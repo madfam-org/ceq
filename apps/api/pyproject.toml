@@ -21,6 +21,7 @@ dependencies = [
     "boto3>=1.34.0",  # R2 storage
     "websockets>=12.0",
     "prometheus-client>=0.20.0",
+    "jsonschema>=4.21.0",  # Input validation
 ]
 
 [project.optional-dependencies]

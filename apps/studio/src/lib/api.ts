@@ -90,10 +90,10 @@ async function handleResponse<T>(response: Response): Promise<T> {
 
 // === API Methods ===
 
+import { getToken } from "@/lib/auth";
+
 function getAuthHeaders(): HeadersInit {
-  // In a real app, get this from auth context
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("janua_token") : null;
+  const token = getToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
@@ -112,7 +112,7 @@ export async function getWorkflows(params?: {
   if (params?.public_only) searchParams.set("public_only", "true");
 
   const response = await fetch(
-    `${API_BASE}/api/v1/workflows?${searchParams}`,
+    `${API_BASE}/v1/workflows/?${searchParams}`,
     {
       headers: getAuthHeaders(),
     }
@@ -121,14 +121,14 @@ export async function getWorkflows(params?: {
 }
 
 export async function getWorkflow(id: string): Promise<Workflow> {
-  const response = await fetch(`${API_BASE}/api/v1/workflows/${id}`, {
+  const response = await fetch(`${API_BASE}/v1/workflows/${id}`, {
     headers: getAuthHeaders(),
   });
   return handleResponse(response);
 }
 
 export async function createWorkflow(data: WorkflowCreate): Promise<Workflow> {
-  const response = await fetch(`${API_BASE}/api/v1/workflows`, {
+  const response = await fetch(`${API_BASE}/v1/workflows`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -143,7 +143,7 @@ export async function updateWorkflow(
   id: string,
   data: Partial<WorkflowCreate>
 ): Promise<Workflow> {
-  const response = await fetch(`${API_BASE}/api/v1/workflows/${id}`, {
+  const response = await fetch(`${API_BASE}/v1/workflows/${id}`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -155,7 +155,7 @@ export async function updateWorkflow(
 }
 
 export async function deleteWorkflow(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/api/v1/workflows/${id}`, {
+  const response = await fetch(`${API_BASE}/v1/workflows/${id}`, {
     method: "DELETE",
     headers: getAuthHeaders(),
   });
@@ -167,6 +167,12 @@ export async function deleteWorkflow(id: string): Promise<void> {
   }
 }
 
+export interface WorkflowRunResponse {
+  job_id: string;
+  status: string;
+  message: string;
+}
+
 export async function runWorkflow(
   id: string,
   params: {
@@ -174,8 +180,8 @@ export async function runWorkflow(
     priority?: number;
     webhook_url?: string;
   }
-): Promise<Job> {
-  const response = await fetch(`${API_BASE}/api/v1/workflows/${id}/run`, {
+): Promise<WorkflowRunResponse> {
+  const response = await fetch(`${API_BASE}/v1/workflows/${id}/run`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -200,28 +206,28 @@ export async function getJobs(params?: {
   if (params?.status_filter) searchParams.set("status_filter", params.status_filter);
   if (params?.workflow_id) searchParams.set("workflow_id", params.workflow_id);
 
-  const response = await fetch(`${API_BASE}/api/v1/jobs?${searchParams}`, {
+  const response = await fetch(`${API_BASE}/v1/jobs/?${searchParams}`, {
     headers: getAuthHeaders(),
   });
   return handleResponse(response);
 }
 
 export async function getJob(id: string): Promise<Job> {
-  const response = await fetch(`${API_BASE}/api/v1/jobs/${id}`, {
+  const response = await fetch(`${API_BASE}/v1/jobs/${id}`, {
     headers: getAuthHeaders(),
   });
   return handleResponse(response);
 }
 
 export async function pollJob(id: string): Promise<Job> {
-  const response = await fetch(`${API_BASE}/api/v1/jobs/${id}/poll`, {
+  const response = await fetch(`${API_BASE}/v1/jobs/${id}/poll`, {
     headers: getAuthHeaders(),
   });
   return handleResponse(response);
 }
 
 export async function cancelJob(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/api/v1/jobs/${id}`, {
+  const response = await fetch(`${API_BASE}/v1/jobs/${id}`, {
     method: "DELETE",
     headers: getAuthHeaders(),
   });
@@ -234,7 +240,23 @@ export async function cancelJob(id: string): Promise<void> {
 }
 
 export async function getJobOutputs(id: string): Promise<Output[]> {
-  const response = await fetch(`${API_BASE}/api/v1/jobs/${id}/outputs`, {
+  const response = await fetch(`${API_BASE}/v1/jobs/${id}/outputs`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+}
+
+export async function getGalleryOutputs(params?: {
+  skip?: number;
+  limit?: number;
+  file_type?: string;
+}): Promise<{ outputs: Output[]; total: number }> {
+  const searchParams = new URLSearchParams();
+  if (params?.skip) searchParams.set("skip", String(params.skip));
+  if (params?.limit) searchParams.set("limit", String(params.limit));
+  if (params?.file_type) searchParams.set("file_type", params.file_type);
+
+  const response = await fetch(`${API_BASE}/v1/outputs/?${searchParams}`, {
     headers: getAuthHeaders(),
   });
   return handleResponse(response);
@@ -249,7 +271,7 @@ export function subscribeToJob(
   onClose?: () => void
 ): WebSocket {
   const wsUrl = API_BASE.replace(/^http/, "ws");
-  const ws = new WebSocket(`${wsUrl}/api/v1/jobs/${jobId}/stream`);
+  const ws = new WebSocket(`${wsUrl}/v1/jobs/${jobId}/stream`);
 
   ws.onmessage = (event) => {
     try {
@@ -271,9 +293,92 @@ export function subscribeToJob(
   return ws;
 }
 
+// Templates
+
+export interface Template {
+  id: string;
+  name: string;
+  description: string | null;
+  category: "social" | "video" | "3d" | "utility";
+  workflow_json: Record<string, unknown>;
+  input_schema: Record<string, InputSchemaField>;
+  tags: string[];
+  thumbnail_url: string | null;
+  preview_urls: string[];
+  model_requirements: string[];
+  vram_requirement_gb: number;
+  fork_count: number;
+  run_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InputSchemaField {
+  type: "string" | "int" | "float" | "bool" | "image" | "select";
+  label?: string;
+  description?: string;
+  default?: unknown;
+  min?: number;
+  max?: number;
+  step?: number;
+  options?: string[];
+  required?: boolean;
+}
+
+export async function getTemplates(params?: {
+  skip?: number;
+  limit?: number;
+  category?: string;
+  tag?: string;
+}): Promise<{ templates: Template[]; total: number }> {
+  const searchParams = new URLSearchParams();
+  if (params?.skip) searchParams.set("skip", String(params.skip));
+  if (params?.limit) searchParams.set("limit", String(params.limit));
+  if (params?.category) searchParams.set("category", params.category);
+  if (params?.tag) searchParams.set("tag", params.tag);
+
+  const response = await fetch(`${API_BASE}/v1/templates/?${searchParams}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+}
+
+export async function getTemplate(id: string): Promise<Template> {
+  const response = await fetch(`${API_BASE}/v1/templates/${id}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+}
+
+export async function runTemplate(
+  id: string,
+  params: {
+    input_params: Record<string, unknown>;
+    priority?: number;
+  }
+): Promise<WorkflowRunResponse> {
+  const response = await fetch(`${API_BASE}/v1/templates/${id}/run`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(params),
+  });
+  return handleResponse(response);
+}
+
+export async function forkTemplate(id: string): Promise<Workflow> {
+  const response = await fetch(`${API_BASE}/v1/templates/${id}/fork`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+}
+
 // Health check
 
 export async function checkHealth(): Promise<{ status: string; message: string }> {
-  const response = await fetch(`${API_BASE}/api/v1/health`);
+  const response = await fetch(`${API_BASE}/health`);
   return handleResponse(response);
 }

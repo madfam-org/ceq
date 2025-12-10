@@ -87,13 +87,22 @@ async def get_current_user(
 ) -> JanuaUser:
     """
     Get the current authenticated user.
-    
+
     Used as a FastAPI dependency:
-    
+
         @router.get("/me")
         async def get_me(user: JanuaUser = Depends(get_current_user)):
             return {"id": user.id, "email": user.email}
     """
+    # Development mode - bypass auth with mock user
+    if not settings.janua_enabled:
+        return JanuaUser(
+            id=UUID("00000000-0000-0000-0000-000000000001"),
+            email="dev@ceq.local",
+            org_id=None,
+            roles=["user"],
+        )
+
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

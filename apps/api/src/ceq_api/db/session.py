@@ -42,7 +42,10 @@ async def init_db() -> None:
         autoflush=False,
     )
 
-    print(f"   Database connected: {settings.database_url.host}")
+    # Extract host from URL for logging
+    db_url = str(settings.database_url)
+    host_part = db_url.split("@")[1].split("/")[0] if "@" in db_url else "localhost"
+    print(f"   Database connected: {host_part}")
 
 
 async def close_db() -> None:

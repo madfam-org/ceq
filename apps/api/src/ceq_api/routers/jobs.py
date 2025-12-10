@@ -12,7 +12,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSock
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from ceq_api.auth.janua import JanuaUser, get_current_user
 from ceq_api.db.redis import get_redis, publish_job_update
@@ -143,11 +142,10 @@ async def list_jobs(
     count_result = await db.execute(count_query)
     total = len(count_result.scalars().all())
 
-    # Fetch with pagination
+    # Fetch with pagination (outputs auto-loaded via lazy="selectin")
     query = (
         select(Job)
         .where(and_(*conditions))
-        .options(selectinload(Job.outputs))
         .order_by(Job.queued_at.desc())
         .offset(skip)
         .limit(limit)
@@ -175,11 +173,8 @@ async def get_job(
 
     Check on your transmutation progress.
     """
-    query = (
-        select(Job)
-        .where(Job.id == job_id)
-        .options(selectinload(Job.outputs))
-    )
+    # Outputs auto-loaded via lazy="selectin"
+    query = select(Job).where(Job.id == job_id)
     result = await db.execute(query)
     job = result.scalar_one_or_none()
 

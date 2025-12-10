@@ -91,9 +91,9 @@ export function useRunWorkflow(workflowId: string) {
   return useMutation({
     mutationFn: (params: Parameters<typeof api.runWorkflow>[1]) =>
       api.runWorkflow(workflowId, params),
-    onSuccess: (job) => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.jobs });
-      toast.success(`Job queued. ID: ${job.id.slice(0, 8)}...`);
+      toast.success(`Job queued. ID: ${result.job_id.slice(0, 8)}...`);
     },
     onError: (error) => {
       toast.error(
@@ -118,12 +118,13 @@ export function useJob(id: string) {
     queryKey: queryKeys.job(id),
     queryFn: () => api.getJob(id),
     enabled: !!id,
-    refetchInterval: (data) => {
+    refetchInterval: (query) => {
       // Stop polling when job is complete
+      const job = query.state.data;
       if (
-        data?.status === "completed" ||
-        data?.status === "failed" ||
-        data?.status === "cancelled"
+        job?.status === "completed" ||
+        job?.status === "failed" ||
+        job?.status === "cancelled"
       ) {
         return false;
       }

@@ -19,6 +19,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { UserMenu } from "./user-menu";
 
 const navItems = [
   { href: "/", icon: Sparkles, label: "Dashboard", shortcut: "⌘1" },
@@ -105,8 +106,12 @@ export function Sidebar() {
           })}
         </nav>
 
-        {/* Settings */}
-        <div className="p-2 border-t border-border">
+        {/* User menu and settings */}
+        <div className="p-2 border-t border-border space-y-1">
+          {/* User avatar/login */}
+          <UserMenu />
+
+          {/* Settings */}
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
               <Link

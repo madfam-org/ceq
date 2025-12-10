@@ -1,10 +1,12 @@
 """Workflow management endpoints."""
 
+import logging
 from datetime import datetime, timezone
 from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from jsonschema import Draft7Validator, ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +15,8 @@ from ceq_api.auth import JanuaUser, get_current_user
 from ceq_api.db import get_db
 from ceq_api.db.redis import enqueue_job
 from ceq_api.models import Job, Workflow
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -312,7 +316,26 @@ async def run_workflow(
             detail="Access denied. This entropy pattern is private.",
         )
 
-    # TODO: Validate params against input_schema
+    # Validate params against input_schema
+    if workflow.input_schema:
+        try:
+            validator = Draft7Validator(workflow.input_schema)
+            errors = list(validator.iter_errors(data.params))
+            if errors:
+                error_messages = [
+                    f"{'.'.join(str(p) for p in e.path)}: {e.message}" if e.path else e.message
+                    for e in errors[:5]  # Limit to first 5 errors
+                ]
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail={
+                        "message": "Parameters failed entropy validation.",
+                        "errors": error_messages,
+                    },
+                )
+        except JsonSchemaValidationError as e:
+            logger.warning(f"Invalid input_schema for workflow {workflow_id}: {e}")
+            # Don't block execution for malformed schema, log and continue
 
     # Create job record
     now = datetime.now(timezone.utc)

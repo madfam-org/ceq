@@ -14,6 +14,7 @@ const statusConfig = {
     icon: Clock,
     label: "In the crucible...",
     color: "text-muted-foreground",
+    animate: false,
     badge: "queued" as const,
   },
   running: {
@@ -27,18 +28,21 @@ const statusConfig = {
     icon: CheckCircle,
     label: "Materialized ✨",
     color: "text-green-500",
+    animate: false,
     badge: "completed" as const,
   },
   failed: {
     icon: XCircle,
     label: "Chaos won",
     color: "text-destructive",
+    animate: false,
     badge: "failed" as const,
   },
   cancelled: {
     icon: X,
     label: "Aborted",
     color: "text-muted-foreground",
+    animate: false,
     badge: "cancelled" as const,
   },
 };

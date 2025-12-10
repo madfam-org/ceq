@@ -68,3 +68,4 @@ cache/
 
 # Vercel
 .vercel/
+secrets.prod.yaml

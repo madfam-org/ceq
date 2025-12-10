@@ -1,0 +1,94 @@
+{
+  "id": "image-upscaler-v1",
+  "name": "Image Upscaler",
+  "description": "Upscale images 2x or 4x using Real-ESRGAN. Enhances resolution while preserving detail and reducing artifacts.",
+  "category": "utility",
+  "version": "0.1.0",
+  "author": "ceq",
+  "tags": ["upscale", "enhancement", "real-esrgan", "super-resolution"],
+  "thumbnail_url": null,
+  "preview_urls": [],
+  "model_requirements": ["RealESRGAN_x4plus.pth"],
+  "vram_requirement_gb": 4,
+  "input_schema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "required": ["image_url"],
+    "properties": {
+      "image_url": {
+        "type": "string",
+        "title": "Image URL",
+        "description": "URL of the image to upscale",
+        "format": "uri"
+      },
+      "scale": {
+        "type": "integer",
+        "title": "Scale Factor",
+        "description": "Upscaling multiplier",
+        "default": 4,
+        "enum": [2, 4]
+      },
+      "model": {
+        "type": "string",
+        "title": "Upscale Model",
+        "description": "Model to use for upscaling",
+        "default": "RealESRGAN_x4plus",
+        "enum": ["RealESRGAN_x4plus", "RealESRGAN_x4plus_anime_6B", "RealESRGAN_x2plus"]
+      },
+      "denoise_strength": {
+        "type": "number",
+        "title": "Denoise Strength",
+        "description": "Amount of denoising to apply (0.0-1.0)",
+        "default": 0.5,
+        "minimum": 0.0,
+        "maximum": 1.0
+      },
+      "tile_size": {
+        "type": "integer",
+        "title": "Tile Size",
+        "description": "Tile size for processing (lower = less VRAM, slower)",
+        "default": 512,
+        "enum": [256, 512, 1024]
+      },
+      "output_format": {
+        "type": "string",
+        "title": "Output Format",
+        "description": "Output image format",
+        "default": "png",
+        "enum": ["png", "jpg", "webp"]
+      }
+    }
+  },
+  "workflow_json": {
+    "1": {
+      "inputs": {
+        "url": ["{{image_url}}", ""]
+      },
+      "class_type": "LoadImageFromURL",
+      "_meta": {"title": "Load Image from URL"}
+    },
+    "2": {
+      "inputs": {
+        "model_name": ["{{model}}", "RealESRGAN_x4plus.pth"]
+      },
+      "class_type": "UpscaleModelLoader",
+      "_meta": {"title": "Load Upscale Model"}
+    },
+    "3": {
+      "inputs": {
+        "upscale_model": ["2", 0],
+        "image": ["1", 0]
+      },
+      "class_type": "ImageUpscaleWithModel",
+      "_meta": {"title": "Upscale with Model"}
+    },
+    "4": {
+      "inputs": {
+        "filename_prefix": "ceq_upscaled",
+        "images": ["3", 0]
+      },
+      "class_type": "SaveImage",
+      "_meta": {"title": "Save Image"}
+    }
+  }
+}

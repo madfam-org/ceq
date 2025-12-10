@@ -1,0 +1,108 @@
+# CEQ Database Migration Job
+#
+# Run migrations on first deployment or after schema changes:
+#   kubectl apply -f db-migrate-job.yaml
+#
+# Check status:
+#   kubectl get jobs -n ceq
+#   kubectl logs job/ceq-db-migrate -n ceq
+#
+# Delete to re-run:
+#   kubectl delete job ceq-db-migrate -n ceq
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ceq-db-migrate
+  namespace: ceq
+  labels:
+    app: ceq
+    component: migration
+spec:
+  ttlSecondsAfterFinished: 300  # Auto-delete after 5 minutes
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: ceq
+        component: migration
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: ghcr.io/madfam/ceq-api:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Running CEQ database migrations..."
+              cd /app
+              python -m alembic upgrade head
+              echo "Migrations complete!"
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: database-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: redis-url
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+---
+# Optional: Seed templates job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ceq-seed-templates
+  namespace: ceq
+  labels:
+    app: ceq
+    component: seed
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: ceq
+        component: seed
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: seed
+          image: ghcr.io/madfam/ceq-api:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Seeding CEQ templates..."
+              cd /app
+              python -m ceq_api.scripts.seed_db
+              echo "Seeding complete!"
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: database-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: redis-url
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"

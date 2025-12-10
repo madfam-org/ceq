@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Next.js build output
+.next/
+out/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Testing
+coverage/
+.nyc_output/
+
+# Local development
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.log
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+!README.md
+
+# Misc
+.DS_Store
+Thumbs.db

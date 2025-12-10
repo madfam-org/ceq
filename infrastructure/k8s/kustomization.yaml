@@ -1,0 +1,52 @@
+# CEQ Kubernetes Kustomization
+#
+# Deploy all CEQ resources with:
+#   kubectl apply -k infrastructure/k8s/
+#
+# For environment-specific deployments, create overlays:
+#   infrastructure/k8s/overlays/production/kustomization.yaml
+#   infrastructure/k8s/overlays/staging/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ceq
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/name: ceq
+  app.kubernetes.io/part-of: madfam-platform
+  app.kubernetes.io/managed-by: kustomize
+
+# Resources to include
+resources:
+  - namespace.yaml
+  - secrets.yaml
+  - api-deployment.yaml
+  - studio-deployment.yaml
+  - worker-deployment.yaml
+  - cloudflared.yaml
+  # Note: ingress.yaml is optional if using cloudflared
+  # - ingress.yaml
+
+# Image customization for different environments
+images:
+  - name: ghcr.io/madfam/ceq-api
+    newTag: latest
+  - name: ghcr.io/madfam/ceq-studio
+    newTag: latest
+  - name: ghcr.io/madfam/ceq-worker
+    newTag: latest
+
+# ConfigMap generator for environment-specific values
+configMapGenerator:
+  - name: ceq-runtime-config
+    literals:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=info
+      - METRICS_ENABLED=true
+
+# Secret generator (for development only - use external-secrets in production)
+# secretGenerator:
+#   - name: ceq-dev-secrets
+#     literals:
+#       - database-url=postgres://...

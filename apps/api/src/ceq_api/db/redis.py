@@ -27,7 +27,10 @@ async def init_redis() -> None:
 
     # Test connection
     await _redis.ping()
-    print(f"   Redis connected: {settings.redis_url.host}:{settings.redis_url.port}")
+    # Extract host:port from URL for logging
+    redis_url = str(settings.redis_url)
+    host_part = redis_url.split("@")[1].split("/")[0] if "@" in redis_url else redis_url.split("://")[1].split("/")[0]
+    print(f"   Redis connected: {host_part}")
 
 
 async def close_redis() -> None:

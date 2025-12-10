@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+import redis.asyncio as redis
+
 from ceq_worker.config import get_settings
 from ceq_worker.comfyui import ComfyUIExecutor
 from ceq_worker.storage import StorageClient
@@ -25,7 +27,7 @@ settings = get_settings()
 class WorkflowHandler:
     """
     Handles ComfyUI workflow execution.
-    
+
     This is the core handler that processes jobs from the queue.
     Compatible with Furnace serverless SDK pattern.
     """
@@ -37,6 +39,7 @@ class WorkflowHandler:
             device=settings.gpu_device,
         )
         self.storage = StorageClient()
+        self._redis: redis.Redis | None = None
         self._initialized = False
 
     async def initialize(self) -> None:
@@ -49,9 +52,17 @@ class WorkflowHandler:
         print(f"   Models path: {settings.models_path}")
         print(f"   GPU device: {settings.gpu_device}")
 
+        # Initialize Redis for progress publishing
+        self._redis = redis.from_url(
+            str(settings.redis_url),
+            decode_responses=True,
+        )
+        await self._redis.ping()
+        print("   Redis connected for progress updates")
+
         # Initialize ComfyUI executor
         await self.executor.initialize()
-        
+
         # Initialize storage client
         await self.storage.initialize()
 
@@ -101,11 +112,14 @@ class WorkflowHandler:
             prepared_workflow = self._apply_params(workflow_json, params)
 
             # Execute workflow
+            async def progress_callback(p: dict[str, Any]) -> None:
+                await self._report_progress(job_id, p)
+
             result = await self.executor.execute(
                 workflow=prepared_workflow,
                 job_id=job_id,
                 timeout=settings.default_timeout,
-                on_progress=lambda p: self._report_progress(job_id, p),
+                on_progress=progress_callback,
             )
 
             # Upload outputs to R2
@@ -186,10 +200,28 @@ class WorkflowHandler:
 
         return prepared
 
-    def _report_progress(self, job_id: str, progress: dict[str, Any]) -> None:
+    async def _report_progress(self, job_id: str, progress: dict[str, Any]) -> None:
         """Report progress to Redis pub/sub for real-time updates."""
-        # TODO: Publish to Redis channel for WebSocket relay
         print(f"   Progress: {progress.get('node', 'unknown')} - {progress.get('percent', 0)}%")
+
+        if self._redis is None:
+            return
+
+        try:
+            # Publish progress to Redis channel for WebSocket relay
+            progress_data = {
+                "job_id": job_id,
+                "status": "running",
+                "worker_id": settings.worker_id,
+                "node": progress.get("node", "unknown"),
+                "percent": progress.get("percent", 0),
+            }
+            await self._redis.publish(
+                f"ceq:job:{job_id}:status",
+                json.dumps(progress_data),
+            )
+        except Exception as e:
+            print(f"   Warning: Failed to publish progress: {e}")
 
 
 # Furnace-compatible handler export

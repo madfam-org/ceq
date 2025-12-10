@@ -1,15 +1,35 @@
 # CLAUDE.md - ceq Repository Instructions
 
-> **ceq** — Creative Entropy Quantized  
+> **ceq** — Creative Entropy Quantized
 > *The Skunkworks Terminal for the Generative Avant-Garde*
 
 ## Project Overview
 
 **ceq** is a ComfyUI wrapper designed for MADFAM's content production needs. It wraps the raw power of ComfyUI with a streamlined, hacker-centric interface while maintaining full access to the underlying node system.
 
-**Domain**: ceq.lol  
-**Port Block**: 5800-5899  
-**Philosophy**: Wrestling order from the chaos of latent space
+| Property | Value |
+|----------|-------|
+| **Domain** | ceq.lol |
+| **Port Block** | 5800-5899 |
+| **Status** | Pre-production (infrastructure pending) |
+| **Philosophy** | Wrestling order from the chaos of latent space |
+
+## Current Deployment Status (2025-12-10)
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Janua OAuth Client | Registered | `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk` |
+| Cloudflare R2 Bucket | Created | `ceq-assets` with read/write token |
+| Cloudflare Tunnel | Configured | Routes for ceq.lol, api.ceq.lol, ws.ceq.lol |
+| K8s Secrets | Partial | R2 + OAuth done, DB/Redis pending |
+| Enclii Infrastructure | Pending | Terraform not initialized |
+
+**Blocking Issue:** Production k3s cluster doesn't exist yet. Deploy Enclii infrastructure first:
+```bash
+cd /path/to/enclii
+./scripts/deploy-production.sh init
+./scripts/deploy-production.sh apply
+```
 
 ## Architecture
 
@@ -27,10 +47,11 @@ ceq/
 │   ├── social/       # Social media content workflows
 │   ├── video/        # Video clone workflows
 │   └── 3d/           # 3D rendering workflows
-├── docs/
-│   └── PRD.md        # Product Requirements Document
-└── infrastructure/
-    └── k8s/          # Kubernetes manifests
+├── infrastructure/
+│   └── k8s/          # Kubernetes manifests
+└── docs/
+    ├── PRD.md        # Product Requirements Document
+    └── PRODUCTION_DEPLOYMENT.md  # Deployment guide
 ```
 
 ## Tech Stack
@@ -39,26 +60,31 @@ ceq/
 |-------|------------|-------|
 | Frontend | Next.js 14, shadcn/ui, Zustand | Dark mode only |
 | API | FastAPI, SQLAlchemy, Pydantic v2 | Python 3.11+ |
-| Workers | Python, comfy_runner | Furnace SDK integration |
-| Queue | Redis | Job queue, real-time updates |
+| Workers | Python, comfy_runner | Vast.ai (current), Furnace (future) |
+| Queue | Redis | Job queue, real-time updates (DB 14) |
 | Database | PostgreSQL | Via Enclii shared infra |
-| Storage | Cloudflare R2 | Assets and outputs |
+| Storage | Cloudflare R2 | Assets and outputs (`ceq-assets` bucket) |
 | Auth | Janua | @janua/react-sdk |
-| GPU | Furnace | Enclii extension |
+| Hosting | Enclii | k3s on Hetzner via Cloudflare Tunnel |
 
 ## Dependencies
 
 ### Internal MADFAM Services
 
-- **Janua** (auth.madfam.io): Authentication and user management
-- **Furnace** (Enclii): GPU compute scheduling and billing
-- **Enclii**: Platform hosting and deployment
+| Service | Domain | Purpose |
+|---------|--------|---------|
+| Janua | auth.madfam.io | Authentication and user management |
+| Enclii | app.enclii.dev | Platform hosting and deployment |
+| Furnace | (future) | GPU compute scheduling |
 
 ### External Services
 
-- **Cloudflare R2**: Asset and output storage
-- **Redis**: Job queue and caching
-- **PostgreSQL**: Metadata storage
+| Service | Purpose | Status |
+|---------|---------|--------|
+| Cloudflare R2 | Asset and output storage | Ready (`ceq-assets`) |
+| Redis Sentinel | Job queue and caching (DB 14) | Pending infra deploy |
+| PostgreSQL | Metadata storage | Pending (Ubicloud) |
+| Vast.ai | GPU workers (current) | API key required |
 
 ## Development Commands
 
@@ -70,10 +96,13 @@ pnpm install
 pnpm --filter @ceq/studio dev
 
 # Run API locally (port 5800)
-cd apps/api && ./venv/bin/uvicorn main:app --port 5800 --reload
+cd apps/api
+source .venv/bin/activate
+uvicorn ceq_api.main:app --port 5800 --reload
 
-# Run worker (requires GPU)
-cd apps/workers && python main.py
+# Run worker (requires GPU and Vast.ai API key)
+cd apps/workers
+python -m ceq_worker.orchestrator
 
 # Build all
 pnpm build
@@ -81,6 +110,60 @@ pnpm build
 # Type check
 pnpm typecheck
 ```
+
+## Authentication Configuration
+
+### Production OAuth Client (Registered 2025-12-10)
+
+| Property | Value |
+|----------|-------|
+| **Client Name** | CEQ Studio |
+| **Client ID** | `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk` |
+| **Grant Types** | authorization_code, refresh_token |
+| **Scopes** | openid, profile, email |
+| **Redirect URIs** | `https://ceq.lol/auth/callback`, `http://localhost:5801/auth/callback` |
+
+### Usage in Code
+
+```typescript
+// apps/studio - JanuaProvider configuration
+<JanuaProvider
+  domain="auth.madfam.io"
+  clientId="jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk"
+  redirectUri="https://ceq.lol/auth/callback"
+/>
+```
+
+## Environment Variables
+
+### API (apps/api/.env)
+```bash
+DATABASE_URL=postgresql+asyncpg://ceq:PASSWORD@HOST:5432/ceq_production
+REDIS_URL=redis://:PASSWORD@redis-0.redis-headless.enclii-production.svc.cluster.local:6379/14
+R2_ENDPOINT=https://12f1353f7819865c56161ce00297668e.r2.cloudflarestorage.com
+R2_ACCESS_KEY=51844af3c4cbda516895116372ec3b38
+R2_SECRET_KEY=<from-secrets.prod.yaml>
+R2_BUCKET=ceq-assets
+JANUA_URL=https://api.janua.dev
+```
+
+### Studio (apps/studio/.env.local)
+```bash
+NEXT_PUBLIC_API_URL=https://api.ceq.lol
+NEXT_PUBLIC_WS_URL=wss://ws.ceq.lol
+NEXT_PUBLIC_JANUA_DOMAIN=auth.madfam.io
+NEXT_PUBLIC_JANUA_CLIENT_ID=jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk
+```
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `apps/api/src/ceq_api/main.py` | FastAPI entrypoint |
+| `apps/studio/app/layout.tsx` | Root layout with providers |
+| `apps/workers/src/ceq_worker/handler.py` | GPU job handler |
+| `infrastructure/k8s/secrets.prod.yaml` | Production secrets template |
+| `infrastructure/k8s/kustomization.yaml` | K8s deployment manifest |
 
 ## Code Conventions
 
@@ -132,65 +215,84 @@ const LOADING_MESSAGES = [
   "Distilling chaos...",
 ];
 
-// Success states  
+// Success states
 const SUCCESS_MESSAGES = [
-  "Signal acquired. 📡",
-  "Materialized. ✨",
+  "Signal acquired.",
+  "Materialized.",
   "Entropy contained.",
 ];
 
 // Error states
 const ERROR_MESSAGES = [
-  "Chaos won this round. Retry? [↻]",
+  "Chaos won this round. Retry?",
   "Latent space turbulence detected.",
   "Signal lost in the noise.",
 ];
 ```
 
-## Key Files
+## Kubernetes Deployment
 
-| File | Purpose |
-|------|---------|
-| `apps/api/main.py` | FastAPI entrypoint |
-| `apps/studio/app/layout.tsx` | Root layout with providers |
-| `apps/workers/handler.py` | Furnace handler for ComfyUI |
-| `packages/ui/src/index.ts` | Shared UI components |
-| `templates/*/workflow.json` | ComfyUI workflow definitions |
-
-## Environment Variables
-
-### API (apps/api/.env)
+### Namespace
 ```bash
-DATABASE_URL=postgres://...
-REDIS_URL=redis://...
-FURNACE_API_URL=http://furnace-gateway:4210
-FURNACE_API_KEY=...
-R2_ENDPOINT=https://...
-R2_ACCESS_KEY=...
-R2_SECRET_KEY=...
-R2_BUCKET=ceq-assets
-JANUA_API_URL=https://api.janua.dev
+kubectl apply -f infrastructure/k8s/namespace.yaml
 ```
 
-### Studio (apps/studio/.env)
+### Secrets
 ```bash
-NEXT_PUBLIC_API_URL=https://api.ceq.lol
-NEXT_PUBLIC_JANUA_DOMAIN=auth.madfam.io
-NEXT_PUBLIC_JANUA_CLIENT_ID=ceq-studio
+# Copy template and fill in values
+cp infrastructure/k8s/secrets.prod.yaml infrastructure/k8s/secrets.local.yaml
+vim infrastructure/k8s/secrets.local.yaml
+kubectl apply -f infrastructure/k8s/secrets.local.yaml
+```
+
+### Deploy
+```bash
+kubectl apply -k infrastructure/k8s/
+```
+
+### Verify
+```bash
+kubectl get pods -n ceq
+kubectl logs -n ceq deployment/ceq-api
 ```
 
 ## Important Notes
 
-1. **ComfyUI Integration**: We use `comfy_runner` for headless execution, not the ComfyUI web UI
-2. **GPU Scheduling**: All GPU workloads go through Furnace, never direct GPU access
-3. **Asset Storage**: All models, outputs, and assets are stored in R2, cached on GPU nodes
+1. **ComfyUI Integration**: Uses `comfy_runner` for headless execution, not the ComfyUI web UI
+2. **GPU Scheduling**: Workers run on Vast.ai (current) or Furnace (future), never direct GPU access
+3. **Asset Storage**: All models, outputs, and assets are stored in R2 (`ceq-assets` bucket)
 4. **Real-time Updates**: Job progress via WebSocket on port 5820
+5. **Redis DB**: CEQ uses Redis DB 14 per PORT_ALLOCATION.md
+
+## Troubleshooting
+
+### API not starting
+```bash
+kubectl logs -n ceq deployment/ceq-api
+```
+
+### Database connection issues
+```bash
+# Verify DATABASE_URL format - must use asyncpg:
+# postgresql+asyncpg:// (not postgres://)
+```
+
+### Auth callback not working
+1. Verify redirect URI in Janua matches exactly
+2. Check CORS allowed origins in API
+3. Verify client_id matches: `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`
+
+### Cloudflared tunnel issues
+```bash
+kubectl logs -n ceq deployment/cloudflared
+```
 
 ## Related Documentation
 
-- [PRD.md](./docs/PRD.md) - Full product requirements
-- [Enclii PRD_FURNACE.md](../enclii/docs/architecture/PRD_FURNACE.md) - GPU infrastructure
-- [PORT_ALLOCATION.md](../solarpunk-foundry/docs/PORT_ALLOCATION.md) - Port registry
+- [README.md](./README.md) - Project overview and quick start
+- [docs/PRD.md](./docs/PRD.md) - Full product requirements
+- [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md) - Deployment checklist
+- [Enclii CLAUDE.md](../enclii/CLAUDE.md) - Platform infrastructure
 
 ---
 

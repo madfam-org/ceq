@@ -1,0 +1,157 @@
+{
+  "id": "sdxl-txt2img-v1",
+  "name": "SDXL Text-to-Image",
+  "description": "Generate images from text prompts using Stable Diffusion XL. High-quality 1024x1024 outputs with customizable style and composition.",
+  "category": "utility",
+  "version": "0.1.0",
+  "author": "ceq",
+  "tags": ["image-generation", "sdxl", "text-to-image", "stable-diffusion"],
+  "thumbnail_url": null,
+  "preview_urls": [],
+  "model_requirements": ["sd_xl_base_1.0.safetensors", "sd_xl_refiner_1.0.safetensors"],
+  "vram_requirement_gb": 12,
+  "input_schema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "required": ["prompt"],
+    "properties": {
+      "prompt": {
+        "type": "string",
+        "title": "Prompt",
+        "description": "Describe what you want to generate",
+        "minLength": 1,
+        "maxLength": 2000
+      },
+      "negative_prompt": {
+        "type": "string",
+        "title": "Negative Prompt",
+        "description": "What to avoid in the generation",
+        "default": "blurry, low quality, distorted, deformed"
+      },
+      "width": {
+        "type": "integer",
+        "title": "Width",
+        "description": "Output image width",
+        "default": 1024,
+        "enum": [512, 768, 1024, 1280]
+      },
+      "height": {
+        "type": "integer",
+        "title": "Height",
+        "description": "Output image height",
+        "default": 1024,
+        "enum": [512, 768, 1024, 1280]
+      },
+      "seed": {
+        "type": "integer",
+        "title": "Seed",
+        "description": "Random seed for reproducibility (-1 for random)",
+        "default": -1,
+        "minimum": -1
+      },
+      "steps": {
+        "type": "integer",
+        "title": "Steps",
+        "description": "Number of inference steps",
+        "default": 30,
+        "minimum": 10,
+        "maximum": 100
+      },
+      "cfg_scale": {
+        "type": "number",
+        "title": "CFG Scale",
+        "description": "Classifier-free guidance scale",
+        "default": 7.5,
+        "minimum": 1,
+        "maximum": 20
+      },
+      "sampler": {
+        "type": "string",
+        "title": "Sampler",
+        "description": "Sampling method",
+        "default": "euler_ancestral",
+        "enum": ["euler", "euler_ancestral", "dpmpp_2m", "dpmpp_sde"]
+      },
+      "use_refiner": {
+        "type": "boolean",
+        "title": "Use Refiner",
+        "description": "Apply SDXL refiner for improved detail",
+        "default": true
+      },
+      "refiner_switch": {
+        "type": "number",
+        "title": "Refiner Switch",
+        "description": "When to switch to refiner (0.0-1.0)",
+        "default": 0.8,
+        "minimum": 0.0,
+        "maximum": 1.0
+      }
+    }
+  },
+  "workflow_json": {
+    "3": {
+      "inputs": {
+        "seed": ["{{seed}}", -1],
+        "steps": ["{{steps}}", 30],
+        "cfg": ["{{cfg_scale}}", 7.5],
+        "sampler_name": ["{{sampler}}", "euler_ancestral"],
+        "scheduler": "normal",
+        "denoise": 1,
+        "model": ["4", 0],
+        "positive": ["6", 0],
+        "negative": ["7", 0],
+        "latent_image": ["5", 0]
+      },
+      "class_type": "KSampler",
+      "_meta": {"title": "KSampler"}
+    },
+    "4": {
+      "inputs": {
+        "ckpt_name": "sd_xl_base_1.0.safetensors"
+      },
+      "class_type": "CheckpointLoaderSimple",
+      "_meta": {"title": "Load Checkpoint"}
+    },
+    "5": {
+      "inputs": {
+        "width": ["{{width}}", 1024],
+        "height": ["{{height}}", 1024],
+        "batch_size": 1
+      },
+      "class_type": "EmptyLatentImage",
+      "_meta": {"title": "Empty Latent Image"}
+    },
+    "6": {
+      "inputs": {
+        "text": ["{{prompt}}", "a beautiful landscape"],
+        "clip": ["4", 1]
+      },
+      "class_type": "CLIPTextEncode",
+      "_meta": {"title": "CLIP Text Encode (Prompt)"}
+    },
+    "7": {
+      "inputs": {
+        "text": ["{{negative_prompt}}", "blurry, low quality, distorted, deformed"],
+        "clip": ["4", 1]
+      },
+      "class_type": "CLIPTextEncode",
+      "_meta": {"title": "CLIP Text Encode (Negative)"}
+    },
+    "8": {
+      "inputs": {
+        "samples": ["3", 0],
+        "vae": ["4", 2]
+      },
+      "class_type": "VAEDecode",
+      "_meta": {"title": "VAE Decode"}
+    },
+    "9": {
+      "inputs": {
+        "filename_prefix": "ceq_sdxl",
+        "images": ["8", 0]
+      },
+      "class_type": "SaveImage",
+      "_meta": {"title": "Save Image"}
+    }
+  }
+}

@@ -31,7 +31,8 @@ export function WorkflowList() {
     );
   }
 
-  const workflows = data?.items || [];
+  // API returns { workflows: [...] }, not { items: [...] }
+  const workflows = (data as { workflows?: WorkflowType[] })?.workflows || [];
 
   return (
     <div className="space-y-2">
