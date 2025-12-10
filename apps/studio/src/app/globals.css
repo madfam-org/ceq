@@ -1,0 +1,181 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ceq is dark mode only - no light theme */
+    --background: 0 0% 4%;
+    --foreground: 0 0% 95%;
+    
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 95%;
+    
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 95%;
+    
+    --primary: 142 76% 36%;
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: 0 0% 14%;
+    --secondary-foreground: 0 0% 95%;
+    
+    --muted: 0 0% 14%;
+    --muted-foreground: 0 0% 64%;
+    
+    --accent: 142 76% 36%;
+    --accent-foreground: 0 0% 100%;
+    
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --border: 0 0% 18%;
+    --input: 0 0% 14%;
+    --ring: 142 76% 36%;
+    
+    --radius: 0.5rem;
+    
+    /* ceq-specific */
+    --entropy: 280 100% 70%;
+    --entropy-glow: 280 100% 50%;
+    --signal: 142 76% 50%;
+    --signal-success: 142 76% 50%;
+    --signal-warning: 45 93% 47%;
+    --signal-error: 0 84% 60%;
+  }
+
+  /* Force dark mode - ceq is dark only */
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Terminal-style selection */
+  ::selection {
+    @apply bg-primary/30 text-foreground;
+  }
+
+  /* Scrollbar styling - terminal aesthetic */
+  ::-webkit-scrollbar {
+    @apply w-2 h-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-background;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/50;
+  }
+}
+
+@layer components {
+  /* ceq-specific component styles */
+  .ceq-card {
+    @apply bg-card border border-border rounded-lg p-4;
+  }
+
+  .ceq-input {
+    @apply bg-input border border-border rounded-md px-3 py-2 text-sm font-mono;
+    @apply focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent;
+    @apply placeholder:text-muted-foreground;
+  }
+
+  .ceq-button {
+    @apply inline-flex items-center justify-center rounded-md text-sm font-medium;
+    @apply transition-colors focus-visible:outline-none focus-visible:ring-2;
+    @apply focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .ceq-button-primary {
+    @apply ceq-button bg-primary text-primary-foreground hover:bg-primary/90;
+  }
+
+  .ceq-button-secondary {
+    @apply ceq-button bg-secondary text-secondary-foreground hover:bg-secondary/80;
+  }
+
+  .ceq-button-ghost {
+    @apply ceq-button hover:bg-accent hover:text-accent-foreground;
+  }
+
+  /* Entropy glow effect */
+  .entropy-glow {
+    @apply relative;
+  }
+
+  .entropy-glow::before {
+    content: "";
+    @apply absolute inset-0 rounded-lg opacity-50 blur-xl;
+    background: linear-gradient(
+      45deg,
+      hsl(var(--entropy)) 0%,
+      hsl(var(--primary)) 50%,
+      hsl(var(--entropy)) 100%
+    );
+    background-size: 200% 200%;
+    animation: entropy-flow 3s ease infinite;
+    z-index: -1;
+  }
+
+  /* Loading shimmer */
+  .shimmer {
+    @apply relative overflow-hidden;
+  }
+
+  .shimmer::after {
+    content: "";
+    @apply absolute inset-0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(var(--foreground) / 0.1) 50%,
+      transparent 100%
+    );
+    animation: shimmer 2s linear infinite;
+  }
+
+  /* Terminal text effects */
+  .terminal-text {
+    @apply font-mono text-sm tracking-tight;
+  }
+
+  .terminal-prompt {
+    @apply text-primary font-mono;
+  }
+
+  .terminal-prompt::before {
+    content: "› ";
+    @apply text-muted-foreground;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar utility */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Gradient text utility */
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(
+      135deg,
+      hsl(var(--primary)) 0%,
+      hsl(var(--entropy)) 100%
+    );
+  }
+}

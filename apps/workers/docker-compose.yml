@@ -1,0 +1,98 @@
+# CEQ Worker Development Docker Compose
+#
+# For local testing of the worker stack.
+# Note: GPU workloads require --gpus flag or nvidia runtime.
+#
+# Usage:
+#   docker compose up -d          # Start all services
+#   docker compose logs -f worker # Follow worker logs
+#   docker compose down           # Stop all
+
+services:
+  # Redis for job queue (DB 14 per CEQ allocation)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # MinIO for R2-compatible local storage
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ceq-admin
+      MINIO_ROOT_PASSWORD: ceq-secret-key
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # CEQ Worker (requires GPU - comment out for CPU dev)
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.slim
+    environment:
+      REDIS_URL: redis://redis:6379/14
+      WORKER_ID: ceq-worker-dev
+      COMFYUI_PATH: /opt/comfyui
+      MODELS_PATH: /opt/models
+      OUTPUTS_PATH: /opt/outputs
+      R2_ENDPOINT: http://minio:9000
+      R2_ACCESS_KEY: ceq-admin
+      R2_SECRET_KEY: ceq-secret-key
+      R2_BUCKET: ceq-assets
+    volumes:
+      - ./models:/opt/models
+      - ./outputs:/opt/outputs
+    ports:
+      - "8188:8188"
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # Uncomment for CPU-only testing (very slow!)
+    # profiles: ["gpu"]
+
+  # CEQ Orchestrator (manages workers)
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile.slim
+    command: python -m ceq_worker.orchestrator
+    environment:
+      REDIS_URL: redis://redis:6379/14
+      CEQ_GPU_PROVIDER: vast
+      CEQ_MIN_WORKERS: 0
+      CEQ_MAX_WORKERS: 3
+      VAST_API_KEY: ${VAST_API_KEY:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+    profiles: ["orchestrator"]
+
+volumes:
+  redis-data:
+  minio-data:

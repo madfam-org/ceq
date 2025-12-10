@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ceq-studio
+  namespace: ceq
+  labels:
+    app: ceq-studio
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ceq-studio
+  template:
+    metadata:
+      labels:
+        app: ceq-studio
+    spec:
+      containers:
+        - name: ceq-studio
+          image: ghcr.io/madfam/ceq-studio:latest
+          ports:
+            - containerPort: 5801
+              name: http
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: NEXT_PUBLIC_API_URL
+              value: "https://api.ceq.lol"
+            - name: NEXT_PUBLIC_WS_URL
+              value: "wss://ws.ceq.lol"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 5801
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 5801
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ceq-studio
+  namespace: ceq
+spec:
+  selector:
+    app: ceq-studio
+  ports:
+    - port: 5801
+      targetPort: 5801
+      name: http
+  type: ClusterIP

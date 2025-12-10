@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ceq-api
+  namespace: ceq
+  labels:
+    app: ceq-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ceq-api
+  template:
+    metadata:
+      labels:
+        app: ceq-api
+    spec:
+      containers:
+        - name: ceq-api
+          image: ghcr.io/madfam/ceq-api:latest
+          ports:
+            - containerPort: 5800
+              name: http
+          env:
+            - name: ENVIRONMENT
+              value: production
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: database-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: redis-url
+            - name: JANUA_API_URL
+              value: "http://janua-api.janua.svc.cluster.local:4100"
+            - name: FURNACE_API_URL
+              value: "http://furnace-gateway.enclii.svc.cluster.local:4210"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5800
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 5800
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ceq-api
+  namespace: ceq
+spec:
+  selector:
+    app: ceq-api
+  ports:
+    - port: 5800
+      targetPort: 5800
+      name: http
+  type: ClusterIP

@@ -1,0 +1,57 @@
+# CEQ Worker Docker Ignore
+
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.eggs/
+*.egg-info/
+.installed.cfg
+*.egg
+.venv
+venv/
+ENV/
+
+# Development
+.env
+.env.local
+*.log
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.docker/
+
+# Local development
+models/
+outputs/
+cache/
+*.ckpt
+*.safetensors
+*.pt
+*.pth
+
+# Documentation
+docs/
+*.md
+
+# Scripts (not needed in image)
+scripts/

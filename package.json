@@ -1,0 +1,34 @@
+{
+  "name": "ceq",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Creative Entropy Quantized - The skunkworks terminal for the generative avant-garde",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/madfam/ceq.git"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "dev:studio": "turbo run dev --filter=@ceq/studio",
+    "dev:api": "cd apps/api && uvicorn ceq_api.main:app --reload --host 0.0.0.0 --port 5800",
+    "dev:worker": "cd apps/workers && python -m ceq_worker.queue"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0",
+    "prettier": "^3.3.0",
+    "eslint": "^8.57.0"
+  },
+  "packageManager": "pnpm@9.14.4",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

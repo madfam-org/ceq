@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ceq-worker
+  namespace: ceq
+  labels:
+    app: ceq-worker
+spec:
+  # GPU workers scale via KEDA, start with 0
+  replicas: 0
+  selector:
+    matchLabels:
+      app: ceq-worker
+  template:
+    metadata:
+      labels:
+        app: ceq-worker
+    spec:
+      # Schedule on GPU nodes only
+      nodeSelector:
+        node.kubernetes.io/gpu: "true"
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: ceq-worker
+          image: ghcr.io/madfam/ceq-worker:latest
+          env:
+            - name: WORKER_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: redis-url
+            - name: COMFYUI_PATH
+              value: /opt/comfyui
+            - name: MODELS_PATH
+              value: /opt/models
+            - name: OUTPUTS_PATH
+              value: /opt/outputs
+          resources:
+            requests:
+              memory: "16Gi"
+              cpu: "4"
+              nvidia.com/gpu: "1"
+            limits:
+              memory: "32Gi"
+              cpu: "8"
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: models
+              mountPath: /opt/models
+            - name: outputs
+              mountPath: /opt/outputs
+            - name: cache
+              mountPath: /opt/cache
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: ceq-models-pvc
+        - name: outputs
+          emptyDir: {}
+        - name: cache
+          emptyDir: {}
+---
+# KEDA ScaledObject for autoscaling GPU workers
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: ceq-worker-scaler
+  namespace: ceq
+spec:
+  scaleTargetRef:
+    name: ceq-worker
+  pollingInterval: 10
+  cooldownPeriod: 300
+  minReplicaCount: 0
+  maxReplicaCount: 4
+  triggers:
+    - type: redis
+      metadata:
+        address: redis.ceq.svc.cluster.local:6379
+        databaseIndex: "14"
+        listName: ceq:jobs:pending
+        listLength: "1"

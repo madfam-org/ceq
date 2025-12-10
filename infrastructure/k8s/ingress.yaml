@@ -1,0 +1,50 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ceq-ingress
+  namespace: ceq
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.middlewares: default-redirect-https@kubernetescrd
+spec:
+  tls:
+    - hosts:
+        - ceq.lol
+        - api.ceq.lol
+        - ws.ceq.lol
+      secretName: ceq-tls
+  rules:
+    # Main app
+    - host: ceq.lol
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ceq-studio
+                port:
+                  number: 5801
+    # API
+    - host: api.ceq.lol
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ceq-api
+                port:
+                  number: 5800
+    # WebSocket
+    - host: ws.ceq.lol
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ceq-api
+                port:
+                  number: 5800
