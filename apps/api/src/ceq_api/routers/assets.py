@@ -1,10 +1,12 @@
 """Asset management endpoints (models, LoRAs, VAEs, embeddings)."""
 
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
+
+from ceq_api.auth import JanuaUser, get_current_user
 
 router = APIRouter()
 
@@ -85,11 +87,11 @@ ASSET_TYPES = {
 
 @router.get("/", response_model=AssetList)
 async def list_assets(
+    user: Annotated[JanuaUser, Depends(get_current_user)],
     asset_type: str | None = None,
     tag: str | None = None,
     skip: int = 0,
     limit: int = 50,
-    # user: User = Depends(get_current_user),
 ) -> AssetList:
     """
     List available assets.
@@ -118,7 +120,7 @@ async def list_asset_types() -> dict[str, Any]:
 @router.get("/{asset_id}", response_model=AssetResponse)
 async def get_asset(
     asset_id: UUID,
-    # user: User = Depends(get_current_user),
+    user: Annotated[JanuaUser, Depends(get_current_user)],
 ) -> AssetResponse:
     """
     Get an asset by ID.
@@ -134,12 +136,12 @@ async def get_asset(
 
 @router.post("/", response_model=AssetUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_asset(
+    user: Annotated[JanuaUser, Depends(get_current_user)],
     name: str,
     asset_type: str,
     file: UploadFile = File(...),
     description: str | None = None,
     tags: list[str] | None = None,
-    # user: User = Depends(get_current_user),
 ) -> AssetUploadResponse:
     """
     Upload a new asset.
@@ -159,11 +161,11 @@ async def upload_asset(
 
 @router.post("/presigned-url")
 async def get_presigned_upload_url(
+    user: Annotated[JanuaUser, Depends(get_current_user)],
     filename: str,
     asset_type: str,
     content_type: str,
     size_bytes: int,
-    # user: User = Depends(get_current_user),
 ) -> dict[str, str]:
     """
     Get a presigned URL for direct R2 upload.
@@ -181,7 +183,7 @@ async def get_presigned_upload_url(
 @router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_asset(
     asset_id: UUID,
-    # user: User = Depends(get_current_user),
+    user: Annotated[JanuaUser, Depends(get_current_user)],
 ) -> None:
     """
     Delete an asset.
