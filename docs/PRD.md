@@ -4,7 +4,7 @@
 
 ---
 
-> **Version**: 1.0.0  
+> **Version**: 0.1.0  
 > **Status**: Draft  
 > **Domain**: ceq.lol  
 > **Created**: 2025-12-10  
