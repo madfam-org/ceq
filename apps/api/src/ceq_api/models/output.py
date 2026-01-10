@@ -2,12 +2,10 @@
 
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, String
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy import BigInteger, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ceq_api.models.base import Base, TimestampMixin
+from ceq_api.models.base import Base, GUIDString, JSONB, TimestampMixin
 
 
 class Output(Base, TimestampMixin):
@@ -21,22 +19,33 @@ class Output(Base, TimestampMixin):
 
     # References
     job_id: Mapped[UUID] = mapped_column(
-        PG_UUID(as_uuid=True),
+        GUIDString(),
         ForeignKey("jobs.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
     user_id: Mapped[UUID] = mapped_column(
+        GUIDString(),
         nullable=False,
         index=True,
         comment="Janua user ID",
     )
 
-    # Content type
-    output_type: Mapped[str] = mapped_column(
-        String(50),
+    # File info
+    filename: Mapped[str] = mapped_column(
+        String(255),
         nullable=False,
-        comment="image | video | model",
+        comment="Original filename",
+    )
+    file_type: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        comment="MIME type (image/png, video/mp4, etc.)",
+    )
+    file_size_bytes: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        comment="File size in bytes",
     )
 
     # Storage
@@ -45,10 +54,27 @@ class Output(Base, TimestampMixin):
         nullable=False,
         comment="R2 URI for full output",
     )
-    thumbnail_uri: Mapped[str | None] = mapped_column(
+    preview_url: Mapped[str | None] = mapped_column(
         String(2048),
         nullable=True,
-        comment="R2 URI for thumbnail",
+        comment="URL for preview/thumbnail",
+    )
+
+    # Dimensions (for images and videos)
+    width: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="Width in pixels",
+    )
+    height: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="Height in pixels",
+    )
+    duration_seconds: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        comment="Duration for video/audio outputs",
     )
 
     # Metadata
@@ -56,7 +82,7 @@ class Output(Base, TimestampMixin):
         JSONB,
         nullable=False,
         default=dict,
-        comment="Output-specific metadata (dimensions, duration, etc.)",
+        comment="Output-specific metadata",
     )
 
     # Publishing
@@ -71,4 +97,4 @@ class Output(Base, TimestampMixin):
     job = relationship("Job", back_populates="outputs", lazy="selectin")
 
     def __repr__(self) -> str:
-        return f"<Output {self.id} ({self.output_type})>"
+        return f"<Output {self.id} ({self.file_type})>"

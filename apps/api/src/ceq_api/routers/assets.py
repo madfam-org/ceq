@@ -2,6 +2,7 @@
 
 import hashlib
 import logging
+import re
 from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID, uuid4
@@ -13,12 +14,41 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ceq_api.auth import JanuaUser, get_current_user
 from ceq_api.db import get_db
+from ceq_api.logging import audit_logger
 from ceq_api.models import Asset
 from ceq_api.storage import get_storage
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# === Security Helpers ===
+
+
+def sanitize_filename(filename: str) -> str:
+    """
+    Sanitize filename to prevent path traversal and other attacks.
+
+    - Removes path separators
+    - Removes null bytes
+    - Limits to alphanumeric, dash, underscore, and dot
+    - Limits length
+    """
+    # Remove path separators
+    filename = filename.replace("/", "_").replace("\\", "_")
+    # Remove null bytes
+    filename = filename.replace("\x00", "")
+    # Keep only safe characters
+    filename = re.sub(r"[^a-zA-Z0-9_.-]", "_", filename)
+    # Remove leading dots (hidden files)
+    filename = filename.lstrip(".")
+    # Limit length
+    if len(filename) > 200:
+        name, ext = filename.rsplit(".", 1) if "." in filename else (filename, "")
+        filename = f"{name[:195]}.{ext}" if ext else name[:200]
+    # Ensure non-empty
+    return filename or "unnamed_asset"
 
 
 # === Pydantic Models ===
@@ -332,9 +362,9 @@ async def upload_asset(
     # Calculate checksum
     checksum = hashlib.sha256(content).hexdigest()
 
-    # Generate storage key
+    # Generate storage key with sanitized filename
     unique_id = uuid4().hex[:8]
-    safe_filename = file.filename or f"asset_{unique_id}"
+    safe_filename = sanitize_filename(file.filename or f"asset_{unique_id}")
     key = f"assets/{asset_type}/{user.id}/{unique_id}_{safe_filename}"
 
     # Upload to R2
@@ -390,12 +420,20 @@ async def upload_asset(
     await db.flush()
     await db.refresh(asset)
 
+    # Audit log the upload
+    audit_logger.log_asset_operation(
+        operation="upload",
+        asset_id=str(asset.id),
+        user_id=str(user.id),
+        filename=safe_filename,
+    )
+
     return AssetUploadResponse(
         id=asset.id,
         name=asset.name,
         storage_uri=asset.storage_uri,
         public_url=storage.get_public_url(asset.storage_uri),
-        message="Material secured in the vault. ✨",
+        message="Material secured in the vault.",
     )
 
 
@@ -434,9 +472,10 @@ async def get_presigned_upload_url(
             detail=f"File too large. Maximum for {data.asset_type}: {max_size_gb}GB",
         )
 
-    # Generate storage key
+    # Generate storage key with sanitized filename
     unique_id = uuid4().hex[:8]
-    key = f"assets/{data.asset_type}/{user.id}/{unique_id}_{data.filename}"
+    safe_filename = sanitize_filename(data.filename)
+    key = f"assets/{data.asset_type}/{user.id}/{unique_id}_{safe_filename}"
 
     # Create pending asset record
     asset = Asset(
@@ -542,13 +581,25 @@ async def delete_asset(
 
     # Delete from R2
     storage = await get_storage()
+    r2_deleted = False
     try:
         await storage.delete_object(asset.storage_uri)
+        r2_deleted = True
         logger.info(f"Deleted asset from R2: {asset.storage_uri}")
     except Exception as e:
-        logger.warning(f"Failed to delete asset from R2: {e}")
+        logger.warning(f"Failed to delete asset from R2 (orphaned file): {e}")
         # Continue with soft delete even if R2 delete fails
 
     # Soft delete
     asset.is_deleted = True
     await db.flush()
+
+    # Audit log the deletion
+    audit_logger.log_asset_operation(
+        operation="delete",
+        asset_id=str(asset_id),
+        user_id=str(user.id),
+        filename=asset.name,
+        success=r2_deleted,
+        reason="Orphaned R2 file" if not r2_deleted else None,
+    )

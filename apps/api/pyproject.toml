@@ -22,6 +22,8 @@ dependencies = [
     "websockets>=12.0",
     "prometheus-client>=0.20.0",
     "jsonschema>=4.21.0",  # Input validation
+    "slowapi>=0.1.9",  # Rate limiting
+    "python-json-logger>=2.0.0",  # Structured logging
 ]
 
 [project.optional-dependencies]

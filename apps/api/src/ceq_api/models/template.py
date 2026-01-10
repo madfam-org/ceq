@@ -1,12 +1,9 @@
 """Template model for pre-built ComfyUI workflows."""
 
-from datetime import datetime
-
 from sqlalchemy import Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from ceq_api.models.base import Base, TimestampMixin
+from ceq_api.models.base import Base, JSONB, TimestampMixin
 
 
 class Template(Base, TimestampMixin):

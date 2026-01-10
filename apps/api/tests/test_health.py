@@ -26,4 +26,6 @@ class TestHealthEndpoints:
         response = client.get("/")
         assert response.status_code == 200
         data = response.json()
-        assert "name" in data or "message" in data
+        assert data["service"] == "ceq-api"
+        assert "version" in data
+        assert "tagline" in data

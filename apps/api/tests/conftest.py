@@ -66,7 +66,6 @@ def mock_user() -> JanuaUser:
     return JanuaUser(
         id=uuid4(),
         email="test@madfam.io",
-        name="Test User",
         org_id=uuid4(),
         roles=["user"],
     )
@@ -78,7 +77,6 @@ def mock_admin_user() -> JanuaUser:
     return JanuaUser(
         id=uuid4(),
         email="admin@madfam.io",
-        name="Admin User",
         org_id=uuid4(),
         roles=["admin", "user"],
     )

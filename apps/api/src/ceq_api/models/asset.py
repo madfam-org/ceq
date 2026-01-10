@@ -3,10 +3,9 @@
 from uuid import UUID
 
 from sqlalchemy import BigInteger, Boolean, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from ceq_api.models.base import Base, TimestampMixin
+from ceq_api.models.base import Base, GUIDString, JSONB, TimestampMixin
 
 
 class Asset(Base, TimestampMixin):
@@ -53,11 +52,13 @@ class Asset(Base, TimestampMixin):
 
     # Ownership
     user_id: Mapped[UUID] = mapped_column(
+        GUIDString(),
         nullable=False,
         index=True,
         comment="Janua user ID",
     )
     org_id: Mapped[UUID | None] = mapped_column(
+        GUIDString(),
         nullable=True,
         index=True,
         comment="Janua organization ID",

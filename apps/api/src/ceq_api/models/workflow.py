@@ -3,11 +3,9 @@
 from uuid import UUID
 
 from sqlalchemy import Boolean, ForeignKey, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ceq_api.models.base import Base, TimestampMixin
+from ceq_api.models.base import Base, GUIDString, JSONB, TimestampMixin
 
 
 class Workflow(Base, TimestampMixin):
@@ -41,11 +39,13 @@ class Workflow(Base, TimestampMixin):
 
     # Ownership
     user_id: Mapped[UUID] = mapped_column(
+        GUIDString(),
         nullable=False,
         index=True,
         comment="Janua user ID",
     )
     org_id: Mapped[UUID | None] = mapped_column(
+        GUIDString(),
         nullable=True,
         index=True,
         comment="Janua organization ID",
@@ -53,7 +53,7 @@ class Workflow(Base, TimestampMixin):
 
     # Template origin (if forked)
     template_id: Mapped[UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True),
+        GUIDString(),
         ForeignKey("templates.id", ondelete="SET NULL"),
         nullable=True,
         comment="Original template if forked",

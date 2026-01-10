@@ -5,11 +5,9 @@ from enum import Enum
 from uuid import UUID
 
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ceq_api.models.base import Base, TimestampMixin
+from ceq_api.models.base import Base, GUIDString, JSONB, TimestampMixin
 
 
 class JobStatus(str, Enum):
@@ -33,12 +31,13 @@ class Job(Base, TimestampMixin):
 
     # References
     workflow_id: Mapped[UUID] = mapped_column(
-        PG_UUID(as_uuid=True),
+        GUIDString(),
         ForeignKey("workflows.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
     user_id: Mapped[UUID] = mapped_column(
+        GUIDString(),
         nullable=False,
         index=True,
         comment="Janua user ID",

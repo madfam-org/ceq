@@ -58,6 +58,17 @@ class Settings(BaseSettings):
     comfyui_default_timeout: int = 300  # 5 minutes
     comfyui_max_concurrent_jobs: int = 10
 
+    # Rate Limiting
+    rate_limit_enabled: bool = True
+    rate_limit_default: str = "100/minute"
+    rate_limit_uploads: str = "10/minute"
+    rate_limit_jobs: str = "30/minute"
+
+    # Security
+    max_request_size_mb: int = 1  # Default max request size
+    max_upload_size_mb: int = 100  # Max upload size for assets
+    presigned_url_expiry_seconds: int = 3600  # 1 hour
+
     # CORS
     cors_origins: list[str] = ["http://localhost:5801", "https://ceq.lol"]
 
