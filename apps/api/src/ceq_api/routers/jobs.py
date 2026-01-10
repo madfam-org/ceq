@@ -4,16 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+
+logger = logging.getLogger(__name__)
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ceq_api.auth.janua import JanuaUser, get_current_user
+from ceq_api.auth.janua import JanuaUser, get_current_user, validate_token
+from ceq_api.logging import audit_logger
 from ceq_api.db.redis import get_redis, publish_job_update
 from ceq_api.db.session import get_db
 from ceq_api.models.job import Job, JobStatus as JobStatusEnum
@@ -270,6 +274,14 @@ async def cancel_job(
     job.status = JobStatusEnum.CANCELLED.value
     job.completed_at = datetime.utcnow()
 
+    # Audit log the cancellation
+    audit_logger.log_job_operation(
+        operation="cancel",
+        job_id=str(job_id),
+        user_id=str(user.id),
+        workflow_id=str(job.workflow_id),
+    )
+
     # Publish cancel signal to worker via Redis
     redis = get_redis()
     await redis.publish(f"ceq:job:{job_id}:control", json.dumps({"action": "cancel"}))
@@ -291,11 +303,14 @@ async def cancel_job(
 async def stream_job_progress(
     websocket: WebSocket,
     job_id: UUID,
+    token: str | None = None,
 ) -> None:
     """
     Stream real-time job progress via WebSocket.
 
     Live feed from the transmutation chamber.
+
+    Authentication: Pass token as query parameter: ?token=<jwt>
 
     Message format:
     {
@@ -303,6 +318,34 @@ async def stream_job_progress(
         "data": { ... }
     }
     """
+    # Validate authentication before accepting connection
+    user = None
+    if token:
+        user = await validate_token(token)
+
+    if not user:
+        # Reject unauthenticated connections
+        await websocket.close(code=4001, reason="Authentication required")
+        logger.warning(f"WebSocket connection rejected for job {job_id}: no valid token")
+        return
+
+    # Verify user owns this job (requires DB check)
+    from ceq_api.db.session import async_session_maker
+
+    async with async_session_maker() as db:
+        query = select(Job).where(Job.id == job_id)
+        result = await db.execute(query)
+        job = result.scalar_one_or_none()
+
+        if not job:
+            await websocket.close(code=4004, reason="Job not found")
+            return
+
+        if job.user_id != user.id:
+            await websocket.close(code=4003, reason="Access denied")
+            logger.warning(f"WebSocket access denied for job {job_id}: user {user.id} is not owner")
+            return
+
     await websocket.accept()
 
     redis = get_redis()
@@ -350,8 +393,8 @@ async def stream_job_progress(
                         # Check for terminal states
                         if data.get("type") in ["complete", "error", "cancelled"]:
                             return
-                    except json.JSONDecodeError:
-                        pass
+                    except json.JSONDecodeError as e:
+                        logger.debug(f"Malformed JSON in pubsub message: {e}")
 
         async def handle_client_messages():
             """Handle incoming WebSocket messages from client."""
@@ -378,22 +421,23 @@ async def stream_job_progress(
 
     except WebSocketDisconnect:
         # Client disconnected gracefully
-        pass
+        logger.debug(f"WebSocket client disconnected from job {job_id}")
     except Exception as e:
+        logger.warning(f"WebSocket error for job {job_id}: {e}")
         try:
             await websocket.send_json({
                 "type": "error",
                 "data": {"message": str(e)},
             })
-        except:
-            pass
+        except Exception as send_err:
+            logger.debug(f"Failed to send error to WebSocket: {send_err}")
     finally:
         await pubsub.unsubscribe(channel)
         await pubsub.close()
         try:
             await websocket.close()
-        except:
-            pass
+        except Exception as close_err:
+            logger.debug(f"Failed to close WebSocket: {close_err}")
 
 
 @router.get("/{job_id}/outputs", response_model=list[OutputResponse])

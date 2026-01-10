@@ -5,6 +5,7 @@ The skunkworks terminal for the generative avant-garde.
 Wrestling order from the chaos of latent space.
 """
 
+import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -13,7 +14,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import make_asgi_app
 
 from ceq_api.config import get_settings
+from ceq_api.logging import setup_logging
+from ceq_api.middleware import setup_middleware
 from ceq_api.routers import assets, health, jobs, outputs, templates, workflows
+
+# Initialize logging first
+setup_logging()
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -22,23 +29,23 @@ settings = get_settings()
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan manager."""
     # Startup
-    print("⚡ ceq-api starting... Quantizing entropy...")
-    
+    logger.info("ceq-api starting... Quantizing entropy...")
+
     # Initialize database
     from ceq_api.db.session import init_db, close_db
     from ceq_api.db.redis import init_redis, close_redis
-    
+
     await init_db()
     await init_redis()
-    
-    print("✅ ceq-api ready. Signal acquired.")
-    
+
+    logger.info("ceq-api ready. Signal acquired.")
+
     yield
-    
+
     # Shutdown
     await close_redis()
     await close_db()
-    print("🔌 ceq-api shutting down... Entropy released.")
+    logger.info("ceq-api shutting down... Entropy released.")
 
 
 app = FastAPI(
@@ -50,14 +57,18 @@ app = FastAPI(
     redoc_url="/redoc" if settings.debug else None,
 )
 
-# CORS
+# CORS (must be added before other middleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID"],
 )
+
+# Setup security and observability middleware
+setup_middleware(app)
 
 # Prometheus metrics at /metrics
 metrics_app = make_asgi_app()

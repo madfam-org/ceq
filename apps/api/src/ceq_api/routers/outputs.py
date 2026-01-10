@@ -1,10 +1,13 @@
 """Output management endpoints with R2 storage integration."""
 
+import logging
 from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+logger = logging.getLogger(__name__)
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -570,9 +573,9 @@ async def delete_output(
         await storage.delete_object(output.storage_uri)
         if output.thumbnail_uri:
             await storage.delete_object(output.thumbnail_uri)
-    except Exception:
+    except Exception as e:
         # Log but continue - orphaned files can be cleaned up later
-        pass
+        logger.warning(f"Failed to delete output from R2: {output.storage_uri} - {e}")
 
     # Delete from database
     await db.delete(output)

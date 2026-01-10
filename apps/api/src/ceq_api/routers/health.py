@@ -1,7 +1,7 @@
 """Health check endpoints."""
 
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ceq_api.config import get_settings
 from ceq_api.db import get_db
 from ceq_api.db.redis import get_redis
+from ceq_api.resilience import CircuitBreaker
 
 router = APIRouter()
 settings = get_settings()
@@ -94,3 +95,25 @@ async def readiness_check(
             database=db_status,
             redis=redis_status,
         )
+
+
+@router.get("/circuits")
+async def circuit_breaker_status() -> dict[str, Any]:
+    """
+    Get status of all circuit breakers.
+
+    Returns current state and statistics for monitoring.
+    """
+    stats = CircuitBreaker.get_all_stats()
+
+    # Calculate overall health
+    open_circuits = [
+        name for name, s in stats.items()
+        if s["state"] == "open"
+    ]
+
+    return {
+        "status": "healthy" if not open_circuits else "degraded",
+        "open_circuits": open_circuits,
+        "circuits": stats,
+    }
