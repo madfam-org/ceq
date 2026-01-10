@@ -1,0 +1,207 @@
+{
+  "name": "InstantID Portrait",
+  "description": "Identity-preserving portrait generation. Upload a face photo to generate new images with the same identity.",
+  "category": "social",
+  "tags": ["instantid", "portrait", "face", "identity", "ip-adapter"],
+  "model_requirements": ["instantid-ip-adapter.bin", "antelopev2", "sdxl_base.safetensors"],
+  "vram_requirement_gb": 12,
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "face_image": {
+        "type": "string",
+        "format": "uri",
+        "description": "Reference face image"
+      },
+      "prompt": {
+        "type": "string",
+        "description": "Text prompt for portrait generation"
+      },
+      "negative_prompt": {
+        "type": "string",
+        "default": "blurry, low quality, distorted face, ugly",
+        "description": "Negative prompt"
+      },
+      "ip_adapter_weight": {
+        "type": "number",
+        "default": 0.8,
+        "minimum": 0.0,
+        "maximum": 1.5,
+        "description": "Strength of identity preservation"
+      },
+      "seed": {
+        "type": "integer",
+        "default": -1,
+        "description": "-1 for random seed"
+      }
+    },
+    "required": ["face_image", "prompt"]
+  },
+  "workflow": {
+    "last_node_id": 11,
+    "last_link_id": 11,
+    "nodes": [
+      {
+        "id": 1,
+        "type": "LoadImage",
+        "pos": [50, 100],
+        "size": [300, 300],
+        "inputs": [],
+        "outputs": [
+          {"name": "IMAGE", "type": "IMAGE", "links": [1]},
+          {"name": "MASK", "type": "MASK", "links": null}
+        ],
+        "widgets_values": ["{{face_image}}"]
+      },
+      {
+        "id": 2,
+        "type": "InstantIDFaceAnalysis",
+        "pos": [400, 100],
+        "size": [250, 100],
+        "inputs": [
+          {"name": "image", "type": "IMAGE", "link": 1}
+        ],
+        "outputs": [
+          {"name": "FACE_EMBEDS", "type": "FACE_EMBEDS", "links": [2]}
+        ],
+        "widgets_values": ["antelopev2"]
+      },
+      {
+        "id": 3,
+        "type": "CheckpointLoaderSimple",
+        "pos": [50, 350],
+        "size": [300, 100],
+        "inputs": [],
+        "outputs": [
+          {"name": "MODEL", "type": "MODEL", "links": [3]},
+          {"name": "CLIP", "type": "CLIP", "links": [6, 7]},
+          {"name": "VAE", "type": "VAE", "links": [10]}
+        ],
+        "widgets_values": ["sdxl_base.safetensors"]
+      },
+      {
+        "id": 4,
+        "type": "InstantIDModelLoader",
+        "pos": [50, 500],
+        "size": [300, 80],
+        "inputs": [],
+        "outputs": [
+          {"name": "INSTANTID", "type": "INSTANTID", "links": [4]}
+        ],
+        "widgets_values": []
+      },
+      {
+        "id": 5,
+        "type": "ApplyInstantID",
+        "pos": [400, 300],
+        "size": [300, 150],
+        "inputs": [
+          {"name": "model", "type": "MODEL", "link": 3},
+          {"name": "instantid", "type": "INSTANTID", "link": 4},
+          {"name": "face_embeds", "type": "FACE_EMBEDS", "link": 2}
+        ],
+        "outputs": [
+          {"name": "MODEL", "type": "MODEL", "links": [5]}
+        ],
+        "widgets_values": ["{{ip_adapter_weight}}"]
+      },
+      {
+        "id": 6,
+        "type": "CLIPTextEncode",
+        "pos": [400, 500],
+        "size": [300, 150],
+        "inputs": [
+          {"name": "clip", "type": "CLIP", "link": 6}
+        ],
+        "outputs": [
+          {"name": "CONDITIONING", "type": "CONDITIONING", "links": [8]}
+        ],
+        "widgets_values": ["{{prompt}}"]
+      },
+      {
+        "id": 7,
+        "type": "CLIPTextEncode",
+        "pos": [400, 680],
+        "size": [300, 150],
+        "inputs": [
+          {"name": "clip", "type": "CLIP", "link": 7}
+        ],
+        "outputs": [
+          {"name": "CONDITIONING", "type": "CONDITIONING", "links": [9]}
+        ],
+        "widgets_values": ["{{negative_prompt}}"]
+      },
+      {
+        "id": 8,
+        "type": "EmptyLatentImage",
+        "pos": [750, 600],
+        "size": [200, 100],
+        "inputs": [],
+        "outputs": [
+          {"name": "LATENT", "type": "LATENT", "links": [11]}
+        ],
+        "widgets_values": [1024, 1024, 1]
+      },
+      {
+        "id": 9,
+        "type": "KSampler",
+        "pos": [750, 300],
+        "size": [300, 280],
+        "inputs": [
+          {"name": "model", "type": "MODEL", "link": 5},
+          {"name": "positive", "type": "CONDITIONING", "link": 8},
+          {"name": "negative", "type": "CONDITIONING", "link": 9},
+          {"name": "latent_image", "type": "LATENT", "link": 11}
+        ],
+        "outputs": [
+          {"name": "LATENT", "type": "LATENT", "links": [12]}
+        ],
+        "widgets_values": ["{{seed}}", "fixed", 25, 5.0, "euler", "normal", 1.0]
+      },
+      {
+        "id": 10,
+        "type": "VAEDecode",
+        "pos": [1100, 350],
+        "size": [200, 80],
+        "inputs": [
+          {"name": "samples", "type": "LATENT", "link": 12},
+          {"name": "vae", "type": "VAE", "link": 10}
+        ],
+        "outputs": [
+          {"name": "IMAGE", "type": "IMAGE", "links": [13]}
+        ],
+        "widgets_values": []
+      },
+      {
+        "id": 11,
+        "type": "SaveImage",
+        "pos": [1350, 350],
+        "size": [300, 250],
+        "inputs": [
+          {"name": "images", "type": "IMAGE", "link": 13}
+        ],
+        "outputs": [],
+        "widgets_values": ["instantid"]
+      }
+    ],
+    "links": [
+      [1, 1, 0, 2, 0, "IMAGE"],
+      [2, 2, 0, 5, 2, "FACE_EMBEDS"],
+      [3, 3, 0, 5, 0, "MODEL"],
+      [4, 4, 0, 5, 1, "INSTANTID"],
+      [5, 5, 0, 9, 0, "MODEL"],
+      [6, 3, 1, 6, 0, "CLIP"],
+      [7, 3, 1, 7, 0, "CLIP"],
+      [8, 6, 0, 9, 1, "CONDITIONING"],
+      [9, 7, 0, 9, 2, "CONDITIONING"],
+      [10, 3, 2, 10, 1, "VAE"],
+      [11, 8, 0, 9, 3, "LATENT"],
+      [12, 9, 0, 10, 0, "LATENT"],
+      [13, 10, 0, 11, 0, "IMAGE"]
+    ],
+    "groups": [],
+    "config": {},
+    "extra": {},
+    "version": 0.4
+  }
+}

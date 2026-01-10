@@ -7,6 +7,7 @@ Wraps ComfyUI's API for workflow execution without the web UI.
 
 import asyncio
 import json
+import logging
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -14,6 +15,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -234,8 +237,8 @@ class ComfyUIExecutor:
                     if devices:
                         vram_used = devices[0].get("vram_used", 0)
                         return vram_used / (1024 ** 3)  # Convert to GB
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to get VRAM usage: {e}")
         return 0.0
 
     async def shutdown(self) -> None:

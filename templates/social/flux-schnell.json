@@ -1,0 +1,132 @@
+{
+  "name": "FLUX.1 SCHNELL",
+  "description": "Fast image generation with FLUX.1 SCHNELL. Optimized for speed with 4-step generation.",
+  "category": "social",
+  "tags": ["flux", "fast", "image-gen", "schnell"],
+  "model_requirements": ["flux1-schnell.safetensors"],
+  "vram_requirement_gb": 16,
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "prompt": {
+        "type": "string",
+        "description": "Text prompt for image generation"
+      },
+      "width": {
+        "type": "integer",
+        "default": 1024,
+        "minimum": 512,
+        "maximum": 2048
+      },
+      "height": {
+        "type": "integer",
+        "default": 1024,
+        "minimum": 512,
+        "maximum": 2048
+      },
+      "seed": {
+        "type": "integer",
+        "default": -1,
+        "description": "-1 for random seed"
+      }
+    },
+    "required": ["prompt"]
+  },
+  "workflow": {
+    "last_node_id": 8,
+    "last_link_id": 7,
+    "nodes": [
+      {
+        "id": 1,
+        "type": "CheckpointLoaderSimple",
+        "pos": [50, 100],
+        "size": [300, 100],
+        "inputs": [],
+        "outputs": [
+          {"name": "MODEL", "type": "MODEL", "links": [1]},
+          {"name": "CLIP", "type": "CLIP", "links": [2]},
+          {"name": "VAE", "type": "VAE", "links": [6]}
+        ],
+        "widgets_values": ["flux1-schnell.safetensors"]
+      },
+      {
+        "id": 2,
+        "type": "CLIPTextEncode",
+        "pos": [400, 100],
+        "size": [300, 150],
+        "inputs": [
+          {"name": "clip", "type": "CLIP", "link": 2}
+        ],
+        "outputs": [
+          {"name": "CONDITIONING", "type": "CONDITIONING", "links": [3]}
+        ],
+        "widgets_values": ["{{prompt}}"]
+      },
+      {
+        "id": 3,
+        "type": "EmptyLatentImage",
+        "pos": [400, 300],
+        "size": [300, 100],
+        "inputs": [],
+        "outputs": [
+          {"name": "LATENT", "type": "LATENT", "links": [4]}
+        ],
+        "widgets_values": ["{{width}}", "{{height}}", 1]
+      },
+      {
+        "id": 4,
+        "type": "KSampler",
+        "pos": [750, 150],
+        "size": [300, 250],
+        "inputs": [
+          {"name": "model", "type": "MODEL", "link": 1},
+          {"name": "positive", "type": "CONDITIONING", "link": 3},
+          {"name": "negative", "type": "CONDITIONING", "link": null},
+          {"name": "latent_image", "type": "LATENT", "link": 4}
+        ],
+        "outputs": [
+          {"name": "LATENT", "type": "LATENT", "links": [5]}
+        ],
+        "widgets_values": ["{{seed}}", "fixed", 4, 1.0, "euler", "simple", 1.0]
+      },
+      {
+        "id": 5,
+        "type": "VAEDecode",
+        "pos": [1100, 200],
+        "size": [200, 80],
+        "inputs": [
+          {"name": "samples", "type": "LATENT", "link": 5},
+          {"name": "vae", "type": "VAE", "link": 6}
+        ],
+        "outputs": [
+          {"name": "IMAGE", "type": "IMAGE", "links": [7]}
+        ],
+        "widgets_values": []
+      },
+      {
+        "id": 6,
+        "type": "SaveImage",
+        "pos": [1350, 200],
+        "size": [300, 250],
+        "inputs": [
+          {"name": "images", "type": "IMAGE", "link": 7}
+        ],
+        "outputs": [],
+        "widgets_values": ["flux_schnell"]
+      }
+    ],
+    "links": [
+      [1, 1, 0, 4, 0, "MODEL"],
+      [2, 1, 1, 2, 0, "CLIP"],
+      [3, 2, 0, 4, 1, "CONDITIONING"],
+      [4, 3, 0, 4, 3, "LATENT"],
+      [5, 4, 0, 5, 0, "LATENT"],
+      [6, 1, 2, 5, 1, "VAE"],
+      [7, 5, 0, 6, 0, "IMAGE"]
+    ],
+    "groups": [],
+    "config": {},
+    "extra": {},
+    "version": 0.4
+  }
+}

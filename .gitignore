@@ -55,6 +55,7 @@ htmlcov/
 
 # Models and outputs (large files)
 models/
+!**/ceq_api/models/
 outputs/
 cache/
 *.ckpt

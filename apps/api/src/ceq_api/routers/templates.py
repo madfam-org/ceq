@@ -1,10 +1,13 @@
 """Template management endpoints."""
 
+import logging
 from datetime import datetime, timezone
 from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+
+logger = logging.getLogger(__name__)
 from jsonschema import Draft7Validator
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -300,7 +303,7 @@ async def run_template(
             if isinstance(e, HTTPException):
                 raise
             # Schema itself may be malformed - log and continue
-            pass
+            logger.warning(f"Invalid input_schema for template {template_id}: {e}")
 
     # Create ephemeral workflow for this run
     now = datetime.now(timezone.utc)

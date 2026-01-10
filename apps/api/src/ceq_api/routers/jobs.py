@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+
+logger = logging.getLogger(__name__)
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -350,8 +353,8 @@ async def stream_job_progress(
                         # Check for terminal states
                         if data.get("type") in ["complete", "error", "cancelled"]:
                             return
-                    except json.JSONDecodeError:
-                        pass
+                    except json.JSONDecodeError as e:
+                        logger.debug(f"Malformed JSON in pubsub message: {e}")
 
         async def handle_client_messages():
             """Handle incoming WebSocket messages from client."""
@@ -378,22 +381,23 @@ async def stream_job_progress(
 
     except WebSocketDisconnect:
         # Client disconnected gracefully
-        pass
+        logger.debug(f"WebSocket client disconnected from job {job_id}")
     except Exception as e:
+        logger.warning(f"WebSocket error for job {job_id}: {e}")
         try:
             await websocket.send_json({
                 "type": "error",
                 "data": {"message": str(e)},
             })
-        except:
-            pass
+        except Exception as send_err:
+            logger.debug(f"Failed to send error to WebSocket: {send_err}")
     finally:
         await pubsub.unsubscribe(channel)
         await pubsub.close()
         try:
             await websocket.close()
-        except:
-            pass
+        except Exception as close_err:
+            logger.debug(f"Failed to close WebSocket: {close_err}")
 
 
 @router.get("/{job_id}/outputs", response_model=list[OutputResponse])

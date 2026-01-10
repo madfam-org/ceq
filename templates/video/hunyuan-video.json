@@ -1,0 +1,177 @@
+{
+  "name": "Hunyuan Video 1.0",
+  "description": "Text-to-video generation using Hunyuan Video model. Create short video clips from text descriptions.",
+  "category": "video",
+  "tags": ["hunyuan", "text-to-video", "video-gen", "animation"],
+  "model_requirements": ["hunyuan_video_720_cfgdistill_fp8.safetensors"],
+  "vram_requirement_gb": 24,
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "prompt": {
+        "type": "string",
+        "description": "Video description"
+      },
+      "negative_prompt": {
+        "type": "string",
+        "default": "blurry, low quality, distorted",
+        "description": "Negative prompt"
+      },
+      "frames": {
+        "type": "integer",
+        "default": 49,
+        "minimum": 25,
+        "maximum": 129,
+        "description": "Number of frames"
+      },
+      "width": {
+        "type": "integer",
+        "default": 848
+      },
+      "height": {
+        "type": "integer",
+        "default": 480
+      },
+      "steps": {
+        "type": "integer",
+        "default": 30,
+        "minimum": 10,
+        "maximum": 50
+      },
+      "cfg": {
+        "type": "number",
+        "default": 6.0,
+        "minimum": 1.0,
+        "maximum": 15.0
+      },
+      "seed": {
+        "type": "integer",
+        "default": -1,
+        "description": "-1 for random seed"
+      }
+    },
+    "required": ["prompt"]
+  },
+  "workflow": {
+    "last_node_id": 8,
+    "last_link_id": 8,
+    "nodes": [
+      {
+        "id": 1,
+        "type": "HunyuanVideoModelLoader",
+        "pos": [50, 100],
+        "size": [300, 100],
+        "inputs": [],
+        "outputs": [
+          {"name": "MODEL", "type": "HUNYUAN_VIDEO_MODEL", "links": [1]},
+          {"name": "VAE", "type": "VAE", "links": [7]}
+        ],
+        "widgets_values": ["hunyuan_video_720_cfgdistill_fp8.safetensors"]
+      },
+      {
+        "id": 2,
+        "type": "HunyuanVideoCLIPLoader",
+        "pos": [50, 250],
+        "size": [300, 80],
+        "inputs": [],
+        "outputs": [
+          {"name": "CLIP", "type": "CLIP", "links": [2, 3]}
+        ],
+        "widgets_values": []
+      },
+      {
+        "id": 3,
+        "type": "HunyuanVideoTextEncode",
+        "pos": [400, 100],
+        "size": [300, 150],
+        "inputs": [
+          {"name": "clip", "type": "CLIP", "link": 2}
+        ],
+        "outputs": [
+          {"name": "CONDITIONING", "type": "CONDITIONING", "links": [4]}
+        ],
+        "widgets_values": ["{{prompt}}"]
+      },
+      {
+        "id": 4,
+        "type": "HunyuanVideoTextEncode",
+        "pos": [400, 280],
+        "size": [300, 150],
+        "inputs": [
+          {"name": "clip", "type": "CLIP", "link": 3}
+        ],
+        "outputs": [
+          {"name": "CONDITIONING", "type": "CONDITIONING", "links": [5]}
+        ],
+        "widgets_values": ["{{negative_prompt}}"]
+      },
+      {
+        "id": 5,
+        "type": "HunyuanVideoEmptyLatent",
+        "pos": [400, 460],
+        "size": [300, 100],
+        "inputs": [],
+        "outputs": [
+          {"name": "LATENT", "type": "LATENT", "links": [6]}
+        ],
+        "widgets_values": ["{{width}}", "{{height}}", "{{frames}}"]
+      },
+      {
+        "id": 6,
+        "type": "HunyuanVideoSampler",
+        "pos": [750, 200],
+        "size": [300, 280],
+        "inputs": [
+          {"name": "model", "type": "HUNYUAN_VIDEO_MODEL", "link": 1},
+          {"name": "positive", "type": "CONDITIONING", "link": 4},
+          {"name": "negative", "type": "CONDITIONING", "link": 5},
+          {"name": "latent", "type": "LATENT", "link": 6}
+        ],
+        "outputs": [
+          {"name": "LATENT", "type": "LATENT", "links": [8]}
+        ],
+        "widgets_values": ["{{steps}}", "{{cfg}}", "{{seed}}"]
+      },
+      {
+        "id": 7,
+        "type": "HunyuanVideoVAEDecode",
+        "pos": [1100, 250],
+        "size": [200, 80],
+        "inputs": [
+          {"name": "samples", "type": "LATENT", "link": 8},
+          {"name": "vae", "type": "VAE", "link": 7}
+        ],
+        "outputs": [
+          {"name": "IMAGE", "type": "IMAGE", "links": [9]}
+        ],
+        "widgets_values": []
+      },
+      {
+        "id": 8,
+        "type": "VHS_VideoCombine",
+        "pos": [1350, 250],
+        "size": [300, 250],
+        "inputs": [
+          {"name": "images", "type": "IMAGE", "link": 9}
+        ],
+        "outputs": [],
+        "widgets_values": [24, "video/mp4", "hunyuan_video"]
+      }
+    ],
+    "links": [
+      [1, 1, 0, 6, 0, "HUNYUAN_VIDEO_MODEL"],
+      [2, 2, 0, 3, 0, "CLIP"],
+      [3, 2, 0, 4, 0, "CLIP"],
+      [4, 3, 0, 6, 1, "CONDITIONING"],
+      [5, 4, 0, 6, 2, "CONDITIONING"],
+      [6, 5, 0, 6, 3, "LATENT"],
+      [7, 1, 1, 7, 1, "VAE"],
+      [8, 6, 0, 7, 0, "LATENT"],
+      [9, 7, 0, 8, 0, "IMAGE"]
+    ],
+    "groups": [],
+    "config": {},
+    "extra": {},
+    "version": 0.4
+  }
+}
