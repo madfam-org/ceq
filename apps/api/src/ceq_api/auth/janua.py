@@ -11,6 +11,12 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from ceq_api.config import get_settings
+from ceq_api.resilience import (
+    CircuitBreakerError,
+    janua_circuit,
+    retry_with_backoff,
+    JANUA_RETRY_CONFIG,
+)
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -43,10 +49,34 @@ def get_janua_client() -> httpx.AsyncClient:
     )
 
 
+async def _validate_token_impl(token: str) -> JanuaUser | None:
+    """Internal token validation with retry support."""
+    client = get_janua_client()
+    response = await client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    if response.status_code != 200:
+        logger.debug(f"Token validation failed: status {response.status_code}")
+        return None
+
+    data = response.json()
+    user = JanuaUser(
+        id=UUID(data["id"]),
+        email=data["email"],
+        org_id=UUID(data["org_id"]) if data.get("org_id") else None,
+        roles=data.get("roles"),
+    )
+    logger.debug(f"Token validated for user {user.email}")
+    return user
+
+
 async def validate_token(token: str) -> JanuaUser | None:
     """
     Validate a JWT token with Janua.
 
+    Uses circuit breaker and retry logic for reliability.
     Returns the user if valid, None if invalid.
     """
     if not settings.janua_enabled:
@@ -60,26 +90,19 @@ async def validate_token(token: str) -> JanuaUser | None:
         )
 
     try:
-        client = get_janua_client()
-        response = await client.get(
-            "/api/v1/auth/me",
-            headers={"Authorization": f"Bearer {token}"},
-        )
+        # Use circuit breaker with retry
+        async def do_validate():
+            return await retry_with_backoff(
+                _validate_token_impl,
+                JANUA_RETRY_CONFIG,
+                token,
+            )
 
-        if response.status_code != 200:
-            logger.debug(f"Token validation failed: status {response.status_code}")
-            return None
+        return await janua_circuit.call(do_validate)
 
-        data = response.json()
-        user = JanuaUser(
-            id=UUID(data["id"]),
-            email=data["email"],
-            org_id=UUID(data["org_id"]) if data.get("org_id") else None,
-            roles=data.get("roles"),
-        )
-        logger.debug(f"Token validated for user {user.email}")
-        return user
-
+    except CircuitBreakerError as e:
+        logger.warning(f"Janua circuit breaker open: {e}")
+        return None
     except httpx.TimeoutException:
         logger.error("Janua API timeout during token validation")
         return None
