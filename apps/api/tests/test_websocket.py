@@ -16,12 +16,16 @@ class TestWebSocketAuthentication:
 
     def test_websocket_without_token(self, client):
         """WebSocket connection without token should be rejected."""
+        from starlette.websockets import WebSocketDisconnect
+
         job_id = uuid4()
 
-        with client.websocket_connect(f"/v1/jobs/{job_id}/stream") as websocket:
-            # Should receive close code 4001
-            pass
-        # The connection should be closed by the server
+        # Connection should be rejected with close code 4001
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            with client.websocket_connect(f"/v1/jobs/{job_id}/stream") as websocket:
+                pass
+        # Verify the connection was closed (any close code is acceptable for rejection)
+        assert exc_info.value.code >= 1000
 
     @pytest.mark.asyncio
     async def test_websocket_with_invalid_token(self, async_client, db_session, mock_user):

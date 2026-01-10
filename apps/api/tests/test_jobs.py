@@ -193,7 +193,9 @@ class TestPollJobStatus:
         db_session.add(job)
         await db_session.commit()
 
-        response = await async_client.get(f"/v1/jobs/{job.id}/poll")
+        # Patch get_redis at module level since it's called directly
+        with patch("ceq_api.routers.jobs.get_redis", return_value=mock_redis):
+            response = await async_client.get(f"/v1/jobs/{job.id}/poll")
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -234,13 +236,18 @@ class TestCancelJob:
         db_session.add(job)
         await db_session.commit()
 
-        response = await async_client.delete(f"/v1/jobs/{job.id}")
+        # Patch Redis functions at module level since they're called directly
+        with patch("ceq_api.routers.jobs.get_redis", return_value=mock_redis), \
+             patch("ceq_api.routers.jobs.publish_job_update", new_callable=AsyncMock):
+            response = await async_client.delete(f"/v1/jobs/{job.id}")
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
-        # Verify job was cancelled
-        await db_session.refresh(job)
-        assert job.status == JobStatus.CANCELLED.value
+        # Verify job was cancelled - refetch from database to get updated state
+        from sqlalchemy import select
+        result = await db_session.execute(select(Job).where(Job.id == job.id))
+        updated_job = result.scalar_one()
+        assert updated_job.status == JobStatus.CANCELLED.value
 
     @pytest.mark.asyncio
     async def test_cancel_job_already_completed(self, async_client, db_session, mock_user):

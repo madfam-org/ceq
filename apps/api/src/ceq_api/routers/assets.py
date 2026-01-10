@@ -425,7 +425,7 @@ async def upload_asset(
         operation="upload",
         asset_id=str(asset.id),
         user_id=str(user.id),
-        filename=safe_filename,
+        asset_filename=safe_filename,
     )
 
     return AssetUploadResponse(
@@ -599,7 +599,7 @@ async def delete_asset(
         operation="delete",
         asset_id=str(asset_id),
         user_id=str(user.id),
-        filename=asset.name,
+        asset_filename=asset.name,
         success=r2_deleted,
         reason="Orphaned R2 file" if not r2_deleted else None,
     )

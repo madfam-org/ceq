@@ -133,7 +133,7 @@ class AuditLogger:
         operation: str,
         asset_id: str,
         user_id: str,
-        filename: str | None = None,
+        asset_filename: str | None = None,
         success: bool = True,
         reason: str | None = None,
     ) -> None:
@@ -144,7 +144,7 @@ class AuditLogger:
                 "event_type": f"asset_{operation}",
                 "asset_id": asset_id,
                 "user_id": user_id,
-                "filename": filename,
+                "asset_filename": asset_filename,  # renamed from filename - reserved by LogRecord
                 "success": success,
                 "reason": reason,
             },
