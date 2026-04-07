@@ -24,6 +24,7 @@ dependencies = [
     "jsonschema>=4.21.0",  # Input validation
     "slowapi>=0.1.9",  # Rate limiting
     "python-json-logger>=2.0.0",  # Structured logging
+    "PyJWT[crypto]>=2.8.0",  # JWKS RS256 token validation
 ]
 
 [project.optional-dependencies]

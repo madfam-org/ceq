@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     # Janua (authentication)
     janua_api_url: str = "http://localhost:4100"
     janua_enabled: bool = True
+    janua_jwks_url: str = ""  # e.g. https://auth.madfam.io/.well-known/jwks.json
+    janua_issuer: str = ""  # e.g. https://auth.madfam.io
+    janua_audience: str = ""  # e.g. ceq-api
 
     # R2 Storage (Cloudflare)
     r2_endpoint: str = ""
