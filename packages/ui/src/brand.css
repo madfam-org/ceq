@@ -1,0 +1,30 @@
+/*
+ * MADFAM brand tokens as CSS custom properties.
+ *
+ * Import this file from any app that needs brand colors without pulling
+ * in the full globals.css (e.g. email templates, standalone widgets).
+ *
+ * Two variants per hue:
+ *   terminal-*  — high-saturation, screen-glow feel
+ *   brand-*     — print-safe, slightly muted
+ *
+ * Each property is provided in two formats:
+ *   --color-*          raw hex (canvas, SVG, emails)
+ *   --color-*-hsl      H S% L% triple for Tailwind's hsl(var(--x)) pattern
+ */
+
+:root {
+  /* ── Terminal variants ─────────────────────────────────── */
+  --color-terminal-green:     #16a34a;
+  --color-terminal-green-hsl: 142 76% 36%;
+
+  --color-neon-violet:        #cc66ff;
+  --color-neon-violet-hsl:    280 100% 70%;
+
+  /* ── Brand variants ────────────────────────────────────── */
+  --color-brand-green:        #2c8136;
+  --color-brand-green-hsl:    127 49% 34%;
+
+  --color-brand-violet:       #58326f;
+  --color-brand-violet-hsl:   277 38% 32%;
+}

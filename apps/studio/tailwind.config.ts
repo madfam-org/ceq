@@ -55,6 +55,11 @@ const config: Config = {
           warning: "hsl(var(--signal-warning))",
           error: "hsl(var(--signal-error))",
         },
+        // MADFAM brand tokens — terminal + brand variants
+        "terminal-green": "hsl(var(--color-terminal-green-hsl))",
+        "brand-green": "hsl(var(--color-brand-green-hsl))",
+        "neon-violet": "hsl(var(--color-neon-violet-hsl))",
+        "brand-violet": "hsl(var(--color-brand-violet-hsl))",
       },
       fontFamily: {
         mono: ["var(--font-mono)", "JetBrains Mono", "Fira Code", "monospace"],

@@ -42,6 +42,19 @@
     --signal-success: 142 76% 50%;
     --signal-warning: 45 93% 47%;
     --signal-error: 0 84% 60%;
+
+    /* ── MADFAM brand tokens ─────────────────────────────── */
+    /* Terminal variants – high-saturation, screen-glow feel */
+    --color-terminal-green:     #16a34a;
+    --color-terminal-green-hsl: 142 76% 36%;
+    --color-neon-violet:        #cc66ff;
+    --color-neon-violet-hsl:    280 100% 70%;
+
+    /* Brand variants – print-safe, slightly muted */
+    --color-brand-green:        #2c8136;
+    --color-brand-green-hsl:    127 49% 34%;
+    --color-brand-violet:       #58326f;
+    --color-brand-violet-hsl:   277 38% 32%;
   }
 
   /* Force dark mode - ceq is dark only */
