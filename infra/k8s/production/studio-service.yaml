@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ceq-studio
+  namespace: ceq
+spec:
+  type: ClusterIP
+  selector:
+    app: ceq-studio
+  ports:
+  - port: 80
+    targetPort: 5801
+    protocol: TCP
