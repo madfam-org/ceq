@@ -70,3 +70,8 @@ cache/
 # Vercel
 .vercel/
 secrets.prod.yaml
+*.pem
+*.key
+*.p12
+*.pfx
+.env.production
