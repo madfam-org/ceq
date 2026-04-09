@@ -56,14 +56,18 @@ class Settings(BaseSettings):
     health_check_interval: int = 30
 
     # GPU Provider Configuration
-    gpu_provider: Literal["vast", "furnace"] = Field(default="vast")
+    gpu_provider: Literal["vast", "fal", "furnace"] = Field(default="vast")
 
-    # Vast.ai Configuration
+    # Vast.ai Configuration (instance-based, Docker deployment)
     vast_api_key: str = Field(default="")
     vast_region: str = Field(default="any")
     vast_ssh_key: str = Field(default="~/.ssh/id_rsa")
     vast_max_price: float = Field(default=1.0)  # $/hr
     vast_max_instances: int = Field(default=5)
+
+    # fal.ai Configuration (serverless API, per-request billing)
+    fal_api_key: str = Field(default="")
+    fal_max_hourly_spend: float = Field(default=5.0)  # $/hr budget cap
 
     # Furnace Configuration (future - Enclii internal)
     furnace_api_key: str = Field(default="")

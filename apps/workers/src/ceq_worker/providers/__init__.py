@@ -2,9 +2,9 @@
 GPU Provider Abstraction Layer
 
 Provides a unified interface for different GPU compute providers:
-- Vast.ai (current)
-- Furnace (future - via Enclii)
-- RunPod (alternative)
+- Vast.ai (current) — P2P GPU marketplace, Docker-based instances
+- fal.ai (current) — Serverless API, per-request billing, fast image gen
+- Furnace (future - via Enclii) — Self-hosted GPU scheduling
 
 This abstraction enables seamless migration between providers.
 """
@@ -12,12 +12,14 @@ This abstraction enables seamless migration between providers.
 from ceq_worker.providers.base import GPUProvider, ProviderConfig
 from ceq_worker.providers.vast import VastAIProvider
 from ceq_worker.providers.furnace import FurnaceProvider
+from ceq_worker.providers.fal import FalAIProvider
 
 __all__ = [
     "GPUProvider",
     "ProviderConfig",
     "VastAIProvider",
     "FurnaceProvider",
+    "FalAIProvider",
     "get_provider",
 ]
 
@@ -27,15 +29,15 @@ def get_provider(provider_type: str = "vast") -> GPUProvider:
     Get the appropriate GPU provider instance.
 
     Args:
-        provider_type: One of "vast", "furnace", "runpod"
+        provider_type: One of "vast", "fal", "furnace"
 
     Returns:
         Configured GPUProvider instance
     """
     providers = {
         "vast": VastAIProvider,
+        "fal": FalAIProvider,
         "furnace": FurnaceProvider,
-        # "runpod": RunPodProvider,  # Future
     }
 
     if provider_type not in providers:
