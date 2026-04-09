@@ -19,7 +19,6 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/studio/package.json ./apps/studio/
 COPY packages/ui/package.json ./packages/ui/
-COPY packages/workflow-types/package.json ./packages/workflow-types/
 RUN corepack enable && corepack prepare pnpm@9.14.4 --activate && \
     pnpm install --frozen-lockfile || pnpm install
 
