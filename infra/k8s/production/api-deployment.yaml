@@ -46,6 +46,7 @@ spec:
             memory: "1Gi"
         securityContext:
           allowPrivilegeEscalation: false
+          privileged: false
           capabilities:
             drop: [ALL]
         startupProbe:

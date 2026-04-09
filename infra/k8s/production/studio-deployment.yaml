@@ -46,6 +46,7 @@ spec:
             memory: "512Mi"
         securityContext:
           allowPrivilegeEscalation: false
+          privileged: false
           capabilities:
             drop: [ALL]
         startupProbe:
