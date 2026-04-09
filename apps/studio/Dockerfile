@@ -15,8 +15,11 @@ FROM node:20-alpine AS deps
 
 WORKDIR /app
 
-# Install dependencies based on the preferred package manager
-COPY package.json pnpm-lock.yaml* ./
+# Copy workspace root config + lockfile + all package.json files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/studio/package.json ./apps/studio/
+COPY packages/ui/package.json ./packages/ui/
+COPY packages/workflow-types/package.json ./packages/workflow-types/
 RUN corepack enable && corepack prepare pnpm@9.14.4 --activate && \
     pnpm install --frozen-lockfile || pnpm install
 
@@ -28,7 +31,9 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY --from=deps /app/apps/studio/node_modules ./apps/studio/node_modules
+COPY --from=deps /app/packages/ ./packages/
+COPY apps/studio/ ./apps/studio/
 
 # Build arguments for environment variables (OAuth client registered in Janua 2025-12-10)
 ARG NEXT_PUBLIC_API_URL=https://api.ceq.lol
@@ -41,6 +46,8 @@ ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
 ENV NEXT_PUBLIC_JANUA_DOMAIN=$NEXT_PUBLIC_JANUA_DOMAIN
 ENV NEXT_PUBLIC_JANUA_CLIENT_ID=$NEXT_PUBLIC_JANUA_CLIENT_ID
 ENV NEXT_TELEMETRY_DISABLED=1
+
+WORKDIR /app/apps/studio
 
 # Build Next.js with standalone output
 RUN corepack enable && corepack prepare pnpm@9.14.4 --activate && pnpm build
@@ -57,9 +64,9 @@ RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
 # Copy built assets
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder /app/apps/studio/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/apps/studio/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/apps/studio/.next/static ./.next/static
 
 # Environment
 ENV NODE_ENV=production

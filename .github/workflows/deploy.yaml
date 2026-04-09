@@ -138,7 +138,8 @@ jobs:
         uses: docker/build-push-action@v5
         id: build-studio
         with:
-          context: ./apps/studio
+          context: .
+          file: ./apps/studio/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
