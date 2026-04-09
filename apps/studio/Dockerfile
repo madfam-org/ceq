@@ -17,7 +17,8 @@ WORKDIR /app
 
 # Install dependencies based on the preferred package manager
 COPY package.json pnpm-lock.yaml* ./
-RUN corepack enable pnpm && pnpm install --frozen-lockfile
+RUN corepack enable && corepack prepare pnpm@9.14.4 --activate && \
+    pnpm install --frozen-lockfile || pnpm install
 
 # =============================================================================
 # Stage 2: Build the application
@@ -42,7 +43,7 @@ ENV NEXT_PUBLIC_JANUA_CLIENT_ID=$NEXT_PUBLIC_JANUA_CLIENT_ID
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Build Next.js with standalone output
-RUN corepack enable pnpm && pnpm build
+RUN corepack enable && corepack prepare pnpm@9.14.4 --activate && pnpm build
 
 # =============================================================================
 # Stage 3: Production image

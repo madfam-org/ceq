@@ -34,7 +34,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/madfam
+  IMAGE_PREFIX: ghcr.io/madfam-org/ceq
 
 jobs:
   # ===========================================================================
@@ -46,6 +46,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
 
     outputs:
       image-tag: ${{ steps.meta.outputs.tags }}
@@ -53,6 +54,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -75,6 +79,7 @@ jobs:
 
       - name: Build and push
         uses: docker/build-push-action@v5
+        id: build-api
         with:
           context: ./apps/api
           push: true
@@ -82,6 +87,12 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Sign image with cosign
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          cosign sign --yes ${{ env.IMAGE_PREFIX }}/api@${{ steps.build-api.outputs.digest }}
 
   # ===========================================================================
   # Build Studio Image
@@ -92,6 +103,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
 
     outputs:
       image-tag: ${{ steps.meta.outputs.tags }}
@@ -99,6 +111,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -121,6 +136,7 @@ jobs:
 
       - name: Build and push
         uses: docker/build-push-action@v5
+        id: build-studio
         with:
           context: ./apps/studio
           push: true
@@ -133,6 +149,12 @@ jobs:
             NEXT_PUBLIC_JANUA_CLIENT_ID=jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Sign image with cosign
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          cosign sign --yes ${{ env.IMAGE_PREFIX }}/studio@${{ steps.build-studio.outputs.digest }}
 
   # ===========================================================================
   # Build Worker Image (Optional)
@@ -166,7 +188,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_PREFIX }}/ceq-worker
+          images: ${{ env.IMAGE_PREFIX }}/worker
           tags: |
             type=sha,prefix=
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
@@ -209,9 +231,9 @@ jobs:
         run: |
           cd infrastructure/k8s
           # Update API image
-          kustomize edit set image ghcr.io/madfam/ceq-api=${{ env.IMAGE_PREFIX }}/ceq-api:${{ github.sha }}
+          kustomize edit set image ghcr.io/madfam-org/ceq/api=${{ env.IMAGE_PREFIX }}/ceq-api:${{ github.sha }}
           # Update Studio image
-          kustomize edit set image ghcr.io/madfam/ceq-studio=${{ env.IMAGE_PREFIX }}/ceq-studio:${{ github.sha }}
+          kustomize edit set image ghcr.io/madfam-org/ceq/studio=${{ env.IMAGE_PREFIX }}/ceq-studio:${{ github.sha }}
 
       - name: Deploy to cluster
         run: |
