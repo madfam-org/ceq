@@ -44,7 +44,7 @@ async def health_check() -> HealthResponse:
     Use /ready for full readiness check.
     """
     return HealthResponse(
-        status="healthy",
+        status="ok",
         service="ceq-api",
         version=settings.app_version,
     )

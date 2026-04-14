@@ -5,6 +5,24 @@ The skunkworks terminal for the generative avant-garde.
 Wrestling order from the chaos of latent space.
 """
 
+import os
+
+# Initialize Sentry early, before other imports
+_sentry_dsn = os.environ.get("SENTRY_DSN", "")
+if _sentry_dsn:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+
+        sentry_sdk.init(
+            dsn=_sentry_dsn,
+            environment=os.environ.get("SENTRY_ENVIRONMENT", os.environ.get("APP_ENV", "development")),
+            traces_sample_rate=0.1,
+            integrations=[FastApiIntegration()],
+        )
+    except ImportError:
+        pass  # sentry-sdk not installed
+
 import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
