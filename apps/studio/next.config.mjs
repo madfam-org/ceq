@@ -1,8 +1,15 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   // Enable standalone output for Docker deployment
   output: "standalone",
+  // Trace from monorepo root to include workspace deps in standalone
+  outputFileTracingRoot: path.join(__dirname, '../../'),
   // Skip build-time type errors (stubs for slider/switch have type mismatches)
   typescript: { ignoreBuildErrors: true },
   eslint: { ignoreDuringBuilds: true },
