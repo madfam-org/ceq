@@ -25,7 +25,9 @@ spec:
         matchLabels:
           kubernetes.io/metadata.name: cloudflare-tunnel
     ports:
-    - port: 80
+    - port: 5800
+      protocol: TCP
+    - port: 5801
       protocol: TCP
 ---
 apiVersion: networking.k8s.io/v1

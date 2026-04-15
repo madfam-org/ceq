@@ -30,6 +30,7 @@ spec:
       containers:
       - name: ceq-studio
         image: ghcr.io/madfam-org/ceq/studio:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 5801
           name: http

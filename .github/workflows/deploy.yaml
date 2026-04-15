@@ -42,7 +42,7 @@ jobs:
   # ===========================================================================
   build-api:
     name: Build API
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-latest' }}
     permissions:
       contents: read
       packages: write
@@ -99,7 +99,7 @@ jobs:
   # ===========================================================================
   build-studio:
     name: Build Studio
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-latest' }}
     permissions:
       contents: read
       packages: write
@@ -162,7 +162,7 @@ jobs:
   # ===========================================================================
   build-worker:
     name: Build Worker
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-latest' }}
     permissions:
       contents: read
       packages: write
@@ -209,7 +209,7 @@ jobs:
   # ===========================================================================
   deploy:
     name: Deploy to K8s
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-latest' }}
     needs: [build-api, build-studio]
     environment: production
 
@@ -296,7 +296,7 @@ jobs:
   # ===========================================================================
   notify:
     name: Notify
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-latest' }}
     needs: [deploy]
     if: always()
 

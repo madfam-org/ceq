@@ -15,9 +15,18 @@ spec:
       labels:
         app: ceq-studio
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      imagePullSecrets:
+        - name: ghcr-credentials
       containers:
         - name: ceq-studio
-          image: ghcr.io/madfam/ceq-studio:latest
+          image: ghcr.io/madfam-org/ceq/studio:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 5801
               name: http
@@ -35,6 +44,11 @@ spec:
             limits:
               memory: "256Mi"
               cpu: "250m"
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
           livenessProbe:
             httpGet:
               path: /
