@@ -14,7 +14,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/studio/package.json ./apps/studio/
 COPY packages/ui/package.json ./packages/ui/
 
-# Full install (not filtered) — standalone tracer needs the complete .pnpm store
+# Full install — standalone tracer needs the complete .pnpm store
 RUN corepack enable && corepack prepare pnpm@9.14.4 --activate && \
     pnpm install --frozen-lockfile || pnpm install
 
@@ -48,10 +48,20 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-# Copy standalone output (includes node_modules/.pnpm, apps/studio/server.js)
+# Copy standalone output
+# Note: Next.js 14 with outputFileTracingRoot produces flat structure
+# (server.js at root, node_modules/ with symlinks)
 COPY --from=builder --chown=nextjs:nodejs /app/apps/studio/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/studio/.next/static ./apps/studio/.next/static
-COPY --from=builder /app/apps/studio/public ./apps/studio/public
+COPY --from=builder --chown=nextjs:nodejs /app/apps/studio/.next/static ./.next/static
+COPY --from=builder /app/apps/studio/public ./public
+
+# Fix broken pnpm symlinks: copy .pnpm store and recreate links
+# Next.js 14 standalone doesn't trace .pnpm/ into output
+RUN rm -rf node_modules
+COPY --from=builder /app/node_modules/.pnpm ./node_modules/.pnpm
+RUN ln -s .pnpm/next@14.2.35_@babel+core@7.29.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next ./node_modules/next && \
+    ln -s .pnpm/react@18.3.1/node_modules/react ./node_modules/react && \
+    ln -s .pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom ./node_modules/react-dom
 
 # Environment
 ENV NODE_ENV=production
@@ -65,4 +75,4 @@ USER nextjs
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD wget -q --spider http://localhost:5801/ || exit 1
 
-CMD ["node", "apps/studio/server.js"]
+CMD ["node", "server.js"]
