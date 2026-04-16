@@ -51,7 +51,11 @@ export default function HomePage() {
         {/* Status bar */}
         <footer className="fixed bottom-0 left-0 right-0 bg-card border-t border-border px-4 py-2">
           <div className="flex items-center justify-between text-xs text-muted-foreground font-mono">
-            <span>Signal acquired. 📡</span>
+            <span>Signal acquired.</span>
+            <span>
+              &copy; {new Date().getFullYear()} CEQ Studio. By{' '}
+              <a href="https://madfam.io" className="text-muted-foreground hover:text-foreground transition-colors" target="_blank" rel="noopener noreferrer">Innovaciones MADFAM</a>
+            </span>
             <span>ceq v0.1.0 | Entropy: stable</span>
           </div>
         </footer>

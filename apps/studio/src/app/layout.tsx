@@ -16,9 +16,22 @@ const fontSans = Inter({
 
 export const metadata: Metadata = {
   title: "ceq | Creative Entropy Quantized",
-  description: "The skunkworks terminal for the generative avant-garde",
+  description: "Generative AI image pipeline by MADFAM. The skunkworks terminal for the generative avant-garde.",
+  metadataBase: new URL("https://ceq.lol"),
   icons: {
     icon: "/favicon.ico",
+  },
+  openGraph: {
+    title: "CEQ Studio — Generative AI Image Pipeline",
+    description: "The skunkworks terminal for the generative avant-garde. Wraps ComfyUI with a streamlined, hacker-centric interface.",
+    url: "https://ceq.lol",
+    siteName: "CEQ Studio by MADFAM",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "CEQ Studio — Generative AI Image Pipeline",
+    description: "The skunkworks terminal for the generative avant-garde.",
   },
 };
 
