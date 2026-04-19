@@ -81,6 +81,40 @@ uvicorn ceq_api.main:app --port 5800 --reload
 | `GET` | `/v1/outputs/{id}` | Get output |
 | `POST` | `/v1/outputs/{id}/publish` | Publish to channel |
 
+### Render (generative assets)
+
+Deterministic, cached renders — same input returns the same URL (R2 cache).
+Use these endpoints when a consumer needs an asset URL to cache on its own
+records (e.g. card thumbnails on Rondelio card records).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/render/card` | Render card-standard thumbnail (512×768 PNG) |
+| `POST` | `/v1/render/thumbnail` | Generic render; caller supplies template name |
+| `GET` | `/v1/render/templates` | List available templates + versions |
+| `POST` | `/v1/render/audio` | **501** — reserved for future audio generation |
+| `POST` | `/v1/render/3d` | **501** — reserved for future 3D generation |
+
+Request shape:
+```json
+{"template": "card-standard", "data": {"title": "...", "accent": "#...", ...}}
+```
+
+Response shape (same for cache hit + miss):
+```json
+{
+  "url": "https://cdn.../render/card-standard/<hash>.png",
+  "storage_uri": "r2://ceq-assets/render/card-standard/<hash>.png",
+  "hash": "<sha256>",
+  "template": "card-standard",
+  "template_version": "1",
+  "content_type": "image/png",
+  "cached": true
+}
+```
+
+Clients should prefer the `@ceq/sdk` package (`packages/sdk`) over raw HTTP.
+
 ### Health
 
 | Method | Endpoint | Description |

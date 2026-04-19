@@ -58,6 +58,15 @@ class StorageClient:
         """Check if R2 storage is configured."""
         return bool(self._settings.r2_endpoint)
 
+    @property
+    def bucket(self) -> str:
+        """Configured R2 bucket name."""
+        return self._settings.r2_bucket
+
+    def storage_uri_for(self, key: str) -> str:
+        """Build the r2:// URI for a key in the configured bucket."""
+        return f"r2://{self._settings.r2_bucket}/{key}"
+
     def get_public_url(self, storage_uri: str) -> str:
         """
         Convert internal storage URI to public URL.
@@ -178,6 +187,67 @@ class StorageClient:
             "upload_url": url,
             "storage_uri": f"r2://{self._settings.r2_bucket}/{key}",
         }
+
+    async def head_object(self, key: str) -> bool:
+        """
+        Check whether an object exists at the given key.
+
+        Used by the render cache to avoid re-rendering deterministic outputs.
+        Treats transient / unexpected errors as "miss" — callers will fall
+        through to re-render, which is safe because renders are idempotent.
+        """
+        if self._client is None:
+            return False
+
+        bucket = self._settings.r2_bucket
+        loop = asyncio.get_event_loop()
+
+        def _head() -> bool:
+            try:
+                self._client.head_object(Bucket=bucket, Key=key)
+                return True
+            except Exception as exc:  # noqa: BLE001 — boto3 raises many subclasses
+                response = getattr(exc, "response", None) or {}
+                code = (response.get("Error") or {}).get("Code") if isinstance(response, dict) else None
+                if code in {"404", "NoSuchKey", "NotFound"}:
+                    return False
+                return False
+
+        return await loop.run_in_executor(None, _head)
+
+    async def put_object(
+        self,
+        key: str,
+        body: bytes,
+        content_type: str = "application/octet-stream",
+        cache_control: str | None = None,
+    ) -> str:
+        """
+        Upload bytes to R2 directly. Returns the storage URI.
+
+        Used by the render cache for deterministic asset writes.
+        """
+        if self._client is None:
+            raise RuntimeError("R2 storage not configured")
+
+        bucket = self._settings.r2_bucket
+        loop = asyncio.get_event_loop()
+
+        extra: dict[str, Any] = {}
+        if cache_control is not None:
+            extra["CacheControl"] = cache_control
+
+        def _put() -> None:
+            self._client.put_object(
+                Bucket=bucket,
+                Key=key,
+                Body=body,
+                ContentType=content_type,
+                **extra,
+            )
+
+        await loop.run_in_executor(None, _put)
+        return f"r2://{bucket}/{key}"
 
     async def delete_object(self, storage_uri: str) -> bool:
         """
