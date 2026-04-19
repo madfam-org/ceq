@@ -204,7 +204,14 @@ async def _render_image(
                 detail="render failed",
             ) from None
 
-        await cache.put(key=key, body=image_bytes, content_type=renderer.content_type)
+        try:
+            await cache.put(key=key, body=image_bytes, content_type=renderer.content_type)
+        except Exception:
+            logger.exception("render cache write failed for key=%s", key)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="render failed: cache write error",
+            ) from None
 
     public_url = storage.get_public_url(storage_uri)
     return RenderResponse(

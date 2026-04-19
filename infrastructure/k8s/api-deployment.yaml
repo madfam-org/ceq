@@ -39,12 +39,15 @@ spec:
             - name: FURNACE_API_URL
               value: "http://furnace-gateway.enclii.svc.cluster.local:4210"
           resources:
+            # Headroom sized for the render pipeline: 512x768 Pillow renders
+            # spike to ~200Mi transient; baseline API stays under 150Mi.
+            # Bump limits if concurrency goes beyond 2 workers.
             requests:
-              memory: "256Mi"
+              memory: "384Mi"
               cpu: "100m"
             limits:
-              memory: "512Mi"
-              cpu: "500m"
+              memory: "1Gi"
+              cpu: "1000m"
           livenessProbe:
             httpGet:
               path: /health

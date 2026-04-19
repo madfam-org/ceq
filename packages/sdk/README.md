@@ -46,9 +46,45 @@ await db.card.update({ id, thumbnail_url: url });
 
 ## Methods
 
-- `renderCard(data, { template? })` — render the card-standard template (or a variant).
-- `renderThumbnail({ template, data })` — generic thumbnail; caller supplies template name.
-- `listTemplates()` — enumerate available templates + versions.
+### `renderCard(data, { template? })`
+
+Render the card-standard template (or a registered variant).
+
+```ts
+// Default template.
+const { url } = await ceq.renderCard({ title: "Catalyst", accent: "#00AA66" });
+
+// Future / custom template (once registered server-side).
+const { url } = await ceq.renderCard(
+  { title: "Catalyst", accent: "#00AA66" },
+  { template: "card-legendary" }
+);
+```
+
+### `renderThumbnail({ template, data })`
+
+Generic thumbnail — caller must name the template explicitly.
+
+```ts
+const { url, cached } = await ceq.renderThumbnail({
+  template: "card-standard",
+  data: { title: "Catalyst" },
+});
+console.log(cached); // true after the first call with identical inputs
+```
+
+### `listTemplates()`
+
+Enumerate available templates + their current versions. Use this to discover what's available or pin to a specific version.
+
+```ts
+const templates = await ceq.listTemplates();
+//=> [{ name: "card-standard", version: "1", content_type: "image/png", extension: "png" }]
+```
+
+## Reserved endpoints (not yet implemented)
+
+The CEQ API also exposes `POST /v1/render/audio` and `POST /v1/render/3d` — both return **501** today with a stable request shape. This SDK does not yet wrap them (will land once the backends do). If you need to integrate early, call the endpoints directly with `fetch` + your bearer token; the response shape will match `RenderResponse` when ready.
 
 ## Error handling
 

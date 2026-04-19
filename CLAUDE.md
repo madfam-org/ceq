@@ -11,25 +11,25 @@
 |----------|-------|
 | **Domain** | ceq.lol |
 | **Port Block** | 5800-5899 |
-| **Status** | Pre-production (infrastructure pending) |
+| **Status** | Live (api.ceq.lol + ceq.lol serving; render pipeline shipped 2026-04-19) |
 | **Philosophy** | Wrestling order from the chaos of latent space |
 
-## Current Deployment Status (2025-12-10)
+## Current Deployment Status (2026-04-19)
 
 | Component | Status | Notes |
 |-----------|--------|-------|
+| ceq.lol (studio) | Live | 2 pods Running in `ceq` namespace |
+| api.ceq.lol (api) | Live | 2 pods Running |
+| `/v1/render/*` pipeline | Shipped | Card renderer + R2 cache + @ceq/sdk (62fcfe9) |
 | Janua OAuth Client | Registered | `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk` |
-| Cloudflare R2 Bucket | Created | `ceq-assets` with read/write token |
+| Cloudflare R2 Bucket | Live | `ceq-assets` — render cache under `render/{template}/{hash}.{ext}` |
 | Cloudflare Tunnel | Configured | Routes for ceq.lol, api.ceq.lol, ws.ceq.lol |
-| K8s Secrets | Partial | R2 + OAuth done, DB/Redis pending |
-| Enclii Infrastructure | Pending | Terraform not initialized |
 
-**Blocking Issue:** Production k3s cluster doesn't exist yet. Deploy Enclii infrastructure first:
-```bash
-cd /path/to/enclii
-./scripts/deploy-production.sh init
-./scripts/deploy-production.sh apply
-```
+## Asset-pillar surface (shipped 2026-04-19)
+
+`POST /v1/render/card`, `/thumbnail`, `/audio` (501), `/3d` (501), `GET /v1/render/templates` — deterministic, content-addressed, R2-cached. Identical inputs always return the same URL. See `apps/api/README.md#render-generative-assets` for the full contract.
+
+Client: `@ceq/sdk` (`packages/sdk/`) — `CeqClient.renderCard({...})` for JS/TS consumers. First external consumer: Rondelio's stratum-tcg cartridge (`services/simulator/cartridges/stratum-tcg/scripts/generate_art.py`, `--provider ceq`).
 
 ## Architecture
 

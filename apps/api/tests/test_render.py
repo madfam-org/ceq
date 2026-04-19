@@ -170,3 +170,56 @@ def test_list_templates(client, render_storage) -> None:
     assert resp.status_code == 200
     templates = resp.json()
     assert any(t["name"] == "card-standard" for t in templates)
+
+
+def test_render_returns_500_when_r2_upload_fails(client, render_storage) -> None:
+    """If put_object raises, return 500 — don't leak half-state into the response."""
+    render_storage.put_object = AsyncMock(side_effect=RuntimeError("R2 is down"))
+    resp = client.post(
+        "/v1/render/card",
+        json={
+            "template": "card-standard",
+            "data": {"title": "Wreckage", "accent": "#808080"},
+        },
+    )
+    assert resp.status_code == 500
+    assert "cache write" in resp.json()["detail"]
+
+
+def test_render_when_storage_not_configured_returns_503(client, render_storage) -> None:
+    render_storage.is_configured = False
+    resp = client.post(
+        "/v1/render/card",
+        json={"template": "card-standard", "data": {"title": "X"}},
+    )
+    assert resp.status_code == 503
+
+
+def test_thumbnail_requires_explicit_template(client, render_storage) -> None:
+    """Unlike /card, /thumbnail requires the caller to name the template."""
+    resp = client.post(
+        "/v1/render/thumbnail",
+        json={"template": "", "data": {"title": "x"}},
+    )
+    assert resp.status_code == 404
+
+
+def test_same_inputs_produce_same_hash_across_requests(client, render_storage) -> None:
+    """Determinism contract: two identical requests return the same hash + storage_uri."""
+    payload = {
+        "template": "card-standard",
+        "data": {"title": "Repeat", "accent": "#123456", "badge": "R"},
+    }
+    r1 = client.post("/v1/render/card", json=payload)
+    r2 = client.post("/v1/render/card", json=payload)
+    assert r1.status_code == 200 and r2.status_code == 200
+    assert r1.json()["hash"] == r2.json()["hash"]
+    assert r1.json()["storage_uri"] == r2.json()["storage_uri"]
+
+
+def test_different_inputs_produce_different_hashes(client, render_storage) -> None:
+    p1 = {"template": "card-standard", "data": {"title": "A"}}
+    p2 = {"template": "card-standard", "data": {"title": "B"}}
+    r1 = client.post("/v1/render/card", json=p1)
+    r2 = client.post("/v1/render/card", json=p2)
+    assert r1.json()["hash"] != r2.json()["hash"]
