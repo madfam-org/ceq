@@ -11,13 +11,11 @@ invalidated.
 from __future__ import annotations
 
 import io
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
-
 
 # Font resolution: bundled → system DejaVu (prod Linux) → platform fallbacks (dev).
 _BUNDLED_FONT_DIR = Path(__file__).parent.parent / "assets" / "fonts"
@@ -126,7 +124,7 @@ class CardData:
     badge: str = ""  # short rarity tag e.g. "R", "SR", "★★★"
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "CardData":
+    def from_dict(cls, data: dict[str, Any]) -> CardData:
         allowed = {"title", "subtitle", "description", "accent", "glyph", "badge"}
         if not data.get("title"):
             raise ValueError("card.title is required")

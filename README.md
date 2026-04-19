@@ -5,7 +5,7 @@
 **ceq** wraps the raw power of [ComfyUI](https://github.com/comfyanonymous/ComfyUI) with a streamlined, hacker-centric interface. Full node power when you need it, a clean UX when you don't.
 
 **Domain:** [ceq.lol](https://ceq.lol)
-**Status:** Pre-production (Infrastructure pending)
+**Status:** Live — studio + API deployed; `/v1/render` pipeline shipped 2026-04-19
 **Philosophy:** *Wrestling order from the chaos of latent space*
 
 ---
@@ -18,6 +18,7 @@ CEQ is MADFAM's internal content generation platform. It enables:
 - **Video Clones**: AI-generated spokesperson content
 - **3D Renders**: Product visualization and creative assets
 - **Brand Consistency**: MADFAM aesthetic across all outputs
+- **Generic asset rendering (`/v1/render/*`)**: Deterministic, content-addressed cards / thumbnails for any MADFAM service that needs a stable URL — see [`@ceq/sdk`](./packages/sdk/README.md) and [API docs](./apps/api/README.md#render-generative-assets).
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -178,21 +179,22 @@ CEQ is deployed to Enclii infrastructure via Cloudflare Tunnels:
 
 | Domain | Service | Status |
 |--------|---------|--------|
-| ceq.lol | Studio | Pending |
-| api.ceq.lol | API | Pending |
-| ws.ceq.lol | WebSocket | Pending |
+| ceq.lol | Studio | Live (2 pods) |
+| api.ceq.lol | API | Live (2 pods) |
+| ws.ceq.lol | WebSocket | Configured |
 
 See [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md) for detailed deployment guide.
 
-### Deployment Status (2025-12-10)
+### Deployment Status (2026-04-19)
 
 | Component | Status |
 |-----------|--------|
 | Janua OAuth Client | Registered |
-| Cloudflare R2 Bucket | Created |
+| Cloudflare R2 Bucket | Live (`ceq-assets`; render cache under `render/{template}/{hash}.{ext}`) |
 | Cloudflare Tunnel Routes | Configured |
-| K8s Secrets | Partial (DB/Redis pending) |
-| Infrastructure | Pending (Terraform not run) |
+| `/v1/render/*` pipeline | Shipped — card renderer + R2 cache + `@ceq/sdk` |
+| K8s Secrets | Applied |
+| Infrastructure | Live on Enclii k3s |
 
 ---
 
@@ -214,8 +216,9 @@ CEQ uses [Janua](https://github.com/madfam-io/janua) for authentication:
 |----------|-------------|
 | [docs/PRD.md](./docs/PRD.md) | Product requirements & manifesto |
 | [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md) | Production deployment guide |
-| [apps/api/README.md](./apps/api/README.md) | API documentation |
+| [apps/api/README.md](./apps/api/README.md) | API documentation (incl. `/v1/render/*` contract) |
 | [apps/workers/README.md](./apps/workers/README.md) | GPU worker documentation |
+| [packages/sdk/README.md](./packages/sdk/README.md) | `@ceq/sdk` — JS/TS client for the render API |
 | [CLAUDE.md](./CLAUDE.md) | Agent/developer instructions |
 
 ---

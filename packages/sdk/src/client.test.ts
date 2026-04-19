@@ -142,4 +142,23 @@ describe("CeqApiError", () => {
     expect(err.message).toContain("500");
     expect(err.message).toContain("boom");
   });
+
+  it("falls back to statusText when the error body is not JSON", async () => {
+    // Non-JSON body (e.g. HTML 502 page, plaintext gateway error).
+    // The SDK's body.json() call throws; detail should fall back to statusText.
+    const fetchImpl: typeof fetch = vi.fn(async () =>
+      new Response("<html>bad gateway</html>", {
+        status: 502,
+        statusText: "Bad Gateway",
+        headers: { "content-type": "text/html" },
+      })
+    ) as unknown as typeof fetch;
+
+    const ceq = new CeqClient({ fetch: fetchImpl });
+    await expect(ceq.listTemplates()).rejects.toMatchObject({
+      name: "CeqApiError",
+      status: 502,
+      detail: "Bad Gateway",
+    });
+  });
 });
