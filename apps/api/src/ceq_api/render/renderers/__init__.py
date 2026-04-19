@@ -44,9 +44,13 @@ registry = RendererRegistry()
 
 
 def _load_builtins() -> None:
+    from ceq_api.render.renderers.audio_tone_beep import ToneBeepRenderer
     from ceq_api.render.renderers.card import CardStandardRenderer
+    from ceq_api.render.renderers.card_plate_3d import CardPlateRenderer
 
     registry.register(CardStandardRenderer())
+    registry.register(ToneBeepRenderer())
+    registry.register(CardPlateRenderer())
 
 
 _load_builtins()

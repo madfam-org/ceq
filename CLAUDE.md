@@ -27,9 +27,17 @@
 
 ## Asset-pillar surface (shipped 2026-04-19)
 
-`POST /v1/render/card`, `/thumbnail`, `/audio` (501), `/3d` (501), `GET /v1/render/templates` — deterministic, content-addressed, R2-cached. Identical inputs always return the same URL. See `apps/api/README.md#render-generative-assets` for the full contract.
+`POST /v1/render/card`, `/thumbnail`, `/audio`, `/3d`, `GET /v1/render/templates` — deterministic, content-addressed, R2-cached. Identical inputs always return the same URL. See `apps/api/README.md#render-generative-assets` for the full contract.
 
-Client: `@ceq/sdk` (`packages/sdk/`) — `CeqClient.renderCard({...})` for JS/TS consumers. First external consumer: Rondelio's stratum-tcg cartridge (`services/simulator/cartridges/stratum-tcg/scripts/generate_art.py`, `--provider ceq`).
+Built-in templates (as of 2026-04-19):
+
+| Endpoint | Template | Output | Notes |
+|---|---|---|---|
+| `/v1/render/card` | `card-standard` | 512×768 PNG | Pillow-rendered card thumbnail |
+| `/v1/render/audio` | `tone-beep` | 16-bit PCM WAV @ 22.05kHz | Parametric sine + ADSR envelope (stdlib) |
+| `/v1/render/3d` | `card-plate` | GLB (glTF 2.0 binary) | Parametric rounded-rectangle plate (stdlib writer) |
+
+Client: `@ceq/sdk` (`packages/sdk/`) — `CeqClient.renderCard/renderAudio/render3D({...})` for JS/TS consumers. First external consumer: Rondelio's stratum-tcg cartridge (`services/simulator/cartridges/stratum-tcg/scripts/generate_art.py`, `--provider ceq`).
 
 ## Architecture
 

@@ -2,7 +2,7 @@
 
 Client SDK for [ceq.lol](https://ceq.lol) — MADFAM's generative asset platform.
 
-Render thumbnails, cards, and (soon) audio/3D assets with deterministic caching. Same inputs always produce the same URL, so it's safe to call on every record save.
+Render thumbnails, cards, audio beeps, and 3D plates with deterministic caching. Same inputs always produce the same URL, so it's safe to call on every record save.
 
 ## Install
 
@@ -73,18 +73,47 @@ const { url, cached } = await ceq.renderThumbnail({
 console.log(cached); // true after the first call with identical inputs
 ```
 
+### `renderAudio(data, { template? })`
+
+Render a deterministic audio asset (WAV). Default template is `tone-beep` — a parametric sine-wave beep with ADSR envelopes, useful for notification chimes and UI feedback sounds.
+
+```ts
+const { url } = await ceq.renderAudio({
+  frequency_hz: 880,
+  duration_ms: 200,
+  envelope: "adsr-gentle",
+  volume: 0.5,
+});
+// <audio src={url} /> — same params → same URL → R2-cached forever.
+```
+
+### `render3D(data, { template? })`
+
+Render a deterministic 3D asset (GLB / glTF 2.0 binary). Default template is `card-plate` — a parametric rounded-rectangle plate sized to a standard trading card, suitable as an AR preview target or a physical-prototype reference.
+
+```ts
+const { url } = await ceq.render3D({
+  width_mm: 63.5,
+  height_mm: 88.9,
+  thickness_mm: 2.0,
+  corner_radius_mm: 4.0,
+  accent_hex: "#3C8CFF",
+});
+// Drop `url` into your <model-viewer src={url}> element.
+```
+
 ### `listTemplates()`
 
 Enumerate available templates + their current versions. Use this to discover what's available or pin to a specific version.
 
 ```ts
 const templates = await ceq.listTemplates();
-//=> [{ name: "card-standard", version: "1", content_type: "image/png", extension: "png" }]
+// => [
+//   { name: "card-plate", version: "1", content_type: "model/gltf-binary", extension: "glb" },
+//   { name: "card-standard", version: "1", content_type: "image/png", extension: "png" },
+//   { name: "tone-beep", version: "1", content_type: "audio/wav", extension: "wav" },
+// ]
 ```
-
-## Reserved endpoints (not yet implemented)
-
-The CEQ API also exposes `POST /v1/render/audio` and `POST /v1/render/3d` — both return **501** today with a stable request shape. This SDK does not yet wrap them (will land once the backends do). If you need to integrate early, call the endpoints directly with `fetch` + your bearer token; the response shape will match `RenderResponse` when ready.
 
 ## Error handling
 
