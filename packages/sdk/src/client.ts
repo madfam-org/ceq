@@ -1,9 +1,11 @@
 import {
   CardData,
+  CardPlateData,
   CeqApiError,
   RenderRequest,
   RenderResponse,
   TemplateInfo,
+  ToneBeepData,
 } from "./types.js";
 
 export interface CeqClientOptions {
@@ -88,6 +90,37 @@ export class CeqClient {
     request: RenderRequest<TData>
   ): Promise<RenderResponse> {
     return this.post<RenderResponse>("/v1/render/thumbnail", request);
+  }
+
+  /**
+   * Render a deterministic audio asset (WAV). Defaults to the `tone-beep`
+   * template — a parametric sine-wave beep with ADSR envelopes, useful for
+   * notification chimes and UI feedback sounds. Same input → same URL.
+   */
+  async renderAudio(
+    data: ToneBeepData,
+    opts: { template?: string } = {}
+  ): Promise<RenderResponse> {
+    return this.post<RenderResponse>("/v1/render/audio", {
+      template: opts.template ?? "tone-beep",
+      data: data as unknown as Record<string, unknown>,
+    });
+  }
+
+  /**
+   * Render a deterministic 3D asset (GLB / glTF 2.0 binary). Defaults to the
+   * `card-plate` template — a parametric rounded-rectangle plate sized to a
+   * standard trading card. Same input → same URL. Useful for AR previews and
+   * physical-prototype targets.
+   */
+  async render3D(
+    data: CardPlateData,
+    opts: { template?: string } = {}
+  ): Promise<RenderResponse> {
+    return this.post<RenderResponse>("/v1/render/3d", {
+      template: opts.template ?? "card-plate",
+      data: data as unknown as Record<string, unknown>,
+    });
   }
 
   /** List available render templates. */

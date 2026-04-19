@@ -149,27 +149,33 @@ def test_render_rejects_invalid_data(client, render_storage) -> None:
     assert resp.status_code == 422
 
 
-def test_render_audio_returns_501(client, render_storage) -> None:
+def test_render_audio_unknown_template_returns_404(client, render_storage) -> None:
+    """/audio now ships with `tone-beep`; unknown templates 404 like other families."""
     resp = client.post(
         "/v1/render/audio",
-        json={"template": "any", "data": {}},
+        json={"template": "nope", "data": {}},
     )
-    assert resp.status_code == 501
+    assert resp.status_code == 404
 
 
-def test_render_3d_returns_501(client, render_storage) -> None:
+def test_render_3d_unknown_template_returns_404(client, render_storage) -> None:
+    """/3d now ships with `card-plate`; unknown templates 404 like other families."""
     resp = client.post(
         "/v1/render/3d",
-        json={"template": "any", "data": {}},
+        json={"template": "nope", "data": {}},
     )
-    assert resp.status_code == 501
+    assert resp.status_code == 404
 
 
 def test_list_templates(client, render_storage) -> None:
     resp = client.get("/v1/render/templates")
     assert resp.status_code == 200
     templates = resp.json()
-    assert any(t["name"] == "card-standard" for t in templates)
+    names = {t["name"] for t in templates}
+    # All three built-ins should be exposed: image, audio, 3D.
+    assert "card-standard" in names
+    assert "tone-beep" in names
+    assert "card-plate" in names
 
 
 def test_render_returns_500_when_r2_upload_fails(client, render_storage) -> None:

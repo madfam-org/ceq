@@ -4,9 +4,14 @@
 Deterministic, cached renders. Given a template + data, return a stable public
 URL. Identical inputs hit the R2 cache and skip re-rendering.
 
-This is CEQ's "generic renderer" surface — currently image-only (cards).
-Audio and 3D endpoints are stubs exposing the same request shape so callers
-can integrate against a stable contract while the backends are built out.
+Three asset families today:
+  - image: /v1/render/card, /v1/render/thumbnail  (Pillow-based)
+  - audio: /v1/render/audio                       (stdlib WAV synthesis)
+  - 3D:    /v1/render/3d                          (stdlib GLB writer)
+
+All three flow through a single generic dispatcher (`_render_asset`) — they
+differ only in which templates they accept. The cache, hash, and response
+shape are uniform across families.
 """
 
 from __future__ import annotations
@@ -66,7 +71,7 @@ async def render_card(
     user: Annotated[JanuaUser, Depends(get_current_user)],
     storage: Annotated[StorageClient, Depends(get_storage)],
 ) -> RenderResponse:
-    return await _render_image(
+    return await _render_asset(
         template=request.template or "card-standard",
         data=request.data,
         storage=storage,
@@ -87,7 +92,7 @@ async def render_thumbnail(
     user: Annotated[JanuaUser, Depends(get_current_user)],
     storage: Annotated[StorageClient, Depends(get_storage)],
 ) -> RenderResponse:
-    return await _render_image(
+    return await _render_asset(
         template=request.template,
         data=request.data,
         storage=storage,
@@ -120,55 +125,72 @@ async def list_templates(
     ]
 
 
-# ---------- stubs for broader ambition ----------
+# ---------- audio render ----------
 
 
 @router.post(
     "/audio",
-    status_code=status.HTTP_501_NOT_IMPLEMENTED,
-    summary="Render an audio asset (not yet implemented)",
+    response_model=RenderResponse,
+    summary="Render an audio asset",
     description=(
-        "Reserved for future audio generation. Returns 501 today. The request "
-        "shape matches other render endpoints so callers can integrate early."
+        "Render a deterministic audio asset (WAV). Current templates: "
+        "`tone-beep` (parametric sine-wave beep with ADSR envelopes — useful "
+        "for notification chimes and UI feedback sounds). Deterministic, "
+        "cached, same response shape as /card and /thumbnail."
     ),
 )
 async def render_audio(
     request: RenderRequest,
     user: Annotated[JanuaUser, Depends(get_current_user)],
-) -> dict[str, str]:
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="audio rendering not yet implemented; contract is stable, backend coming",
+    storage: Annotated[StorageClient, Depends(get_storage)],
+) -> RenderResponse:
+    return await _render_asset(
+        template=request.template or "tone-beep",
+        data=request.data,
+        storage=storage,
     )
+
+
+# ---------- 3D render ----------
 
 
 @router.post(
     "/3d",
-    status_code=status.HTTP_501_NOT_IMPLEMENTED,
-    summary="Render a 3D asset (not yet implemented)",
+    response_model=RenderResponse,
+    summary="Render a 3D asset",
     description=(
-        "Reserved for future 3D generation (GLB/USDZ). Returns 501 today. Use "
-        "/v1/workflows with the triposr-image-to-3d template for current 3D jobs."
+        "Render a deterministic 3D asset (GLB / glTF 2.0 binary). Current "
+        "templates: `card-plate` (parametric rounded-rectangle plate — 3D "
+        "counterpart to card-standard, useful as a physical-prototype preview "
+        "or AR card holder). Deterministic, cached, same response shape as "
+        "/card and /thumbnail."
     ),
 )
 async def render_3d(
     request: RenderRequest,
     user: Annotated[JanuaUser, Depends(get_current_user)],
-) -> dict[str, str]:
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="3D rendering not yet implemented; use /v1/workflows for ComfyUI-backed 3D jobs",
+    storage: Annotated[StorageClient, Depends(get_storage)],
+) -> RenderResponse:
+    return await _render_asset(
+        template=request.template or "card-plate",
+        data=request.data,
+        storage=storage,
     )
 
 
 # ---------- internal ----------
 
 
-async def _render_image(
+async def _render_asset(
     template: str,
     data: dict[str, Any],
     storage: StorageClient,
 ) -> RenderResponse:
+    """
+    Generic render dispatcher. Works for any registered renderer regardless
+    of output media — image/png, audio/wav, model/gltf-binary all flow through
+    the same hash + cache + response pipeline.
+    """
     try:
         renderer = registry.get(template)
     except KeyError:
@@ -191,7 +213,7 @@ async def _render_image(
     cached = await cache.exists(key)
     if not cached:
         try:
-            image_bytes = renderer.render(data)
+            asset_bytes = renderer.render(data)
         except ValueError as exc:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -205,7 +227,7 @@ async def _render_image(
             ) from None
 
         try:
-            await cache.put(key=key, body=image_bytes, content_type=renderer.content_type)
+            await cache.put(key=key, body=asset_bytes, content_type=renderer.content_type)
         except Exception:
             logger.exception("render cache write failed for key=%s", key)
             raise HTTPException(

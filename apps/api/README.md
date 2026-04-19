@@ -91,9 +91,9 @@ records (e.g. card thumbnails on Rondelio card records).
 |--------|----------|-------------|
 | `POST` | `/v1/render/card` | Render card-standard thumbnail (512×768 PNG) |
 | `POST` | `/v1/render/thumbnail` | Generic render; caller supplies template name |
+| `POST` | `/v1/render/audio` | Render audio asset (`audio/wav`). Default template: `tone-beep` — parametric sine + ADSR envelope |
+| `POST` | `/v1/render/3d` | Render 3D asset (`model/gltf-binary`). Default template: `card-plate` — parametric rounded-rectangle plate |
 | `GET` | `/v1/render/templates` | List available templates + versions |
-| `POST` | `/v1/render/audio` | **501** — reserved for future audio generation |
-| `POST` | `/v1/render/3d` | **501** — reserved for future 3D generation |
 
 Request shape:
 ```json

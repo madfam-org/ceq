@@ -53,6 +53,74 @@ describe("CeqClient", () => {
     expect(headers.authorization).toBe("Bearer t");
   });
 
+  it("renderAudio posts to /v1/render/audio with the tone-beep template", async () => {
+    const fetchImpl = mockFetch([
+      {
+        status: 200,
+        body: {
+          url: "https://cdn.ceq.lol/render/tone-beep/abc.wav",
+          storage_uri: "r2://ceq-assets/render/tone-beep/abc.wav",
+          hash: "abc",
+          template: "tone-beep",
+          template_version: "1",
+          content_type: "audio/wav",
+          cached: false,
+        },
+      },
+    ]);
+    const ceq = new CeqClient({ fetch: fetchImpl, token: "t" });
+
+    const result = await ceq.renderAudio({
+      frequency_hz: 880,
+      duration_ms: 200,
+      envelope: "adsr-gentle",
+    });
+
+    expect(result.content_type).toBe("audio/wav");
+    expect(result.template).toBe("tone-beep");
+    const call = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]!;
+    expect(call[0]).toBe("https://api.ceq.lol/v1/render/audio");
+    const body = JSON.parse((call[1] as RequestInit).body as string);
+    expect(body.template).toBe("tone-beep");
+    expect(body.data.frequency_hz).toBe(880);
+    expect(body.data.envelope).toBe("adsr-gentle");
+  });
+
+  it("render3D posts to /v1/render/3d with the card-plate template", async () => {
+    const fetchImpl = mockFetch([
+      {
+        status: 200,
+        body: {
+          url: "https://cdn.ceq.lol/render/card-plate/abc.glb",
+          storage_uri: "r2://ceq-assets/render/card-plate/abc.glb",
+          hash: "abc",
+          template: "card-plate",
+          template_version: "1",
+          content_type: "model/gltf-binary",
+          cached: false,
+        },
+      },
+    ]);
+    const ceq = new CeqClient({ fetch: fetchImpl, token: "t" });
+
+    const result = await ceq.render3D({
+      width_mm: 63.5,
+      height_mm: 88.9,
+      accent_hex: "#3C8CFF",
+    });
+
+    expect(result.content_type).toBe("model/gltf-binary");
+    expect(result.template).toBe("card-plate");
+    const call = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]!;
+    expect(call[0]).toBe("https://api.ceq.lol/v1/render/3d");
+    const body = JSON.parse((call[1] as RequestInit).body as string);
+    expect(body.template).toBe("card-plate");
+    expect(body.data.width_mm).toBe(63.5);
+    expect(body.data.accent_hex).toBe("#3C8CFF");
+  });
+
   it("throws CeqApiError with detail on non-2xx", async () => {
     const fetchImpl = mockFetch([
       { status: 404, body: { detail: "unknown template: 'nope'" } },
