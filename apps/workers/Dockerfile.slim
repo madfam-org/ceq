@@ -75,4 +75,13 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 
 VOLUME ["/opt/models", "/opt/outputs"]
 
+
+# Audit 2026-04-23 (cross-cutting I.1): run as non-root `ceq`.
+# ComfyUI + CUDA both work as non-root on nvidia-container-toolkit-managed
+# GPU nodes (standard in our k3s cluster). Override with `--user 0` at
+# runtime if a Vast.ai target needs root.
+RUN useradd -r -u 10001 -m -s /bin/bash ceq \
+    && chown -R ceq:ceq /opt/comfyui /opt/models /opt/outputs /opt/cache /app/ceq-worker
+USER ceq
+
 CMD ["python", "-m", "ceq_worker.queue"]
