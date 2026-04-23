@@ -302,6 +302,14 @@ kubectl logs -n ceq deployment/cloudflared
 - [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md) - Deployment checklist
 - [Enclii CLAUDE.md](../enclii/CLAUDE.md) - Platform infrastructure
 
+## Known Issues — Audit 2026-04-23
+
+See `/Users/aldoruizluna/labspace/claudedocs/ECOSYSTEM_AUDIT_2026-04-23.md` for the full ecosystem audit.
+
+- **🔴 R1: Cloudflare tunnel token committed in plaintext** — `infrastructure/k8s/cloudflared.yaml:26`. Token is a live JWT. Rotate in CF dashboard and move to a K8s Secret (SealedSecret or External Secrets). Duplicate leak exists in the operator's `.claude/settings.local.json:554`.
+- ~~**🔴 T1: No CI test gate**~~ — Fixed 2026-04-23: `.github/workflows/ci.yaml` runs lint + typecheck + unit tests for api / workers / studio on every PR. Configure Branch Protection on `main` to require these checks before merge.
+- **🟠 H9: OpenAPI docs likely exposed in prod** — verify `docs_url` is None when `env == "production"` on all FastAPI entrypoints.
+
 ---
 
 *"The terminal awaits. Let's quantize some chaos."* — ceq.lol
