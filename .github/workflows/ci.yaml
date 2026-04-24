@@ -1,0 +1,133 @@
+# =============================================================================
+# CEQ CI — Test & Lint
+# =============================================================================
+#
+# Audit 2026-04-23 finding T1: ceq had zero CI test gate (graded F in the
+# ecosystem-wide test-coverage audit). This workflow runs lint + typecheck +
+# unit tests for each workspace on every PR so broken changes never reach
+# main.
+#
+# Scope (deliberately minimal — mirrors what the codebase already has):
+#   - apps/api       : ruff + pytest (tests/ exists, 18 test modules)
+#   - apps/workers   : ruff + pytest (tests/ exists, conftest.py only today
+#                      — coverage grows here, this gate ensures new tests
+#                      that land actually run)
+#   - apps/studio    : lint + typecheck + vitest (__tests__/ exists)
+#
+# The deploy workflow (deploy.yaml) intentionally does NOT gate on this —
+# deploys are still triggered by push to main — but Branch Protection on
+# main should require ci / (api | workers | studio) to pass before merge.
+# =============================================================================
+
+name: CEQ CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API · lint + tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install dependencies
+        run: |
+          $HOME/.local/bin/uv pip install --system -e '.[dev]' || \
+            $HOME/.local/bin/uv pip install --system -e '.'
+          pip install ruff pytest pytest-asyncio pytest-cov httpx
+
+      - name: Ruff (lint)
+        run: ruff check . || true  # non-blocking on first rollout; tighten later
+
+      - name: Pytest
+        env:
+          CEQ_ENV: test
+          DATABASE_URL: sqlite+aiosqlite:///./test.db
+          REDIS_URL: redis://localhost:6379/0
+          R2_BUCKET_NAME: ceq-test
+          R2_ENDPOINT: http://localhost:9000
+          R2_ACCESS_KEY_ID: test
+          R2_SECRET_ACCESS_KEY: test
+        run: pytest -q tests/ --maxfail=1
+
+  workers:
+    name: Workers · lint + tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/workers
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        # torch + torchvision are heavy; skip them here and install only
+        # what the unit tests need. CEQ_TEST_SKIP_TORCH lets the test
+        # modules stub out ML imports.
+        run: |
+          pip install ruff pytest pytest-asyncio pytest-cov httpx \
+                      redis pydantic pydantic-settings aiofiles \
+                      boto3 prometheus-client websockets pillow
+
+      - name: Ruff (lint)
+        run: ruff check . || true
+
+      - name: Pytest
+        env:
+          CEQ_TEST_SKIP_TORCH: "1"
+          REDIS_URL: redis://localhost:6379/0
+        run: pytest -q tests/ --maxfail=1
+
+  studio:
+    name: Studio · lint + typecheck + vitest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/studio
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: apps/studio/package-lock.json
+
+      - name: Install
+        run: npm ci || npm install
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint || true  # non-blocking on first rollout
+
+      - name: Tests
+        run: npm test -- --run
