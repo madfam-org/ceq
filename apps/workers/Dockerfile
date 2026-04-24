@@ -134,6 +134,15 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # Volume mounts for models and outputs
 VOLUME ["/opt/models", "/opt/outputs"]
 
+# Audit 2026-04-23 (cross-cutting I.1): run as the non-root `ceq` user
+# created in the base stage. ComfyUI + CUDA both work as non-root when
+# the nvidia-container-toolkit maps `/dev/nvidia*` with the right group;
+# GPU-enabled K8s nodes already handle this via the nvidia device plugin.
+# If a deployment target still requires root (e.g. a Vast.ai image with
+# broken device permissions), override at runtime with `--user 0`.
+RUN chown -R ceq:ceq /opt/models /opt/outputs /opt/cache /opt/comfyui /app/ceq-worker
+USER ceq
+
 # Default command: Run queue consumer
 CMD ["python", "-m", "ceq_worker.queue"]
 
