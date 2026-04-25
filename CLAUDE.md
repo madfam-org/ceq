@@ -306,7 +306,7 @@ kubectl logs -n ceq deployment/cloudflared
 
 See `/Users/aldoruizluna/labspace/claudedocs/ECOSYSTEM_AUDIT_2026-04-23.md` for the full ecosystem audit.
 
-- **🔴 R1: Cloudflare tunnel token committed in plaintext** — `infrastructure/k8s/cloudflared.yaml:26`. Token is a live JWT. Rotate in CF dashboard and move to a K8s Secret (SealedSecret or External Secrets). Duplicate leak exists in the operator's `.claude/settings.local.json:554`.
+- ~~**🔴 R1: Cloudflare tunnel token committed in plaintext**~~ — Closed 2026-04-25. The `ceq-prod` tunnel (id `0de376f0-…`) was deleted on the Cloudflare side on 2026-04-09; ceq.lol / api.ceq.lol / ws.ceq.lol now route through the main `enclii-prod` platform tunnel. The token in git was already non-functional. Removed `infrastructure/k8s/cloudflared.yaml` to eliminate the leak surface. Duplicate in `.claude/settings.local.json` is operator-local + also dead.
 - ~~**🔴 T1: No CI test gate**~~ — Fixed 2026-04-23: `.github/workflows/ci.yaml` runs lint + typecheck + unit tests for api / workers / studio on every PR. Configure Branch Protection on `main` to require these checks before merge.
 - **🟠 H9: OpenAPI docs likely exposed in prod** — verify `docs_url` is None when `env == "production"` on all FastAPI entrypoints.
 

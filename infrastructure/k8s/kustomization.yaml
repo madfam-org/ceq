@@ -24,9 +24,11 @@ resources:
   - api-deployment.yaml
   - studio-deployment.yaml
   - worker-deployment.yaml
-  - cloudflared.yaml
-  # Note: ingress.yaml is optional if using cloudflared
-  # - ingress.yaml
+  # cloudflared removed 2026-04-25: ceq-prod tunnel deleted on Cloudflare side
+  # 2026-04-09; ceq.lol / api.ceq.lol / ws.ceq.lol DNS now routes through the
+  # main enclii-prod tunnel at the platform level. No per-namespace cloudflared
+  # needed. Old config + leaked token (R1 audit) removed in this commit.
+  # - cloudflared.yaml
 
 # Image customization for different environments
 images:
