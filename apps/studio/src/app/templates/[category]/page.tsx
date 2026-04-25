@@ -16,7 +16,19 @@ import { MainLayout } from "@/components/layout/main-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TemplateCard } from "@/components/templates/template-card";
-import { getTemplates } from "@/lib/api";
+import { InterestGate } from "@/components/InterestGate";
+import { getTemplates, type Template } from "@/lib/api";
+
+/**
+ * Premium templates: tagged "pro" or "premium" in the backend.
+ * Until paid checkout ships, free users see InterestGate (email capture)
+ * over these instead of a 403. Free templates render as usual.
+ */
+function isPremiumTemplate(template: Template): boolean {
+  return template.tags.some((tag) =>
+    ["pro", "premium"].includes(tag.toLowerCase())
+  );
+}
 
 const CATEGORY_META: Record<
   string,
@@ -149,9 +161,22 @@ export default function TemplateCategoryPage() {
         {/* Template grid */}
         {!isLoading && !error && filteredTemplates.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredTemplates.map((template) => (
-              <TemplateCard key={template.id} template={template} />
-            ))}
+            {filteredTemplates.map((template) =>
+              isPremiumTemplate(template) ? (
+                // Pro template: wrap with InterestGate (email capture instead of paywall).
+                <InterestGate
+                  key={template.id}
+                  featureKey="premium_render"
+                  variant="overlay"
+                  sourcePage={`templates/${category}`}
+                  className="h-full"
+                >
+                  <TemplateCard template={template} />
+                </InterestGate>
+              ) : (
+                <TemplateCard key={template.id} template={template} />
+              )
+            )}
           </div>
         )}
       </div>

@@ -75,6 +75,20 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: list[str] = ["http://localhost:5801", "https://ceq.lol"]
 
+    # InterestGate / pre-monetization feature-interest capture
+    # When `interest_enabled=True` (default), the public POST /v1/interest/
+    # endpoint accepts email + feature_key submissions from the studio's
+    # InterestGate component. Set to False to hard-disable capture (the
+    # endpoint will return 503).
+    interest_enabled: bool = True
+
+    # Outbound webhook to Phyne-CRM. When CRM_WEBHOOK_URL is empty the
+    # `dispatch_interest_to_crm` background task is a no-op — the row is still
+    # persisted, we just skip the push. Set both values to wire CRM sync.
+    crm_webhook_url: str = ""
+    crm_webhook_secret: str = ""
+    crm_webhook_timeout_seconds: float = 5.0
+
     @model_validator(mode="after")
     def validate_production_settings(self) -> "Settings":
         """Validate required settings for production environment."""
