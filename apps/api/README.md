@@ -202,6 +202,98 @@ async def protected_route(user = Depends(get_current_user)):
 
 JWT tokens are validated against Janua's JWKS endpoint.
 
+## Monetization gating (InterestGate)
+
+CEQ is in pre-monetization mode. Instead of a real paywall in front of "Pro"
+features, the studio uses the **InterestGate** pattern: gated UI is wrapped
+in `<InterestGate featureKey="..." variant="overlay">` (see
+`apps/studio/src/components/InterestGate.tsx`), which shows an email-capture
+form. Free `/v1/render/*` endpoints stay open for evaluators — only the
+studio surface gates "Pro" templates today.
+
+### Endpoint
+
+| Method | Endpoint | Auth | Rate limit | Description |
+|--------|----------|------|-----------|-------------|
+| `POST` | `/v1/interest/` | none | 10/hour per IP | Capture email + feature_key (+ optional wishlist) |
+
+Responses:
+- `201 Created` `{"status": "registered"}` — first capture for `(email, feature_key)`
+- `200 OK` `{"status": "already_registered"}` — duplicate; backfills missing fields
+- `400/422` — invalid email or unknown `feature_key`
+- `429` — rate limit exceeded
+- `503` — capture disabled (`INTEREST_ENABLED=false`)
+
+Allowed `feature_key` values are listed in
+`apps/api/src/ceq_api/routers/interest.py::ALLOWED_FEATURES`. Add new keys
+there when you wire up new gates and keep them in sync with
+`apps/studio/src/lib/feature-labels.ts`.
+
+### Storage
+
+Captures land in the `feature_interest` table (see migration
+`8a3f1c4e5d20_add_feature_interest.py` and model
+`ceq_api/models/feature_interest.py`). Indexed on `(email, feature_key)` for
+the upsert lookup and on `(feature_key, created_at)` for analytics.
+
+### CRM dispatch
+
+On every successful **new** registration the API enqueues a
+`dispatch_interest_to_crm` background task that POSTs an HMAC-SHA256-signed
+payload to `CRM_WEBHOOK_URL`. When either `CRM_WEBHOOK_URL` or
+`CRM_WEBHOOK_SECRET` is unset, the dispatch is a silent no-op — the DB row
+is still the source of truth. Phyne-CRM receives:
+
+```json
+{
+  "event": "interest.created",
+  "timestamp": "2026-04-25T12:00:00+00:00",
+  "source": "ceq",
+  "data": {
+    "email": "user@example.com",
+    "feature_key": "premium_render",
+    "wishlist": {"text": "..."} ,
+    "janua_user_id": null,
+    "source_page": "templates/3d",
+    "created_at": "2026-04-25T12:00:00+00:00"
+  }
+}
+```
+
+Verify with:
+
+```python
+expected = hmac.new(secret, raw_body, hashlib.sha256).hexdigest()
+assert request.headers["X-Webhook-Signature"] == f"sha256={expected}"
+```
+
+### Environment
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `INTEREST_ENABLED` | `true` | Set to `false` to hard-disable capture (returns 503) |
+| `CRM_WEBHOOK_URL` | `""` | e.g. `https://crm.madfam.io/api/webhooks/ceq`. Empty = no-op |
+| `CRM_WEBHOOK_SECRET` | `""` | 32-byte hex secret shared with Phyne-CRM. Empty = no-op |
+| `CRM_WEBHOOK_TIMEOUT_SECONDS` | `5.0` | Per-request HTTP timeout |
+
+### Flipping to paid checkout later
+
+When WTP signal is sufficient and billing is wired up:
+
+1. Replace `<InterestGate>` wrappers in the studio with a real checkout/tier
+   gate (e.g. a `<TierGate>` similar to tezca's pattern).
+2. Keep `POST /v1/interest/` available as a **fallback** for "not ready to
+   buy" users — it's still useful WTP signal post-launch.
+3. Migrate the existing `feature_interest` rows into the CRM as a warm
+   waitlist; email them announcing checkout availability.
+4. Add a deprecation log line to `register_interest` when the feature_key
+   has a paid SKU available, so we can spot rows that should have hit
+   checkout instead.
+
+The existing free `/v1/render/*` endpoints stay open under all gating
+strategies — they're the public evaluation surface and the contract Rondelio
++ other internal consumers depend on (see `@ceq/sdk`).
+
 ## Development
 
 ```bash
