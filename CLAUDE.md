@@ -295,6 +295,12 @@ kubectl logs -n ceq deployment/ceq-api
 kubectl logs -n ceq deployment/cloudflared
 ```
 
+## Pricing + PMF
+
+- **Pricing source-of-truth**: `internal-devops/decisions/2026-04-25-tulana-ecosystem-pricing.md`. CEQ tiers per Tulana intel: Creator $0 (100 credits/mo) / Pro Artist 349 MXN (2K credits) / Studio 1,299 MXN (10K credits). **Confidence: low** — DeepInfra inference cost basis is volatile, so InterestGate is the active gating pattern (ceq#11) rather than a paywall. Locks in via PMF Score per RFC 0013.
+- **Monetization gating**: `apps/api/src/ceq_api/routers/interest.py` + `apps/studio/src/components/InterestGate.tsx`. Premium-tagged templates (`Template.tags` includes 'pro' or 'premium') show overlay InterestGate for free users; data captured in `feature_interest` table → CRM webhook → Phyne-CRM. Switches to checkout when `recommended_action` from Tulana flips.
+- **PMF measurement**: per RFC 0013, NPS + Sean Ellis + retention via `@madfam/pmf-widget` → Tulana `/v1/pmf/*` endpoints.
+
 ## Related Documentation
 
 - [README.md](./README.md) - Project overview and quick start
