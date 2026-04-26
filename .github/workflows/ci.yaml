@@ -55,7 +55,9 @@ jobs:
         run: |
           $HOME/.local/bin/uv pip install --system -e '.[dev]' || \
             $HOME/.local/bin/uv pip install --system -e '.'
-          pip install ruff pytest pytest-asyncio pytest-cov httpx
+          # 'pydantic[email]' pulls email-validator — required by EmailStr
+          # (used in our schemas but not always pulled by `.[dev]`).
+          pip install ruff pytest pytest-asyncio pytest-cov httpx 'pydantic[email]'
 
       - name: Ruff (lint)
         run: ruff check . || true  # non-blocking on first rollout; tighten later
