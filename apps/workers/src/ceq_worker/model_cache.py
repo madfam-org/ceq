@@ -9,12 +9,10 @@ Manages model downloads and caching from R2 storage with:
 """
 
 import asyncio
-import hashlib
+import contextlib
 import json
-import os
-import shutil
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -356,13 +354,12 @@ class ModelCache:
                 workflow = job.get("input", {}).get("workflow_json", {})
 
                 # Extract model references from workflow nodes
-                for node_id, node in workflow.items():
+                for _node_id, node in workflow.items():
                     if isinstance(node, dict):
                         inputs = node.get("inputs", {})
                         for key, value in inputs.items():
-                            if key in ("ckpt_name", "model_name", "lora_name"):
-                                if isinstance(value, str):
-                                    models_needed.add(value)
+                            if key in ("ckpt_name", "model_name", "lora_name") and isinstance(value, str):
+                                models_needed.add(value)
             except Exception:
                 continue
 
@@ -393,7 +390,7 @@ class ModelCache:
         """
         models: list[str] = []
 
-        for node_id, node in workflow.items():
+        for _node_id, node in workflow.items():
             if not isinstance(node, dict):
                 continue
 
@@ -458,10 +455,8 @@ class ModelCache:
         """Shutdown cache manager."""
         if self._prefetch_task:
             self._prefetch_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._prefetch_task
-            except asyncio.CancelledError:
-                pass
 
         if self._redis:
             await self._redis.close()

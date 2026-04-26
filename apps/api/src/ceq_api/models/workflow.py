@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import Boolean, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ceq_api.models.base import Base, GUIDString, JSONB, TimestampMixin
+from ceq_api.models.base import JSONB, Base, GUIDString, TimestampMixin
 
 
 class Workflow(Base, TimestampMixin):

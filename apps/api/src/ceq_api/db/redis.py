@@ -15,7 +15,7 @@ _redis: redis.Redis | None = None
 async def init_redis() -> None:
     """
     Initialize Redis connection.
-    
+
     Called during application startup.
     """
     global _redis
@@ -36,7 +36,7 @@ async def init_redis() -> None:
 async def close_redis() -> None:
     """
     Close Redis connection.
-    
+
     Called during application shutdown.
     """
     global _redis
@@ -50,9 +50,9 @@ async def close_redis() -> None:
 def get_redis() -> redis.Redis:
     """
     Get the Redis client.
-    
+
     Used as a FastAPI dependency:
-    
+
         @router.post("/jobs")
         async def create_job(redis: Redis = Depends(get_redis)):
             ...
@@ -65,7 +65,7 @@ def get_redis() -> redis.Redis:
 async def enqueue_job(job_data: dict[str, Any]) -> None:
     """
     Add a job to the processing queue.
-    
+
     Jobs are stored as JSON in a Redis list.
     """
     import json

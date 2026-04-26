@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import BigInteger, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ceq_api.models.base import Base, GUIDString, JSONB, TimestampMixin
+from ceq_api.models.base import JSONB, Base, GUIDString, TimestampMixin
 
 
 class Output(Base, TimestampMixin):

@@ -6,13 +6,13 @@ Wraps ComfyUI's API for workflow execution without the web UI.
 """
 
 import asyncio
-import json
 import logging
 import subprocess
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import httpx
 
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ExecutionResult:
     """Result of a workflow execution."""
-    
+
     output_paths: list[Path] = field(default_factory=list)
     node_timings: dict[str, float] = field(default_factory=dict)
     vram_peak_gb: float = 0.0
@@ -34,7 +34,7 @@ class ExecutionResult:
 class ComfyUIExecutor:
     """
     Headless ComfyUI executor.
-    
+
     Manages a ComfyUI server process and executes workflows via its API.
     """
 
@@ -68,7 +68,7 @@ class ComfyUIExecutor:
         await self._start_server()
 
         # Wait for server to be ready
-        for i in range(30):
+        for _i in range(30):
             if await self._is_healthy():
                 print("   ComfyUI server ready")
                 return
@@ -113,13 +113,13 @@ class ComfyUIExecutor:
     ) -> ExecutionResult:
         """
         Execute a ComfyUI workflow.
-        
+
         Args:
             workflow: ComfyUI workflow in API format
             job_id: Unique job identifier for output naming
             timeout: Maximum execution time in seconds
             on_progress: Optional callback for progress updates
-            
+
         Returns:
             ExecutionResult with output paths and metadata
         """
@@ -139,7 +139,7 @@ class ComfyUIExecutor:
                 },
             )
             response.raise_for_status()
-            
+
             prompt_data = response.json()
             prompt_id = prompt_data.get("prompt_id")
 
@@ -150,13 +150,13 @@ class ComfyUIExecutor:
             while True:
                 elapsed = time.time() - start_time
                 if elapsed > timeout:
-                    raise asyncio.TimeoutError()
+                    raise TimeoutError()
 
                 # Check history for completion
                 history_response = await self._client.get(
                     f"{self.base_url}/history/{prompt_id}"
                 )
-                
+
                 if history_response.status_code == 200:
                     history = history_response.json()
                     if prompt_id in history:
@@ -171,7 +171,7 @@ class ComfyUIExecutor:
                 if queue_response.status_code == 200:
                     queue = queue_response.json()
                     running = queue.get("queue_running", [])
-                    
+
                     # Report progress if we have a callback
                     if on_progress and running:
                         for item in running:
@@ -186,7 +186,7 @@ class ComfyUIExecutor:
             result.vram_peak_gb = await self._get_vram_usage()
             result.success = True
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             result.success = False
             result.error = "Execution timeout"
             # Cancel the running prompt
@@ -198,15 +198,15 @@ class ComfyUIExecutor:
         return result
 
     def _collect_outputs(
-        self, 
-        outputs: dict[str, Any], 
+        self,
+        outputs: dict[str, Any],
         job_id: str
     ) -> list[Path]:
         """Collect output file paths from execution results."""
         output_paths: list[Path] = []
         output_dir = self.comfyui_path / "output"
 
-        for node_id, node_outputs in outputs.items():
+        for _node_id, node_outputs in outputs.items():
             images = node_outputs.get("images", [])
             for img in images:
                 filename = img.get("filename")

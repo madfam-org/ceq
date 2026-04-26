@@ -4,7 +4,7 @@ import logging
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, RedisDsn, model_validator
+from pydantic import Field, RedisDsn, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -31,8 +31,11 @@ class Settings(BaseSettings):
     port: int = 5800
     workers: int = 1
 
-    # Database
-    database_url: PostgresDsn = Field(
+    # Database — typed `str` rather than `PostgresDsn` so test runs can pass
+    # `sqlite+aiosqlite://` (PostgresDsn rejects non-postgres schemes).
+    # Production URL format is still validated at startup by the Validation
+    # check below (see `errors.append(...)` block below).
+    database_url: str = Field(
         default="postgresql+asyncpg://ceq:ceq_dev@localhost:5432/ceq_dev"
     )
 

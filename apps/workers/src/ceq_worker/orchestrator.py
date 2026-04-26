@@ -10,15 +10,15 @@ This is the main entry point for the worker management system.
 import asyncio
 import json
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
 import redis.asyncio as redis
 
 from ceq_worker.config import get_settings
-from ceq_worker.providers import GPUProvider, VastAIProvider, FurnaceProvider, get_provider
-from ceq_worker.providers.base import InstanceInfo, InstanceSpec, InstanceStatus, GPUTier
+from ceq_worker.providers import GPUProvider, get_provider
+from ceq_worker.providers.base import GPUTier, InstanceInfo, InstanceSpec, InstanceStatus
 
 settings = get_settings()
 
@@ -406,7 +406,7 @@ class Orchestrator:
         initial_count = len(self._workers)
         await self._scale_up(count)
         new_workers = [
-            w_id for w_id in self._workers.keys()
+            w_id for w_id in self._workers
             if w_id not in list(self._workers.keys())[:initial_count]
         ]
         return new_workers

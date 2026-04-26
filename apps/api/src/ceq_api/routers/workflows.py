@@ -1,12 +1,13 @@
 """Workflow management endpoints."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from jsonschema import Draft7Validator, ValidationError as JsonSchemaValidationError
+from jsonschema import Draft7Validator
+from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -338,7 +339,7 @@ async def run_workflow(
             # Don't block execution for malformed schema, log and continue
 
     # Create job record
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     job = Job(
         workflow_id=workflow.id,
         user_id=user.id,

@@ -3,7 +3,7 @@
 from sqlalchemy import Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from ceq_api.models.base import Base, JSONB, TimestampMixin
+from ceq_api.models.base import JSONB, Base, TimestampMixin
 
 
 class Template(Base, TimestampMixin):

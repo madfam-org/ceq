@@ -1,13 +1,11 @@
 """Output management endpoints with R2 storage integration."""
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-
-logger = logging.getLogger(__name__)
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ceq_api.auth import JanuaUser, get_current_user
 from ceq_api.db import get_db
 from ceq_api.models import Job, Output
-from ceq_api.storage import get_storage, StorageClient
+from ceq_api.storage import StorageClient, get_storage
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -185,7 +185,7 @@ def _enrich_output_response(
 async def list_outputs(
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[JanuaUser, Depends(get_current_user)],
-    job_id: UUID | None = Query(None, description="Filter by job ID"),
+    job_id: UUID | None = Query(None, description="Filter by job ID"),  # noqa: B008
     output_type: str | None = Query(None, description="Filter by type: image | video | model"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
@@ -517,11 +517,10 @@ async def publish_output(
             )
 
         # Record successful publish
-        from datetime import timezone
         publish_record = {
             "channel": data.channel,
             "url": webhook_url,
-            "published_at": datetime.now(timezone.utc).isoformat(),
+            "published_at": datetime.now(UTC).isoformat(),
         }
         output.published_to = [*output.published_to, publish_record]
         await db.flush()

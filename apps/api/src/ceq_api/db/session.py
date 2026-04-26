@@ -22,7 +22,7 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 async def init_db() -> None:
     """
     Initialize the database connection pool.
-    
+
     Called during application startup.
     """
     global _engine, _session_factory
@@ -51,7 +51,7 @@ async def init_db() -> None:
 async def close_db() -> None:
     """
     Close the database connection pool.
-    
+
     Called during application shutdown.
     """
     global _engine, _session_factory
@@ -66,9 +66,9 @@ async def close_db() -> None:
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Get a database session.
-    
+
     Used as a FastAPI dependency:
-    
+
         @router.get("/items")
         async def list_items(db: AsyncSession = Depends(get_db)):
             ...
@@ -89,9 +89,9 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 async def get_db_context() -> AsyncGenerator[AsyncSession, None]:
     """
     Get a database session as a context manager.
-    
+
     For use outside of FastAPI request context:
-    
+
         async with get_db_context() as db:
             result = await db.execute(...)
     """

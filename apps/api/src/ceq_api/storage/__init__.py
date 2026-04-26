@@ -5,7 +5,6 @@ Provides presigned URL generation for output downloads and direct uploads.
 """
 
 import asyncio
-from functools import lru_cache
 from typing import Any
 
 import boto3

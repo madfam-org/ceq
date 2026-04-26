@@ -412,7 +412,7 @@ def get_template_by_name(name: str) -> dict[str, Any] | None:
 
 def get_all_categories() -> list[str]:
     """Get unique categories."""
-    return list(set(t["category"] for t in SEED_TEMPLATES))
+    return list({t["category"] for t in SEED_TEMPLATES})
 
 
 def get_all_tags() -> list[str]:

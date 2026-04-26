@@ -20,7 +20,7 @@ settings = get_settings()
 class QueueConsumer:
     """
     Redis-based job queue consumer.
-    
+
     Listens for jobs on the pending queue and processes them
     using the workflow handler.
     """
@@ -114,9 +114,9 @@ class QueueConsumer:
             self._current_job_id = None
 
     async def _update_status(
-        self, 
-        job_id: str, 
-        status: str, 
+        self,
+        job_id: str,
+        status: str,
         error: str | None = None
     ) -> None:
         """Update job status in Redis."""

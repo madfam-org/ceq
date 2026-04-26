@@ -8,17 +8,14 @@ The handler pattern is designed to be compatible with RunPod's serverless
 SDK for easy migration.
 """
 
-import asyncio
 import json
 import time
-from pathlib import Path
 from typing import Any
-from uuid import UUID
 
 import redis.asyncio as redis
 
-from ceq_worker.config import get_settings
 from ceq_worker.comfyui import ComfyUIExecutor
+from ceq_worker.config import get_settings
 from ceq_worker.storage import StorageClient
 
 settings = get_settings()
@@ -72,18 +69,18 @@ class WorkflowHandler:
     async def handler(self, event: dict[str, Any]) -> dict[str, Any]:
         """
         Main handler function for workflow execution.
-        
+
         This follows the Furnace/RunPod serverless pattern:
         - event["input"] contains the job input
         - Returns a dict with output data
-        
+
         Args:
             event: Job event containing:
                 - input.workflow_json: ComfyUI workflow in API format
                 - input.params: Input parameters (prompts, seeds, etc.)
                 - input.job_id: Unique job identifier
                 - input.webhook_url: Optional callback URL
-                
+
         Returns:
             Dict containing:
                 - output_urls: List of generated asset URLs
@@ -98,7 +95,7 @@ class WorkflowHandler:
             # Extract workflow and parameters
             workflow_json = input_data.get("workflow_json", {})
             params = input_data.get("params", {})
-            
+
             if not workflow_json:
                 return {
                     "error": "Chaos prevails: No workflow provided",
@@ -147,7 +144,7 @@ class WorkflowHandler:
                 "execution_time": execution_time,
             }
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return {
                 "error": "Chaos won: Execution timeout",
                 "success": False,
@@ -162,13 +159,13 @@ class WorkflowHandler:
             }
 
     def _apply_params(
-        self, 
-        workflow: dict[str, Any], 
+        self,
+        workflow: dict[str, Any],
         params: dict[str, Any]
     ) -> dict[str, Any]:
         """
         Apply input parameters to workflow nodes.
-        
+
         Parameters are matched to nodes by:
         1. Direct node ID reference (e.g., "3.inputs.text")
         2. Node title/name matching
@@ -184,7 +181,7 @@ class WorkflowHandler:
                 parts = param_key.split(".")
                 node_id = parts[0]
                 input_path = parts[1:]
-                
+
                 if node_id in prepared:
                     target = prepared[node_id]
                     for key in input_path[:-1]:
@@ -193,7 +190,7 @@ class WorkflowHandler:
                         target[input_path[-1]] = param_value
             else:
                 # Search for matching inputs across all nodes
-                for node_id, node_data in prepared.items():
+                for _node_id, node_data in prepared.items():
                     inputs = node_data.get("inputs", {})
                     if param_key in inputs:
                         inputs[param_key] = param_value
@@ -231,7 +228,7 @@ handler_instance = WorkflowHandler()
 async def handler(event: dict[str, Any]) -> dict[str, Any]:
     """
     Furnace serverless handler function.
-    
+
     This is the entry point called by the Furnace worker runtime.
     Compatible with RunPod's handler pattern.
     """
@@ -242,7 +239,7 @@ async def handler(event: dict[str, Any]) -> dict[str, Any]:
 # For direct execution / testing
 if __name__ == "__main__":
     import furnace  # type: ignore
-    
+
     furnace.serverless.start({
         "handler": handler,
     })

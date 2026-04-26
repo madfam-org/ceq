@@ -9,10 +9,28 @@ class TestWorkerConfig:
     """Test worker configuration."""
 
     def test_default_config(self):
-        """Test default configuration loads."""
+        """Test default configuration loads.
+
+        CI sets REDIS_URL=redis://localhost:6379/0 in the workers job env;
+        we must clear it (and any other test-time overrides) before
+        instantiating Settings to assert the in-code default value of
+        DB 14 per PORT_ALLOCATION.md.
+        """
         from ceq_worker.config import Settings
 
-        with patch.dict(os.environ, {}, clear=False):
+        # Strip every env var that pydantic-settings would slurp into the
+        # model — leave only what the test explicitly sets.
+        env_overrides_to_clear = {
+            "REDIS_URL": None,
+            "WORKER_ID": None,
+        }
+        with patch.dict(
+            os.environ,
+            {k: v for k, v in env_overrides_to_clear.items() if v is not None},
+            clear=False,
+        ):
+            for key in env_overrides_to_clear:
+                os.environ.pop(key, None)
             settings = Settings()
             # Redis DB 14 per PORT_ALLOCATION.md
             assert "/14" in str(settings.redis_url)
