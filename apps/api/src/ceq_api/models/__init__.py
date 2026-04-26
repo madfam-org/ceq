@@ -1,7 +1,7 @@
 """SQLAlchemy models for CEQ API."""
 
-from ceq_api.models.base import Base, TimestampMixin
 from ceq_api.models.asset import Asset
+from ceq_api.models.base import Base, TimestampMixin
 from ceq_api.models.feature_interest import FeatureInterest
 from ceq_api.models.job import Job, JobStatus
 from ceq_api.models.output import Output

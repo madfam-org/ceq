@@ -2,7 +2,7 @@
 
 import logging
 import time
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
@@ -12,7 +12,7 @@ from slowapi.util import get_remote_address
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from ceq_api.config import get_settings
-from ceq_api.logging import get_request_id, set_request_id
+from ceq_api.logging import set_request_id
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -169,14 +169,13 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
 
         # Check Content-Length header
         content_length = request.headers.get("content-length")
-        if content_length:
-            if int(content_length) > max_size:
-                return JSONResponse(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                    content={
-                        "detail": f"Request too large. Maximum size: {max_size / 1024 / 1024:.0f}MB"
-                    },
-                )
+        if content_length and int(content_length) > max_size:
+            return JSONResponse(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                content={
+                    "detail": f"Request too large. Maximum size: {max_size / 1024 / 1024:.0f}MB"
+                },
+            )
 
         return await call_next(request)
 

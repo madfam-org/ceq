@@ -15,8 +15,7 @@ import os
 from typing import Any
 
 from ceq_worker.providers.base import GPUProvider
-from ceq_worker.providers.fal import FalAIProvider, FAL_MODEL_ENDPOINTS
-
+from ceq_worker.providers.fal import FalAIProvider
 
 # Templates/categories that should route to fal.ai (fast, cheap, serverless)
 FAL_ELIGIBLE_CATEGORIES = {"social", "utility"}
@@ -89,10 +88,7 @@ class ProviderRouter:
 
         # Check if model requirements match a fal.ai endpoint
         model_reqs = template.get("model_requirements", [])
-        if model_reqs and self.fal.resolve_endpoint(model_reqs):
-            return True
-
-        return False
+        return bool(model_reqs and self.fal.resolve_endpoint(model_reqs))
 
     async def execute_on_fal(self, job: dict[str, Any]) -> dict[str, Any]:
         """

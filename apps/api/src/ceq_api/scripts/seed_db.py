@@ -11,7 +11,6 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ceq_api.config import settings
 from ceq_api.db.session import async_session_maker, init_db
 from ceq_api.models.template import Template
 from ceq_api.seed_templates import SEED_TEMPLATES

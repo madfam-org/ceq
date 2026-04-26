@@ -11,10 +11,10 @@ billing; existing rows in this table become the warm waitlist to migrate.
 
 from __future__ import annotations
 
-from sqlalchemy import Index, String, Text
+from sqlalchemy import Index, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from ceq_api.models.base import Base, JSONB, TimestampMixin
+from ceq_api.models.base import JSONB, Base, TimestampMixin
 
 
 class FeatureInterest(Base, TimestampMixin):

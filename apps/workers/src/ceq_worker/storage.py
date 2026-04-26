@@ -20,7 +20,7 @@ settings = get_settings()
 class StorageClient:
     """
     Cloudflare R2 storage client.
-    
+
     Handles uploading generated outputs (images, videos, models)
     to R2 storage for retrieval by the API.
     """
@@ -66,12 +66,12 @@ class StorageClient:
     ) -> str:
         """
         Upload an output file to R2.
-        
+
         Args:
             local_path: Path to the local file
             job_id: Job ID for organizing outputs
             content_type: Optional MIME type override
-            
+
         Returns:
             Public URL for the uploaded file
         """
@@ -116,12 +116,12 @@ class StorageClient:
     ) -> str:
         """
         Upload an asset (model, LoRA, etc.) to R2.
-        
+
         Args:
             local_path: Path to the local file
             asset_type: Type of asset (checkpoint, lora, etc.)
             asset_id: Unique asset identifier
-            
+
         Returns:
             Storage URI for the asset
         """
@@ -149,11 +149,11 @@ class StorageClient:
     ) -> Path:
         """
         Download an asset from R2 to local storage.
-        
+
         Args:
             storage_uri: R2 URI (r2://bucket/key)
             local_path: Local destination path
-            
+
         Returns:
             Path to downloaded file
         """

@@ -317,7 +317,7 @@ async def get_asset(
 async def upload_asset(
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[JanuaUser, Depends(get_current_user)],
-    file: UploadFile = File(...),
+    file: UploadFile = File(...),  # noqa: B008  # FastAPI Depends-style default
     name: str = Form(...),
     asset_type: str = Form(...),
     description: str | None = Form(None),
@@ -370,9 +370,10 @@ async def upload_asset(
     # Upload to R2
     try:
         # Use boto3 directly for actual upload
-        from ceq_api.config import get_settings
         import boto3
         from botocore.config import Config
+
+        from ceq_api.config import get_settings
 
         settings = get_settings()
         s3_client = boto3.client(
@@ -396,7 +397,7 @@ async def upload_asset(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to upload to storage. The vault rejected the material.",
-        )
+        ) from e
 
     # Parse tags
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []

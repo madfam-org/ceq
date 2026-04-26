@@ -10,18 +10,19 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
-
-logger = logging.getLogger(__name__)
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ceq_api.auth.janua import JanuaUser, get_current_user, validate_token
-from ceq_api.logging import audit_logger
 from ceq_api.db.redis import get_redis, publish_job_update
 from ceq_api.db.session import get_db
-from ceq_api.models.job import Job, JobStatus as JobStatusEnum
+from ceq_api.logging import audit_logger
+from ceq_api.models.job import Job
+from ceq_api.models.job import JobStatus as JobStatusEnum
 from ceq_api.models.output import Output
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -69,7 +70,7 @@ class JobStatusResponse(BaseModel):
         from_attributes = True
 
     @classmethod
-    def from_job(cls, job: Job) -> "JobStatusResponse":
+    def from_job(cls, job: Job) -> JobStatusResponse:
         """Create response from Job model with brand message."""
         return cls(
             id=job.id,
@@ -120,7 +121,7 @@ async def list_jobs(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     status_filter: str | None = Query(None, description="Filter by status"),
-    workflow_id: UUID | None = Query(None, description="Filter by workflow"),
+    workflow_id: UUID | None = Query(None, description="Filter by workflow"),  # noqa: B008
 ) -> JobListResponse:
     """
     List jobs.
@@ -406,7 +407,7 @@ async def stream_job_progress(
                     )
                     if data == "ping":
                         await websocket.send_json({"type": "pong"})
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # Send keepalive
                     await websocket.send_json({"type": "keepalive"})
                 except WebSocketDisconnect:

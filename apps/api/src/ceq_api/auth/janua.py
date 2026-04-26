@@ -18,16 +18,16 @@ from uuid import UUID
 
 import httpx
 import jwt
-from jwt import PyJWKClient, PyJWKClientError
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt import PyJWKClient, PyJWKClientError
 
 from ceq_api.config import get_settings
 from ceq_api.resilience import (
+    JANUA_RETRY_CONFIG,
     CircuitBreakerError,
     janua_circuit,
     retry_with_backoff,
-    JANUA_RETRY_CONFIG,
 )
 
 logger = logging.getLogger(__name__)

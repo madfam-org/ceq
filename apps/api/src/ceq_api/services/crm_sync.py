@@ -15,7 +15,7 @@ import hashlib
 import hmac
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -34,7 +34,7 @@ def _serialize_record(record: dict[str, Any]) -> dict[str, Any]:
     """Build the wire payload for an interest.created event."""
     return {
         "event": "interest.created",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "source": "ceq",
         "data": {
             "email": record.get("email"),

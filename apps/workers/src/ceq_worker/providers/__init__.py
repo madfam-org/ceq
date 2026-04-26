@@ -10,9 +10,9 @@ This abstraction enables seamless migration between providers.
 """
 
 from ceq_worker.providers.base import GPUProvider, ProviderConfig
-from ceq_worker.providers.vast import VastAIProvider
-from ceq_worker.providers.furnace import FurnaceProvider
 from ceq_worker.providers.fal import FalAIProvider
+from ceq_worker.providers.furnace import FurnaceProvider
+from ceq_worker.providers.vast import VastAIProvider
 
 __all__ = [
     "GPUProvider",

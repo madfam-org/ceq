@@ -19,6 +19,7 @@ Not suited for:
 - Jobs needing persistent model state between calls
 """
 
+import asyncio
 import os
 import time
 from typing import Any
@@ -341,5 +342,4 @@ class FalAIProvider(GPUProvider):
         raise NotImplementedError("File download not supported for serverless provider. Results are returned as URLs.")
 
 
-# Required for import resolution
-import asyncio
+# asyncio imported at top of module

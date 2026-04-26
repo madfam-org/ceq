@@ -7,11 +7,11 @@ This enables provider-agnostic worker deployment and management.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class InstanceStatus(str, Enum):
+class InstanceStatus(StrEnum):
     """GPU instance lifecycle states."""
     PENDING = "pending"
     STARTING = "starting"
@@ -21,7 +21,7 @@ class InstanceStatus(str, Enum):
     ERROR = "error"
 
 
-class GPUTier(str, Enum):
+class GPUTier(StrEnum):
     """GPU capability tiers for workload matching."""
     CONSUMER = "consumer"      # RTX 3080, 3090 - 10-24GB VRAM
     PROSUMER = "prosumer"      # RTX 4090, A5000 - 24GB VRAM

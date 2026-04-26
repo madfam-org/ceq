@@ -23,18 +23,28 @@ if _sentry_dsn:
     except ImportError:
         pass  # sentry-sdk not installed
 
-import logging
-from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+# Sentry init must happen BEFORE these imports — instruments FastAPI on import.
+import logging  # noqa: E402
+from collections.abc import AsyncGenerator  # noqa: E402
+from contextlib import asynccontextmanager  # noqa: E402
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from prometheus_client import make_asgi_app
+from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from prometheus_client import make_asgi_app  # noqa: E402
 
-from ceq_api.config import get_settings
-from ceq_api.logging import setup_logging
-from ceq_api.middleware import setup_middleware
-from ceq_api.routers import assets, health, interest, jobs, outputs, render, templates, workflows
+from ceq_api.config import get_settings  # noqa: E402
+from ceq_api.logging import setup_logging  # noqa: E402
+from ceq_api.middleware import setup_middleware  # noqa: E402
+from ceq_api.routers import (  # noqa: E402
+    assets,
+    health,
+    interest,
+    jobs,
+    outputs,
+    render,
+    templates,
+    workflows,
+)
 
 # Initialize logging first
 setup_logging()
@@ -50,8 +60,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("ceq-api starting... Quantizing entropy...")
 
     # Initialize database
-    from ceq_api.db.session import init_db, close_db
-    from ceq_api.db.redis import init_redis, close_redis
+    from ceq_api.db.redis import close_redis, init_redis
+    from ceq_api.db.session import close_db, init_db
 
     await init_db()
     await init_redis()

@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import BigInteger, Boolean, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from ceq_api.models.base import Base, GUIDString, JSONB, TimestampMixin
+from ceq_api.models.base import JSONB, Base, GUIDString, TimestampMixin
 
 
 class Asset(Base, TimestampMixin):

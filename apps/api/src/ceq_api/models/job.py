@@ -1,16 +1,16 @@
 """Job model for workflow execution tracking."""
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ceq_api.models.base import Base, GUIDString, JSONB, TimestampMixin
+from ceq_api.models.base import JSONB, Base, GUIDString, TimestampMixin
 
 
-class JobStatus(str, Enum):
+class JobStatus(StrEnum):
     """Job execution status."""
 
     QUEUED = "queued"

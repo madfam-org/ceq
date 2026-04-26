@@ -1,13 +1,11 @@
 """Template management endpoints."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-
-logger = logging.getLogger(__name__)
 from jsonschema import Draft7Validator
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -17,6 +15,8 @@ from ceq_api.auth import JanuaUser, get_current_user
 from ceq_api.db import get_db
 from ceq_api.db.redis import enqueue_job
 from ceq_api.models import Job, Template, Workflow
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -306,7 +306,7 @@ async def run_template(
             logger.warning(f"Invalid input_schema for template {template_id}: {e}")
 
     # Create ephemeral workflow for this run
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     workflow = Workflow(
         name=f"[Run] {template.name}",
         description=f"Direct run of template: {template.name}",
