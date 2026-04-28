@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: ceq-api
-          image: ghcr.io/madfam/ceq-api:latest
+          image: ghcr.io/madfam-org/ceq-api:latest
           ports:
             - containerPort: 5800
               name: http

@@ -240,28 +240,59 @@ const ERROR_MESSAGES = [
 
 ## Kubernetes Deployment
 
-### Namespace
+### Production deploys: GitOps via ArgoCD (since 2026-04-28, ceq#16)
+
+CEQ deploys through the same auto-digest GitOps loop as the rest of the
+MADFAM ecosystem. `.github/workflows/deploy.yaml` builds + pushes images
+to GHCR, resolves each manifest-list digest via
+`docker buildx imagetools inspect` (NOT `docker manifest inspect | jq`
+— that returns null on multi-arch, see enclii#136), then commits the
+new digests to `infrastructure/k8s/kustomization.yaml` as
+`madfam-deploy-bot`. ArgoCD's `ceq-services` application picks up the
+new digests within ~3 min.
+
+**No `kubectl apply` from CI.** ARC runner pods are NetworkPolicy-isolated
+from the kube-apiserver (verified 2026-04-28); direct cluster access from
+inside a runner returns exit 7. The GitOps loop is the only deploy path.
+
+**Image-name convention:** all three production images use dash-form:
+`ghcr.io/madfam-org/ceq-{api,studio,worker}`. Earlier manifests had a
+mix (`ghcr.io/madfam/ceq-api`, `ghcr.io/madfam-org/ceq/studio`); fixed
+to dash-form in the GitOps refactor PR. New manifests should match.
+
+**Database migrations** run as a Job with `argocd.argoproj.io/hook: PreSync`
++ `hook-delete-policy: BeforeHookCreation`, so each ArgoCD sync runs
+`alembic upgrade head` before the Deployments roll. `seed-templates-job.yaml`
+is a manual one-shot, intentionally excluded from the kustomize bundle.
+
+### Bootstrap (first-time only)
+
 ```bash
-kubectl apply -f infrastructure/k8s/namespace.yaml
+# Namespace + secrets are operator-only; runners can't reach the API.
+ssh ssh.madfam.io
+sudo k3s kubectl apply -f infrastructure/k8s/namespace.yaml
+sudo k3s kubectl apply -f infrastructure/k8s/secrets.local.yaml
 ```
 
-### Secrets
-```bash
-# Copy template and fill in values
-cp infrastructure/k8s/secrets.prod.yaml infrastructure/k8s/secrets.local.yaml
-vim infrastructure/k8s/secrets.local.yaml
-kubectl apply -f infrastructure/k8s/secrets.local.yaml
-```
+After that, ArgoCD owns the rollout.
 
-### Deploy
+### Manual one-shots (operator)
+
 ```bash
-kubectl apply -k infrastructure/k8s/
+# Re-seed templates after a fresh DB:
+ssh ssh.madfam.io
+sudo k3s kubectl apply -f infrastructure/k8s/seed-templates-job.yaml
+
+# Force a re-migration (delete + ArgoCD will recreate the PreSync Job):
+sudo k3s kubectl -n ceq delete job ceq-db-migrate
 ```
 
 ### Verify
+
 ```bash
-kubectl get pods -n ceq
-kubectl logs -n ceq deployment/ceq-api
+ssh ssh.madfam.io
+sudo k3s kubectl -n ceq get pods
+sudo k3s kubectl -n ceq logs deployment/ceq-api
 ```
 
 ## Important Notes
