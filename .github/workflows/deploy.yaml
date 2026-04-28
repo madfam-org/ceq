@@ -1,14 +1,25 @@
 # =============================================================================
-# CEQ CI/CD Pipeline
+# CEQ CI/CD Pipeline (GitOps)
 # =============================================================================
 #
-# Builds and deploys CEQ to production on push to main branch.
-# Triggered by: push to main, manual dispatch
+# Builds + pushes images to GHCR, then commits the new manifest-list digest
+# to `infrastructure/k8s/kustomization.yaml`. ArgoCD's `ceq-services`
+# application reconciles the change within ~3 min — no kubectl apply from
+# CI, no kube-apiserver access required.
 #
-# Required Secrets:
-#   - GHCR_TOKEN: GitHub Container Registry token
-#   - KUBECONFIG_BASE64: Base64-encoded kubeconfig for k3s cluster
-#   - CF_TUNNEL_TOKEN: Cloudflare tunnel token (optional, for tunnel updates)
+# Why GitOps: ARC runner pods in the `arc-runners` namespace are
+# NetworkPolicy-isolated from kube-apiserver (verified 2026-04-28T03:10Z —
+# `kubectl exec -n arc-runners <pod> -- curl https://10.43.0.1:443/`
+# returns exit 7). Direct `kubectl apply` from inside a runner is
+# architecturally broken. Pattern mirrors rondelio's deploy-*.yml,
+# dhanam's deploy-prod.yml, and 6 other repos in the ecosystem.
+# Closes ceq#16.
+#
+# Required secrets:
+#   - GITHUB_TOKEN: implicit, used for GHCR push
+#   - MADFAM_BOT_PAT (optional): bot PAT for the GitOps commit. Falls back
+#     to GITHUB_TOKEN, but a dedicated bot identity is preferred so
+#     deploy commits show up as `madfam-deploy-bot` in `git log`.
 #
 # =============================================================================
 
@@ -21,6 +32,7 @@ on:
       - 'apps/**'
       - 'infrastructure/**'
       - '.github/workflows/deploy.yaml'
+      - '!infrastructure/k8s/kustomization.yaml'
   workflow_dispatch:
     inputs:
       environment:
@@ -32,9 +44,17 @@ on:
           - production
           - staging
 
+# Serialise deploy commits so two concurrent runs can't fight over
+# kustomization.yaml. Newer pushes cancel older queued runs.
+concurrency:
+  group: ceq-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/madfam-org/ceq
+  # Canonical image namespace. All three services live at
+  # ghcr.io/madfam-org/ceq-{api,studio,worker} (dash-form, not slash-form).
+  IMAGE_NAMESPACE: ghcr.io/madfam-org
 
 jobs:
   # ===========================================================================
@@ -49,7 +69,7 @@ jobs:
       id-token: write
 
     outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
+      digest: ${{ steps.digest.outputs.digest }}
 
     steps:
       - name: Checkout
@@ -72,14 +92,14 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_PREFIX }}/api
+          images: ${{ env.IMAGE_NAMESPACE }}/ceq-api
           tags: |
             type=sha,prefix=
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Build and push
         uses: docker/build-push-action@v5
-        id: build-api
+        id: build
         with:
           context: ./apps/api
           push: true
@@ -92,7 +112,24 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
-          cosign sign --yes ${{ env.IMAGE_PREFIX }}/api@${{ steps.build-api.outputs.digest }}
+          cosign sign --yes ${{ env.IMAGE_NAMESPACE }}/ceq-api@${{ steps.build.outputs.digest }}
+
+      - name: Resolve manifest-list digest
+        id: digest
+        run: |
+          set -euo pipefail
+          # docker buildx imagetools inspect returns the manifest-list digest
+          # for multi-arch images. `docker manifest inspect | jq` returns null
+          # for multi-arch (enclii#136).
+          DIGEST=$(docker buildx imagetools inspect \
+            "${{ env.IMAGE_NAMESPACE }}/ceq-api:${{ github.sha }}" \
+            | awk '/^Digest:/{print $2; exit}')
+          if [ -z "$DIGEST" ]; then
+            echo "Failed to resolve digest" >&2
+            exit 1
+          fi
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "Resolved api digest: ${DIGEST}"
 
   # ===========================================================================
   # Build Studio Image
@@ -106,7 +143,7 @@ jobs:
       id-token: write
 
     outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
+      digest: ${{ steps.digest.outputs.digest }}
 
     steps:
       - name: Checkout
@@ -129,14 +166,14 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_PREFIX }}/studio
+          images: ${{ env.IMAGE_NAMESPACE }}/ceq-studio
           tags: |
             type=sha,prefix=
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Build and push
         uses: docker/build-push-action@v5
-        id: build-studio
+        id: build
         with:
           context: .
           file: ./apps/studio/Dockerfile
@@ -155,7 +192,21 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
-          cosign sign --yes ${{ env.IMAGE_PREFIX }}/studio@${{ steps.build-studio.outputs.digest }}
+          cosign sign --yes ${{ env.IMAGE_NAMESPACE }}/ceq-studio@${{ steps.build.outputs.digest }}
+
+      - name: Resolve manifest-list digest
+        id: digest
+        run: |
+          set -euo pipefail
+          DIGEST=$(docker buildx imagetools inspect \
+            "${{ env.IMAGE_NAMESPACE }}/ceq-studio:${{ github.sha }}" \
+            | awk '/^Digest:/{print $2; exit}')
+          if [ -z "$DIGEST" ]; then
+            echo "Failed to resolve digest" >&2
+            exit 1
+          fi
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "Resolved studio digest: ${DIGEST}"
 
   # ===========================================================================
   # Build Worker Image (Optional)
@@ -166,10 +217,16 @@ jobs:
     permissions:
       contents: read
       packages: write
-    # Only build worker on manual dispatch or when worker files change
+    # Only build worker on manual dispatch or when worker files change.
+    # Worker is also currently failing on a separate concern (Dockerfile
+    # `pip install -e .` fails because README.md isn't in the build
+    # context); see the PR body. Out of scope for this GitOps refactor.
     if: |
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.head_commit.modified, 'apps/workers/')
+
+    outputs:
+      digest: ${{ steps.digest.outputs.digest }}
 
     steps:
       - name: Checkout
@@ -189,13 +246,14 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_PREFIX }}/worker
+          images: ${{ env.IMAGE_NAMESPACE }}/ceq-worker
           tags: |
             type=sha,prefix=
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Build and push
         uses: docker/build-push-action@v5
+        id: build
         with:
           context: ./apps/workers
           push: true
@@ -204,97 +262,96 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Resolve manifest-list digest
+        id: digest
+        run: |
+          set -euo pipefail
+          DIGEST=$(docker buildx imagetools inspect \
+            "${{ env.IMAGE_NAMESPACE }}/ceq-worker:${{ github.sha }}" \
+            | awk '/^Digest:/{print $2; exit}')
+          if [ -z "$DIGEST" ]; then
+            echo "Failed to resolve digest" >&2
+            exit 1
+          fi
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "Resolved worker digest: ${DIGEST}"
+
   # ===========================================================================
-  # Deploy to Kubernetes
+  # GitOps Deploy: commit digests to kustomization.yaml
   # ===========================================================================
+  #
+  # Replaces the prior `kubectl apply -k` step. ARC runner pods are
+  # NetworkPolicy-isolated from kube-apiserver, so direct cluster access
+  # from CI is not viable. Instead: pin the image digests in the manifest,
+  # commit + push to main, and let ArgoCD reconcile. The ceq-db-migrate
+  # Job carries an ArgoCD PreSync hook annotation, so alembic upgrade head
+  # runs before the Deployments roll.
   deploy:
-    name: Deploy to K8s
+    name: Commit deploy digests (GitOps)
     runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-latest' }}
     needs: [build-api, build-studio]
+    # Don't gate on build-worker — it only runs when worker files change.
     environment: production
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v3
         with:
-          version: 'v1.28.0'
+          token: ${{ secrets.MADFAM_BOT_PAT || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
-      - name: Set up kustomize
-        uses: imranismail/setup-kustomize@v2
-        with:
-          kustomize-version: '5.4.3'
-
-      - name: Configure kubeconfig
+      - name: Install kustomize
         run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG_BASE64 }}" | base64 -d > ~/.kube/config
-          chmod 600 ~/.kube/config
+          curl -sL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.6.0/kustomize_v5.6.0_linux_amd64.tar.gz" | tar xz
+          sudo mv kustomize /usr/local/bin/
 
-      - name: Update image tags in kustomization
+      - name: Commit image digests
         run: |
-          cd infrastructure/k8s
-          # Update API image
-          kustomize edit set image ghcr.io/madfam-org/ceq/api=${{ env.IMAGE_PREFIX }}/ceq-api:${{ github.sha }}
-          # Update Studio image
-          kustomize edit set image ghcr.io/madfam-org/ceq/studio=${{ env.IMAGE_PREFIX }}/ceq-studio:${{ github.sha }}
+          set -euo pipefail
+          API_DIGEST="${{ needs.build-api.outputs.digest }}"
+          STUDIO_DIGEST="${{ needs.build-studio.outputs.digest }}"
+          WORKER_DIGEST="${{ needs.build-worker.outputs.digest }}"
 
-      - name: Deploy to cluster
-        run: |
-          kubectl apply -k infrastructure/k8s/
-
-          # Wait for rollouts
-          kubectl rollout status deployment/ceq-api -n ceq --timeout=180s
-          kubectl rollout status deployment/ceq-studio -n ceq --timeout=180s
-
-      - name: Run database migrations
-        run: |
-          # Delete old migration job if exists
-          kubectl delete job ceq-db-migrate -n ceq --ignore-not-found=true
-
-          # Apply migration job
-          kubectl apply -f infrastructure/k8s/db-migrate-job.yaml
-
-          # Wait for migration to complete
-          kubectl wait --for=condition=complete job/ceq-db-migrate -n ceq --timeout=120s || {
-            echo "Migration failed. Checking logs..."
-            kubectl logs job/ceq-db-migrate -n ceq
+          if [ -z "$API_DIGEST" ] || [ -z "$STUDIO_DIGEST" ]; then
+            echo "Missing required digest (api=$API_DIGEST, studio=$STUDIO_DIGEST)" >&2
             exit 1
-          }
-
-          echo "✅ Database migrations completed"
-
-      - name: Verify deployment
-        run: |
-          echo "=== Deployment Status ==="
-          kubectl get pods -n ceq
-
-          echo ""
-          echo "=== Service Endpoints ==="
-          kubectl get svc -n ceq
-
-      - name: Health check
-        run: |
-          # Wait a moment for services to stabilize
-          sleep 10
-
-          # Check API health
-          API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.ceq.lol/health || echo "000")
-          if [ "$API_STATUS" == "200" ]; then
-            echo "✅ API is healthy (HTTP $API_STATUS)"
-          else
-            echo "⚠️ API check returned HTTP $API_STATUS"
           fi
 
-          # Check Studio
-          STUDIO_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://ceq.lol || echo "000")
-          if [ "$STUDIO_STATUS" == "200" ] || [ "$STUDIO_STATUS" == "301" ] || [ "$STUDIO_STATUS" == "302" ]; then
-            echo "✅ Studio is healthy (HTTP $STUDIO_STATUS)"
-          else
-            echo "⚠️ Studio check returned HTTP $STUDIO_STATUS"
-          fi
+          git config user.name "madfam-deploy-bot"
+          git config user.email "deploy-bot@madfam.io"
+
+          for ATTEMPT in 1 2 3; do
+            git fetch origin main
+            git reset --hard origin/main
+            (
+              cd infrastructure/k8s
+              kustomize edit set image \
+                "ghcr.io/madfam-org/ceq-api=ghcr.io/madfam-org/ceq-api@${API_DIGEST}"
+              kustomize edit set image \
+                "ghcr.io/madfam-org/ceq-studio=ghcr.io/madfam-org/ceq-studio@${STUDIO_DIGEST}"
+              # Worker digest is optional — only present when build-worker ran.
+              if [ -n "$WORKER_DIGEST" ]; then
+                kustomize edit set image \
+                  "ghcr.io/madfam-org/ceq-worker=ghcr.io/madfam-org/ceq-worker@${WORKER_DIGEST}"
+              fi
+            )
+            git add infrastructure/k8s/kustomization.yaml
+            if git diff --staged --quiet; then
+              echo "No changes to commit (digests already pinned)"
+              exit 0
+            fi
+            git commit -m "deploy(ceq): update digests to ${GITHUB_SHA::8}"
+            if git push origin main; then
+              echo "Pushed deploy commit on attempt ${ATTEMPT}"
+              exit 0
+            fi
+            echo "Push rejected (concurrent commit?). Retry ${ATTEMPT}/3 after backoff..."
+            sleep $((ATTEMPT * 10))
+          done
+          echo "Failed to push deploy commit after 3 attempts" >&2
+          exit 1
 
   # ===========================================================================
   # Notify on completion
@@ -309,12 +366,15 @@ jobs:
       - name: Deployment summary
         run: |
           if [ "${{ needs.deploy.result }}" == "success" ]; then
-            echo "🚀 CEQ deployed successfully!"
+            echo "CEQ deploy commit pushed. ArgoCD reconciles within ~3 min."
             echo ""
             echo "Endpoints:"
             echo "  - https://ceq.lol (Studio)"
             echo "  - https://api.ceq.lol (API)"
             echo "  - wss://ws.ceq.lol (WebSocket)"
+            echo ""
+            echo "Verify rollout:"
+            echo "  ssh ssh.madfam.io 'sudo k3s kubectl -n ceq get pods'"
           else
-            echo "❌ Deployment failed. Check logs for details."
+            echo "Deploy commit failed. Check logs for details."
           fi

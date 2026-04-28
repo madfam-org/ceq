@@ -3,9 +3,9 @@
 # Deploy all CEQ resources with:
 #   kubectl apply -k infrastructure/k8s/
 #
-# For environment-specific deployments, create overlays:
-#   infrastructure/k8s/overlays/production/kustomization.yaml
-#   infrastructure/k8s/overlays/staging/kustomization.yaml
+# In production, ArgoCD's `ceq-services` application reconciles this
+# kustomization. CI commits image digests below via
+# `kustomize edit set image` after each successful build.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -24,19 +24,26 @@ resources:
   - api-deployment.yaml
   - studio-deployment.yaml
   - worker-deployment.yaml
+  # PreSync hook job — runs alembic upgrade head before deployments roll.
+  - db-migrate-job.yaml
   # cloudflared removed 2026-04-25: ceq-prod tunnel deleted on Cloudflare side
   # 2026-04-09; ceq.lol / api.ceq.lol / ws.ceq.lol DNS now routes through the
   # main enclii-prod tunnel at the platform level. No per-namespace cloudflared
   # needed. Old config + leaked token (R1 audit) removed in this commit.
   # - cloudflared.yaml
+  # seed-templates-job.yaml is intentionally excluded — manual one-shot only.
 
-# Image customization for different environments
+# Image customization. CI's deploy.yaml workflow rewrites these entries
+# via `kustomize edit set image <name>=<name>@sha256:...` on every build,
+# pinning each Deployment + the migration Job to a content-addressed
+# digest. ArgoCD's `ceq-services` application reconciles the change
+# within ~3 min.
 images:
-  - name: ghcr.io/madfam/ceq-api
+  - name: ghcr.io/madfam-org/ceq-api
     newTag: latest
-  - name: ghcr.io/madfam/ceq-studio
+  - name: ghcr.io/madfam-org/ceq-studio
     newTag: latest
-  - name: ghcr.io/madfam/ceq-worker
+  - name: ghcr.io/madfam-org/ceq-worker
     newTag: latest
 
 # ConfigMap generator for environment-specific values

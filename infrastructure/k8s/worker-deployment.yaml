@@ -25,7 +25,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: ceq-worker
-          image: ghcr.io/madfam/ceq-worker:latest
+          image: ghcr.io/madfam-org/ceq-worker:latest
           env:
             - name: WORKER_ID
               valueFrom:
