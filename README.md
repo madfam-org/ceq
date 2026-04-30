@@ -185,7 +185,7 @@ CEQ is deployed to Enclii infrastructure via Cloudflare Tunnels:
 
 See [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md) for detailed deployment guide.
 
-### Deployment Status (2026-04-19)
+### Deployment Status (2026-04-30)
 
 | Component | Status |
 |-----------|--------|

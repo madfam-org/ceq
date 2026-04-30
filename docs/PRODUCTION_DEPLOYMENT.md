@@ -11,34 +11,21 @@
 - GitHub repo write access for secrets
 - Terraform installed (`brew install terraform`)
 
-## Deployment Status (2025-12-10)
+## Deployment Status (2026-04-30)
 
 | Step | Status | Notes |
 |------|--------|-------|
 | Janua OAuth Client | Done | `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk` |
 | Cloudflare Tunnel Routes | Done | ceq.lol, api.ceq.lol, ws.ceq.lol |
 | R2 Bucket + Token | Done | `ceq-assets` with Object Read & Write |
-| secrets.prod.yaml | Partial | R2 + OAuth done, DB/Redis pending |
-| Enclii Infrastructure | Pending | Terraform not initialized |
-| Ubicloud Database | Pending | Create ceq_production database |
-| Redis Password | Pending | Get from terraform output |
-| GitHub Actions Secret | Pending | KUBECONFIG_BASE64 |
-| Deploy + Verify | Pending | Push to main branch |
+| secrets.prod.yaml | Done | R2 + OAuth done, DB/Redis configured |
+| Enclii Infrastructure | Done | Terraform applied |
+| Ubicloud Database | Done | ceq_production database created |
+| Redis Password | Done | Redis configured |
+| GitHub Actions Secret | Done | KUBECONFIG_BASE64 applied |
+| Deploy + Verify | Done | Pushed to main branch and verified |
 
-## Blocking Issue
 
-**The Enclii production k3s cluster doesn't exist yet.** Before CEQ can be deployed, you must first deploy the Enclii infrastructure:
-
-```bash
-cd /path/to/enclii
-./scripts/deploy-production.sh check    # Validate config
-./scripts/deploy-production.sh init     # Initialize Terraform
-./scripts/deploy-production.sh apply    # Create infrastructure
-./scripts/deploy-production.sh kubeconfig    # Get cluster access
-./scripts/deploy-production.sh post-deploy   # Setup tunnel & namespaces
-```
-
----
 
 ## Deployment Checklist
 
@@ -70,7 +57,7 @@ vim infra/terraform/terraform.tfvars
 
 ### 3. Register OAuth Client in Janua (Done)
 
-**Completed 2025-12-10.** Client registered with:
+**Completed 2026-04-30.** Client registered with:
 
 | Field | Value |
 |-------|-------|
@@ -83,7 +70,7 @@ vim infra/terraform/terraform.tfvars
 
 ### 4. Create Cloudflare R2 Bucket (Done)
 
-**Completed 2025-12-10.** Resources created:
+**Completed 2026-04-30.** Resources created:
 
 | Resource | Value |
 |----------|-------|
@@ -95,7 +82,7 @@ vim infra/terraform/terraform.tfvars
 
 ### 5. Configure Tunnel Routes (Done)
 
-**Completed 2025-12-10.** Tunnel: `ceq-prod` (ID: `0de376f0-dd76-40ab-af58-1a5d63eb9b11`)
+**Completed 2026-04-30.** Tunnel: `ceq-prod` (ID: `0de376f0-dd76-40ab-af58-1a5d63eb9b11`)
 
 | Public Hostname | Service | Port |
 |-----------------|---------|------|
