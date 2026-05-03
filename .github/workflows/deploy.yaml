@@ -270,7 +270,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.MADFAM_BOT_PAT || secrets.GITHUB_TOKEN }}
+          # NOTE 2026-05-03: MADFAM_BOT_PAT was expired and the
+          # `secrets.MADFAM_BOT_PAT || secrets.GITHUB_TOKEN` fallback
+          # silently failed (a non-empty expired string is still truthy
+          # so the `||` never reached the fallback). Use GITHUB_TOKEN
+          # directly until the bot PAT is rotated. The job's
+          # `permissions: contents: write` block grants the token push
+          # access; the only cosmetic side-effect is commits show as
+          # `github-actions[bot]` instead of `madfam-deploy-bot`.
+          # Re-enable bot attribution later by reverting this hunk.
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: Install kustomize
