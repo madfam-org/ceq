@@ -69,7 +69,12 @@ jobs:
       id-token: write
 
     outputs:
-      digest: ${{ steps.digest.outputs.digest }}
+      # docker/build-push-action's `outputs.digest` IS the manifest-list
+      # digest for multi-arch and the image manifest digest for single-arch
+      # — same value cosign signs above. Reusing it avoids the broken
+      # imagetools-inspect retry that was failing on every CEQ Deploy run
+      # since acecfd5 (75s × 5 retries, then exit 1).
+      digest: ${{ steps.build.outputs.digest }}
 
     steps:
       - name: Checkout
@@ -114,31 +119,6 @@ jobs:
         run: |
           cosign sign --yes ${{ env.IMAGE_NAMESPACE }}/ceq-api@${{ steps.build.outputs.digest }}
 
-      - name: Resolve manifest-list digest
-        id: digest
-        run: |
-          set -euo pipefail
-          # docker buildx imagetools inspect returns the manifest-list digest
-          # for multi-arch images. `docker manifest inspect | jq` returns null
-          # for multi-arch (enclii#136).
-          # GHCR has eventual-consistency between push and pull-side visibility;
-          # retry with backoff (ceq#19) — observed 5 consecutive Deploy failures
-          # 2026-04-28 on "manifest unknown" within 3s of push.
-          IMAGE="${{ env.IMAGE_NAMESPACE }}/ceq-api:${{ github.sha }}"
-          for attempt in 1 2 3 4 5; do
-            if DIGEST=$(docker buildx imagetools inspect "$IMAGE" 2>&1 | awk '/^Digest:/{print $2; exit}'); then
-              if [ -n "$DIGEST" ]; then
-                echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
-                echo "Resolved api digest on attempt ${attempt}: ${DIGEST}"
-                exit 0
-              fi
-            fi
-            echo "Attempt ${attempt} failed — sleeping $((attempt * 5))s before retry" >&2
-            sleep $((attempt * 5))
-          done
-          echo "Failed to resolve digest after 5 attempts (75s total)" >&2
-          exit 1
-
   # ===========================================================================
   # Build Studio Image
   # ===========================================================================
@@ -151,7 +131,12 @@ jobs:
       id-token: write
 
     outputs:
-      digest: ${{ steps.digest.outputs.digest }}
+      # docker/build-push-action's `outputs.digest` IS the manifest-list
+      # digest for multi-arch and the image manifest digest for single-arch
+      # — same value cosign signs above. Reusing it avoids the broken
+      # imagetools-inspect retry that was failing on every CEQ Deploy run
+      # since acecfd5 (75s × 5 retries, then exit 1).
+      digest: ${{ steps.build.outputs.digest }}
 
     steps:
       - name: Checkout
@@ -202,26 +187,6 @@ jobs:
         run: |
           cosign sign --yes ${{ env.IMAGE_NAMESPACE }}/ceq-studio@${{ steps.build.outputs.digest }}
 
-      - name: Resolve manifest-list digest
-        id: digest
-        run: |
-          set -euo pipefail
-          # GHCR eventual-consistency retry — see Build API for rationale.
-          IMAGE="${{ env.IMAGE_NAMESPACE }}/ceq-studio:${{ github.sha }}"
-          for attempt in 1 2 3 4 5; do
-            if DIGEST=$(docker buildx imagetools inspect "$IMAGE" 2>&1 | awk '/^Digest:/{print $2; exit}'); then
-              if [ -n "$DIGEST" ]; then
-                echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
-                echo "Resolved studio digest on attempt ${attempt}: ${DIGEST}"
-                exit 0
-              fi
-            fi
-            echo "Attempt ${attempt} failed — sleeping $((attempt * 5))s before retry" >&2
-            sleep $((attempt * 5))
-          done
-          echo "Failed to resolve digest after 5 attempts (75s total)" >&2
-          exit 1
-
   # ===========================================================================
   # Build Worker Image (Optional)
   # ===========================================================================
@@ -240,7 +205,12 @@ jobs:
       contains(github.event.head_commit.modified, 'apps/workers/')
 
     outputs:
-      digest: ${{ steps.digest.outputs.digest }}
+      # docker/build-push-action's `outputs.digest` IS the manifest-list
+      # digest for multi-arch and the image manifest digest for single-arch
+      # — same value cosign signs above. Reusing it avoids the broken
+      # imagetools-inspect retry that was failing on every CEQ Deploy run
+      # since acecfd5 (75s × 5 retries, then exit 1).
+      digest: ${{ steps.build.outputs.digest }}
 
     steps:
       - name: Checkout
@@ -276,26 +246,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Resolve manifest-list digest
-        id: digest
-        run: |
-          set -euo pipefail
-          # GHCR eventual-consistency retry — see Build API for rationale.
-          IMAGE="${{ env.IMAGE_NAMESPACE }}/ceq-worker:${{ github.sha }}"
-          for attempt in 1 2 3 4 5; do
-            if DIGEST=$(docker buildx imagetools inspect "$IMAGE" 2>&1 | awk '/^Digest:/{print $2; exit}'); then
-              if [ -n "$DIGEST" ]; then
-                echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
-                echo "Resolved worker digest on attempt ${attempt}: ${DIGEST}"
-                exit 0
-              fi
-            fi
-            echo "Attempt ${attempt} failed — sleeping $((attempt * 5))s before retry" >&2
-            sleep $((attempt * 5))
-          done
-          echo "Failed to resolve digest after 5 attempts (75s total)" >&2
-          exit 1
-          echo "Resolved worker digest: ${DIGEST}"
 
   # ===========================================================================
   # GitOps Deploy: commit digests to kustomization.yaml
