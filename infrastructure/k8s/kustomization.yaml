@@ -38,11 +38,47 @@ resources:
 # pinning each Deployment + the migration Job to a content-addressed
 # digest. ArgoCD's `ceq-services` application reconciles the change
 # within ~3 min.
+#
+# 2026-05-03 — pinned api + studio per RFC 0017 + the 2026-05-03
+# ecosystem-health audit (Kyverno fail-closed mutable-tag policy).
+#
+# Why `newName` redirects to slash-form: the deploy.yaml workflow as
+# refactored at acecfd5 builds + pushes to `ceq-{api,studio,worker}`
+# (dash-form), but every CEQ Deploy run since acecfd5 has failed at the
+# digest-resolve step — those dash-form images have never been
+# successfully pushed to GHCR. Meanwhile, the running pods (per the
+# 2026-05-03 audit) pull `ghcr.io/madfam-org/ceq/{api,studio}:latest`
+# (slash-form), the legacy image path that was successfully built up
+# through 2026-04-28T02:33Z (pre-GitOps-refactor commit c9da2ce, run
+# 25030756141). Pinning `name` to dash-form (what the Deployment
+# manifests reference) and `newName` to slash-form (what actually
+# exists on GHCR) plus the digest redirects to the real, present-on-
+# registry image and removes the `:latest` violation in one step.
+#
+# The CEQ Deploy workflow itself is broken (dash-form push failure)
+# and is tracked separately (see ecosystem-health audit § 2 / RFC 0017
+# CI burn-down). Once the workflow is fixed and dash-form images
+# actually exist, swap `newName` back to `ceq-{api,studio}` (or just
+# delete the `newName` line — name and newName matching is the
+# kustomize default).
+#
+# `ceq-worker` is left as `:latest` because (a) it's not in the audit
+# list of running deployments — Vast.ai scheduling means workers are
+# scaled-to-zero in-cluster — and (b) no successful slash-form
+# `ceq/worker` build exists in the workflow history to source a digest
+# from. Pinning a non-existent image would break ArgoCD sync if the
+# pod ever scaled up.
+#
+# Digest provenance: `pushing manifest for ghcr.io/madfam-org/<img>:latest@sha256:…`
+# line in run 25030756141, jobs 73311672398 (api) and 73311672389 (studio),
+# 2026-04-28T02:40-46Z, commit c9da2ce.
 images:
   - name: ghcr.io/madfam-org/ceq-api
-    newTag: latest
+    newName: ghcr.io/madfam-org/ceq/api
+    digest: sha256:f36f7e0eb92865c987f929b29873391087b7a7ac785a90fbfa972f3e93271fd9
   - name: ghcr.io/madfam-org/ceq-studio
-    newTag: latest
+    newName: ghcr.io/madfam-org/ceq/studio
+    digest: sha256:05dd963559592576fb15fd6958aafd5bb9399a64475e945ae74560e678338352
   - name: ghcr.io/madfam-org/ceq-worker
     newTag: latest
 
