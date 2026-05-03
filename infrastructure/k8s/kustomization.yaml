@@ -13,19 +13,19 @@ namespace: ceq
 
 # Common labels applied to all resources
 commonLabels:
+  app.kubernetes.io/managed-by: kustomize
   app.kubernetes.io/name: ceq
   app.kubernetes.io/part-of: madfam-platform
-  app.kubernetes.io/managed-by: kustomize
 
 # Resources to include
-resources:
-  - namespace.yaml
-  - secrets.yaml
-  - api-deployment.yaml
-  - studio-deployment.yaml
-  - worker-deployment.yaml
   # PreSync hook job — runs alembic upgrade head before deployments roll.
-  - db-migrate-job.yaml
+resources:
+- namespace.yaml
+- secrets.yaml
+- api-deployment.yaml
+- studio-deployment.yaml
+- worker-deployment.yaml
+- db-migrate-job.yaml
   # cloudflared removed 2026-04-25: ceq-prod tunnel deleted on Cloudflare side
   # 2026-04-09; ceq.lol / api.ceq.lol / ws.ceq.lol DNS now routes through the
   # main enclii-prod tunnel at the platform level. No per-namespace cloudflared
@@ -73,25 +73,19 @@ resources:
 # line in run 25030756141, jobs 73311672398 (api) and 73311672389 (studio),
 # 2026-04-28T02:40-46Z, commit c9da2ce.
 images:
-  - name: ghcr.io/madfam-org/ceq-api
-    newName: ghcr.io/madfam-org/ceq/api
-    digest: sha256:f36f7e0eb92865c987f929b29873391087b7a7ac785a90fbfa972f3e93271fd9
-  - name: ghcr.io/madfam-org/ceq-studio
-    newName: ghcr.io/madfam-org/ceq/studio
-    digest: sha256:05dd963559592576fb15fd6958aafd5bb9399a64475e945ae74560e678338352
-  - name: ghcr.io/madfam-org/ceq-worker
-    newTag: latest
+- digest: sha256:55f152f99a0c406ea322d82dcf63f596fd14755a8be228fe6926c5e3e3aee390
+  name: ghcr.io/madfam-org/ceq-api
+  newName: ghcr.io/madfam-org/ceq-api
+- digest: sha256:554675598e5e1da6c8d10c54f55aa50d8ba66102831cc16817a6067d6a886616
+  name: ghcr.io/madfam-org/ceq-studio
+  newName: ghcr.io/madfam-org/ceq-studio
+- name: ghcr.io/madfam-org/ceq-worker
+  newTag: latest
 
 # ConfigMap generator for environment-specific values
 configMapGenerator:
-  - name: ceq-runtime-config
-    literals:
-      - ENVIRONMENT=production
-      - LOG_LEVEL=info
-      - METRICS_ENABLED=true
-
-# Secret generator (for development only - use external-secrets in production)
-# secretGenerator:
-#   - name: ceq-dev-secrets
-#     literals:
-#       - database-url=postgres://...
+- literals:
+  - ENVIRONMENT=production
+  - LOG_LEVEL=info
+  - METRICS_ENABLED=true
+  name: ceq-runtime-config
