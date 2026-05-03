@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense } from "react";
 import { MainLayout } from "@/components/layout/main-layout";
 import { WorkflowList } from "@/components/workflows/workflow-list";
 import { QueueMonitor } from "@/components/queue/queue-monitor";
@@ -8,21 +8,14 @@ import { QuickActions } from "@/components/quick-actions";
 import { MarketingLanding } from "@/components/landing/marketing-landing";
 import { useAuth } from "@/contexts/auth-context";
 
-function isAppHost(): boolean {
-  if (typeof window === "undefined") return false;
-  const host = window.location.host;
-  return host.startsWith("app.") || host === "localhost" || host.startsWith("localhost:");
-}
-
+// App-host root page. Reached at app.ceq.lol/. Marketing-host requests
+// (ceq.lol/) are rewritten to /landing by middleware — see middleware.ts
+// for the why (Cloudflare cached the SSR HTML across hosts and the
+// previous client-side window.location.host gate didn't survive that).
 export default function HomePage() {
   const { isAuthenticated, isLoading } = useAuth();
-  const [appHost, setAppHost] = useState<boolean | null>(null);
 
-  useEffect(() => {
-    setAppHost(isAppHost());
-  }, []);
-
-  if (appHost === null || isLoading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="font-mono text-sm text-muted-foreground">
@@ -32,13 +25,9 @@ export default function HomePage() {
     );
   }
 
-  // Marketing surface (ceq.lol) — always shows landing.
-  // Authenticated visitors get a "Open studio" hint inside the landing.
-  if (!appHost) {
-    return <MarketingLanding />;
-  }
-
-  // App surface (app.ceq.lol) — gated dashboard.
+  // Unauthenticated visitors on app.ceq.lol see the landing as a soft
+  // gate. URL stays "/" so the cache entry is distinct from
+  // ceq.lol/landing — no cross-host pollution.
   if (!isAuthenticated) {
     return <MarketingLanding />;
   }
