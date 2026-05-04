@@ -4,4 +4,14 @@ metadata:
   name: ceq
   labels:
     app.kubernetes.io/name: ceq
-    app.kubernetes.io/part-of: madfam
+    app.kubernetes.io/part-of: madfam-platform
+    # Enclii namespace classification — exempts the namespace from the
+    # cluster's "framework" Kyverno policies (block-host-ports,
+    # block-latest-ifnotpresent, require-health-probes, etc.) which are
+    # designed for opt-in production application namespaces. Every other
+    # active product namespace (fortuna, karafiel, dhanam, etc.) carries
+    # these labels; ceq was the only one missing them, which is why
+    # ArgoCD sync hit `validate.kyverno.svc-fail` repeatedly on
+    # 2026-05-03 even after manifest-level securityContext fixes.
+    enclii.dev/type: application
+    enclii.dev/data-access: "true"
