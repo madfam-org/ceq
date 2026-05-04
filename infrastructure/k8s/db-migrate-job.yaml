@@ -63,16 +63,22 @@ spec:
               python -m alembic upgrade head
               echo "Migrations complete!"
           env:
+            # The ceq-secrets secret stores keys in UPPER_CASE (DATABASE_URL,
+            # REDIS_URL) — these must match exactly. studio-deployment.yaml
+            # uses envFrom: secretRef which is case-preserving; the job
+            # references via secretKeyRef and originally had lowercase
+            # `database-url` which produced
+            #   "couldn't find key database-url in Secret ceq/ceq-secrets"
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: ceq-secrets
-                  key: database-url
+                  key: DATABASE_URL
             - name: REDIS_URL
               valueFrom:
                 secretKeyRef:
                   name: ceq-secrets
-                  key: redis-url
+                  key: REDIS_URL
           resources:
             requests:
               memory: "128Mi"
