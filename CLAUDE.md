@@ -347,6 +347,18 @@ See `/Users/aldoruizluna/labspace/claudedocs/ECOSYSTEM_AUDIT_2026-04-23.md` for 
 - ~~**🔴 T1: No CI test gate**~~ — Fixed 2026-04-23: `.github/workflows/ci.yaml` runs lint + typecheck + unit tests for api / workers / studio on every PR. Configure Branch Protection on `main` to require these checks before merge.
 - **🟠 H9: OpenAPI docs likely exposed in prod** — verify `docs_url` is None when `env == "production"` on all FastAPI entrypoints.
 
+## Known Issues — Stabilization Sweep 2026-05-04
+
+A multi-hour stabilization run on 2026-05-04 closed several ceq-side ArgoCD-sync bugs and tightened the deploy chain. See `internal-devops/runbooks/2026-05-03-builder-upgrade-ccx33.md` for the broader infra context (CCX33 builder swap that started the same session).
+
+- ~~**🔴 ArgoCD ceq-services pointed at deleted manifest path**~~ — Closed 2026-05-04 via enclii#192. The repo had moved manifests from `infra/k8s/production/` to `infrastructure/k8s/` in PR ceq#20 but ArgoCD's project config still pointed at the old path → `ComparisonError: app path does not exist`. Updated to track `infrastructure/k8s/`.
+- ~~**🔴 db-migrate-job blocked by Kyverno**~~ — Closed 2026-05-04 via ceq#24, ceq#25. Migration Job lacked pod-level + container-level securityContext (Kyverno `restrict-capabilities` + `block-host-ports`) and the `ceq` namespace was missing the `enclii.dev/type: application` exemption label. Fixed both.
+- ~~**🔴 Migration secret keys lowercase**~~ — Closed 2026-05-04 via ceq#27. Job used `database-url` / `redis-url` from `ceq-secrets`, but keys live there UPPERCASE (`DATABASE_URL`, `REDIS_URL`). studio-deployment uses `envFrom: secretRef` which is case-preserving so it worked; the migration Job using `secretKeyRef.key` did not. Migration now uses uppercase keys to match the rest of the manifest.
+- ~~**🟠 ImagePullBackOff on private dash-form image**~~ — Closed 2026-05-04 via ceq#26. Migration Job didn't carry `imagePullSecrets: [ghcr-credentials]` so the GHCR pull returned 401. Studio + API deployments already had this; migration Job inherited the same secret.
+- ~~**🟠 ceq.lol 502 after pods running**~~ — Closed 2026-05-04 via ceq#28. The `ceq` namespace had `default-deny-egress` + `default-deny-ingress` from the enclii onboarding bundle but no allow rules for cloudflared → ceq pods. Added 4 NPs: `allow-cloudflared-ingress` (ports 80, 5800, 5801, 8000), `allow-intra-namespace`, `allow-https-egress`, `allow-data-egress`. ceq.lol responded 200 within seconds.
+- ~~**🟠 ArgoCD ceq-services Degraded — Service ports + worker SC**~~ — Closed 2026-05-04 via ceq#29. Live cluster ran `port: 80 → targetPort: 5800/5801` (manually patched during the cloudflared work) but source declared `port: 5800/5801`. ArgoCD's client-side-apply migration choked on `spec.ports[0].name: Required value`. Source aligned with live shape (`name: http, port: 80, targetPort: 5800/5801, protocol: TCP`). ceq-worker had no securityContext at all → Kyverno `restrict-capabilities` rejected every apply. Added pod-level `runAsNonRoot:true, runAsUser:1001, fsGroup:1001, seccompProfile`, container-level `privileged:false, allowPrivilegeEscalation:false, capabilities.drop:[ALL]`, explicit `ports: []`, and uppercase `REDIS_URL` (matches the migration Job pattern).
+- **🟡 ceq OAuth client unregistered in Janua** — `app.ceq.lol` sign-in broken because Janua doesn't currently know the `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk` client. Either re-register that client OR rotate to a new client_id and update studio config. Operator action.
+
 ---
 
 *"The terminal awaits. Let's quantize some chaos."* — ceq.lol
