@@ -23,9 +23,16 @@ spec:
         - key: nvidia.com/gpu
           operator: Exists
           effect: NoSchedule
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: ceq-worker
           image: ghcr.io/madfam-org/ceq-worker:latest
+          ports: []
           env:
             - name: WORKER_ID
               valueFrom:
@@ -35,7 +42,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: ceq-secrets
-                  key: redis-url
+                  key: REDIS_URL
             - name: COMFYUI_PATH
               value: /opt/comfyui
             - name: MODELS_PATH
@@ -51,6 +58,11 @@ spec:
               memory: "32Gi"
               cpu: "8"
               nvidia.com/gpu: "1"
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
           volumeMounts:
             - name: models
               mountPath: /opt/models

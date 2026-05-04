@@ -70,7 +70,8 @@ spec:
   selector:
     app: ceq-api
   ports:
-    - port: 5800
+    - name: http
+      port: 80
       targetPort: 5800
-      name: http
+      protocol: TCP
   type: ClusterIP
