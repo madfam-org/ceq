@@ -32,9 +32,22 @@ spec:
         component: migration
     spec:
       restartPolicy: Never
+      # Pod-level security context matches studio-deployment.yaml so this
+      # Job passes the cluster's Kyverno policies. Without it, ArgoCD sync
+      # is blocked by `restrict-capabilities` + `block-host-ports`.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: migrate
           image: ghcr.io/madfam-org/ceq-api:latest
+          # Explicit empty ports list — autogen-deny-host-ports rule
+          # evaluates a concrete shape; an absent ports field tripped
+          # the policy in this cluster's autogen variant.
+          ports: []
           command:
             - /bin/sh
             - -c
@@ -61,3 +74,8 @@ spec:
             limits:
               memory: "256Mi"
               cpu: "200m"
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
