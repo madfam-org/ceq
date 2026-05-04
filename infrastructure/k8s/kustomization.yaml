@@ -11,11 +11,27 @@ kind: Kustomization
 
 namespace: ceq
 
-# Common labels applied to all resources
-commonLabels:
-  app.kubernetes.io/managed-by: kustomize
-  app.kubernetes.io/name: ceq
-  app.kubernetes.io/part-of: madfam-platform
+# Common labels applied to all resource metadata — but NOT selectors.
+#
+# The previous `commonLabels:` form silently propagated into Service
+# spec.selector AND Deployment spec.selector.matchLabels, but pods
+# inherit their labels from the Deployment template which carries
+# different values (`app.kubernetes.io/name=ceq-studio` /
+# `part-of=ceq`). Result: Service selector required 4 labels, pods
+# only had 3 with conflicting values → endpoints empty → all of
+# ceq.lol returned 502 from cloudflared for ~7 hours on 2026-05-04
+# until live-patched + this source fix.
+#
+# `labels:` with `includeSelectors: false` is the kustomize-
+# recommended replacement: still tags every resource's metadata.labels
+# for grouping in dashboards, but leaves selectors alone so they keep
+# matching whatever the Deployment template actually emits.
+labels:
+  - includeSelectors: false
+    pairs:
+      app.kubernetes.io/managed-by: kustomize
+      app.kubernetes.io/name: ceq
+      app.kubernetes.io/part-of: madfam-platform
 
 # Resources to include
   # PreSync hook job — runs alembic upgrade head before deployments roll.
