@@ -1,0 +1,81 @@
+# CEQ NetworkPolicies
+#
+# Allow rules layered on top of the enclii-onboarding default-deny.
+# Without these, cloudflared cannot reach ceq pods (default-deny blocks
+# all ingress + egress except port 53). Pattern matches fortuna namespace.
+#
+# Applied directly via kubectl on 2026-05-03 to unblock the ceq.lol
+# marketing-landing rollout; committed to git so future ArgoCD reconciles
+# preserve them.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cloudflared-ingress
+  namespace: ceq
+spec:
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: cloudflare-tunnel
+    ports:
+    - port: 5800
+      protocol: TCP
+    - port: 5801
+      protocol: TCP
+    - port: 8000
+      protocol: TCP
+    - port: 80
+      protocol: TCP
+  podSelector: {}
+  policyTypes:
+  - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-intra-namespace
+  namespace: ceq
+spec:
+  egress:
+  - to:
+    - podSelector: {}
+  ingress:
+  - from:
+    - podSelector: {}
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-https-egress
+  namespace: ceq
+spec:
+  egress:
+  - ports:
+    - port: 443
+      protocol: TCP
+    - port: 80
+      protocol: TCP
+  podSelector: {}
+  policyTypes:
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-data-egress
+  namespace: ceq
+spec:
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: data
+  podSelector: {}
+  policyTypes:
+  - Egress
