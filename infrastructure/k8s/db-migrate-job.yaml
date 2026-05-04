@@ -32,6 +32,12 @@ spec:
         component: migration
     spec:
       restartPolicy: Never
+      # GHCR pull credentials — the ceq-api image at the dash-form
+      # registry path is private; without imagePullSecrets the pod
+      # gets 401 from ghcr.io/token. studio-deployment.yaml uses the
+      # same secret.
+      imagePullSecrets:
+        - name: ghcr-credentials
       # Pod-level security context matches studio-deployment.yaml so this
       # Job passes the cluster's Kyverno policies. Without it, ArgoCD sync
       # is blocked by `restrict-capabilities` + `block-host-ports`.
