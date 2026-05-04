@@ -26,6 +26,7 @@ resources:
 - studio-deployment.yaml
 - worker-deployment.yaml
 - db-migrate-job.yaml
+- network-policies.yaml
   # cloudflared removed 2026-04-25: ceq-prod tunnel deleted on Cloudflare side
   # 2026-04-09; ceq.lol / api.ceq.lol / ws.ceq.lol DNS now routes through the
   # main enclii-prod tunnel at the platform level. No per-namespace cloudflared
