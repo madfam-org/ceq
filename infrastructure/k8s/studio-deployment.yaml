@@ -71,7 +71,8 @@ spec:
   selector:
     app: ceq-studio
   ports:
-    - port: 5801
+    - name: http
+      port: 80
       targetPort: 5801
-      name: http
+      protocol: TCP
   type: ClusterIP
