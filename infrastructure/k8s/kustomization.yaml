@@ -73,10 +73,10 @@ resources:
 # line in run 25030756141, jobs 73311672398 (api) and 73311672389 (studio),
 # 2026-04-28T02:40-46Z, commit c9da2ce.
 images:
-- digest: sha256:cb9ba91e6caf8077576d19d40588538117c4453fdaaf9b4bdb1d44a14098b353
+- digest: sha256:d2a5bac863e14a2747f05d198976707a344cf83d3825fc2b51a0f0fd17be13d1
   name: ghcr.io/madfam-org/ceq-api
   newName: ghcr.io/madfam-org/ceq-api
-- digest: sha256:f51e1fff838b36a159652223f17f88a039f2621fc730a6622946a09c04c11367
+- digest: sha256:936f86dd7cf4ab68be4e62258ef53ab645193ff83edb82540d97567a38b86615
   name: ghcr.io/madfam-org/ceq-studio
   newName: ghcr.io/madfam-org/ceq-studio
 - name: ghcr.io/madfam-org/ceq-worker
