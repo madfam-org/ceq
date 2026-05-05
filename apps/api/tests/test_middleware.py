@@ -57,10 +57,10 @@ class TestSecurityHeadersMiddleware:
         assert response.headers.get("X-Content-Type-Options") == "nosniff"
 
     def test_frame_options(self, client):
-        """Should include X-Frame-Options header."""
+        """Should include X-Frame-Options header (SAMEORIGIN — legacy fallback for Atrium)."""
         response = client.get("/health")
 
-        assert response.headers.get("X-Frame-Options") == "DENY"
+        assert response.headers.get("X-Frame-Options") == "SAMEORIGIN"
 
     def test_xss_protection(self, client):
         """Should include X-XSS-Protection header."""
@@ -75,11 +75,16 @@ class TestSecurityHeadersMiddleware:
         assert response.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
 
     def test_content_security_policy(self, client):
-        """Should include Content-Security-Policy header."""
+        """Should include Content-Security-Policy header with Selva Atrium allowance."""
         response = client.get("/health")
 
         csp = response.headers.get("Content-Security-Policy", "")
         assert "default-src 'none'" in csp
+        # Selva Atrium (selva-office consumer feature) is allowed to iframe.
+        assert "frame-ancestors" in csp
+        assert "https://selva.town" in csp
+        assert "https://*.selva.town" in csp
+        assert "https://*.madfam.io" in csp
 
     def test_cache_control_for_api(self, client):
         """API endpoints should have no-cache headers."""
