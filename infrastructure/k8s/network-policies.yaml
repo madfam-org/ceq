@@ -8,6 +8,9 @@
 # marketing-landing rollout; committed to git so future ArgoCD reconciles
 # preserve them.
 ---
+# Cloudflared is the trust boundary — explicit per-port allowlists
+# silently drop traffic on every containerPort change. See
+# status.enclii.dev incident 2026-05-04.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -19,15 +22,6 @@ spec:
     - namespaceSelector:
         matchLabels:
           kubernetes.io/metadata.name: cloudflare-tunnel
-    ports:
-    - port: 5800
-      protocol: TCP
-    - port: 5801
-      protocol: TCP
-    - port: 8000
-      protocol: TCP
-    - port: 80
-      protocol: TCP
   podSelector: {}
   policyTypes:
   - Ingress
