@@ -27,11 +27,10 @@ namespace: ceq
 # for grouping in dashboards, but leaves selectors alone so they keep
 # matching whatever the Deployment template actually emits.
 labels:
-  - includeSelectors: false
-    pairs:
-      app.kubernetes.io/managed-by: kustomize
-      app.kubernetes.io/name: ceq
-      app.kubernetes.io/part-of: madfam-platform
+- pairs:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: ceq
+    app.kubernetes.io/part-of: madfam-platform
 
 # Resources to include
   # PreSync hook job — runs alembic upgrade head before deployments roll.
@@ -90,10 +89,10 @@ resources:
 # line in run 25030756141, jobs 73311672398 (api) and 73311672389 (studio),
 # 2026-04-28T02:40-46Z, commit c9da2ce.
 images:
-- digest: sha256:4ad42ac22b372da3c6c2ee4a6077d474bda584bca1e568992fe1018d3d3805bb
+- digest: sha256:c5d57533647f44677d82b1056a2760007c7d5568d749ce7ce845683b6359825b
   name: ghcr.io/madfam-org/ceq-api
   newName: ghcr.io/madfam-org/ceq-api
-- digest: sha256:061227785dfbc398fb601e5fbc4862310dc7e8d94c89f02604e981737e6b83af
+- digest: sha256:7f2cc5b93080d91d0b74f7b1a5a2114c67aa6bef3c00f501a4ddc4f5d3e6c2ec
   name: ghcr.io/madfam-org/ceq-studio
   newName: ghcr.io/madfam-org/ceq-studio
 - name: ghcr.io/madfam-org/ceq-worker
