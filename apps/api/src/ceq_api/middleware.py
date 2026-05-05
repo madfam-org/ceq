@@ -135,13 +135,24 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
 
         # Security headers
+        # X-Frame-Options downgraded from DENY to SAMEORIGIN as a legacy fallback
+        # for the Selva Atrium iframe pattern; modern browsers honor frame-ancestors.
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
 
         # Content Security Policy for API
-        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+        # frame-ancestors permits the Selva Atrium (selva-office consumer feature)
+        # to embed CEQ surfaces. Same operator (Innovaciones MADFAM) on both sides.
+        # Note: api.ceq.lol primarily returns JSON; the Atrium would only iframe
+        # the studio (ceq.lol), but the FastAPI app also serves the OpenAPI docs +
+        # render endpoints which are reachable as HTML/binary, so we keep the
+        # policy app-wide for consistency.
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'none'; "
+            "frame-ancestors 'self' https://selva.town https://*.selva.town https://*.madfam.io"
+        )
 
         # Prevent caching of sensitive data
         if request.url.path.startswith("/v1/"):
