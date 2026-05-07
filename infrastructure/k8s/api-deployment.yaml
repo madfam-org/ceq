@@ -35,12 +35,12 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: ceq-secrets
-                  key: database-url
+                  key: DATABASE_URL
             - name: REDIS_URL
               valueFrom:
                 secretKeyRef:
                   name: ceq-secrets
-                  key: redis-url
+                  key: REDIS_URL
             - name: JANUA_API_URL
               value: "http://janua-api.janua.svc.cluster.local:4100"
             - name: FURNACE_API_URL
