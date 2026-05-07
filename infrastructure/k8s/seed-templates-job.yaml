@@ -24,6 +24,8 @@ spec:
         component: seed
     spec:
       restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
       containers:
         - name: seed
           image: ghcr.io/madfam-org/ceq-api:latest
