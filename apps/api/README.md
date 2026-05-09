@@ -242,7 +242,7 @@ On every successful **new** registration the API enqueues a
 `dispatch_interest_to_crm` background task that POSTs an HMAC-SHA256-signed
 payload to `CRM_WEBHOOK_URL`. When either `CRM_WEBHOOK_URL` or
 `CRM_WEBHOOK_SECRET` is unset, the dispatch is a silent no-op — the DB row
-is still the source of truth. Phyne-CRM receives:
+is still the source of truth. Phynd-CRM receives:
 
 ```json
 {
@@ -273,7 +273,7 @@ assert request.headers["X-Webhook-Signature"] == f"sha256={expected}"
 |----------|---------|-------|
 | `INTEREST_ENABLED` | `true` | Set to `false` to hard-disable capture (returns 503) |
 | `CRM_WEBHOOK_URL` | `""` | e.g. `https://crm.madfam.io/api/webhooks/ceq`. Empty = no-op |
-| `CRM_WEBHOOK_SECRET` | `""` | 32-byte hex secret shared with Phyne-CRM. Empty = no-op |
+| `CRM_WEBHOOK_SECRET` | `""` | 32-byte hex secret shared with Phynd-CRM. Empty = no-op |
 | `CRM_WEBHOOK_TIMEOUT_SECONDS` | `5.0` | Per-request HTTP timeout |
 
 ### Flipping to paid checkout later

@@ -1,4 +1,4 @@
-"""CRM webhook dispatch — pushes interest.created events to Phyne-CRM.
+"""CRM webhook dispatch — pushes interest.created events to Phynd-CRM.
 
 Mirrors the tezca pattern (`apps/api/crm_sync.py` + `tasks.deliver_crm_webhook`)
 but adapted to ceq-api's stack: async httpx + FastAPI BackgroundTasks instead
@@ -6,7 +6,7 @@ of Celery. No-ops when `CRM_WEBHOOK_URL` or `CRM_WEBHOOK_SECRET` is unset, so
 local dev and self-hosted deployments work without CRM wiring.
 
 Payload signing: HMAC-SHA256 over the raw JSON body, hex-encoded, sent as
-`X-Webhook-Signature: sha256=<hex>`. Phyne-CRM verifies with the shared secret.
+`X-Webhook-Signature: sha256=<hex>`. Phynd-CRM verifies with the shared secret.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ def _serialize_record(record: dict[str, Any]) -> dict[str, Any]:
 
 
 async def dispatch_interest_to_crm(record: dict[str, Any]) -> None:
-    """Push a feature-interest record to Phyne-CRM.
+    """Push a feature-interest record to Phynd-CRM.
 
     Designed to be called from FastAPI's BackgroundTasks (fire-and-forget). All
     failures are logged and swallowed — a CRM outage must never break the
