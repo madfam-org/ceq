@@ -354,7 +354,7 @@ jobs:
             echo "  - wss://ws.ceq.lol (WebSocket)"
             echo ""
             echo "Verify rollout:"
-            echo "  ssh ssh.madfam.io 'sudo k3s kubectl -n ceq get pods'"
+            echo "  enclii ops pods diagnose --namespace ceq --workload ceq-api"
           else
             echo "Deploy commit failed. Check logs for details."
           fi
