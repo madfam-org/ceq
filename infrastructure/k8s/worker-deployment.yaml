@@ -83,6 +83,17 @@ spec:
 ---
 # KEDA ScaledObject for autoscaling GPU workers
 apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: ceq-redis-auth
+  namespace: ceq
+spec:
+  secretTargetRef:
+    - parameter: password
+      name: ceq-secrets
+      key: REDIS_PASSWORD
+---
+apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
   name: ceq-worker-scaler
@@ -101,3 +112,5 @@ spec:
         databaseIndex: "14"
         listName: ceq:jobs:pending
         listLength: "1"
+      authenticationRef:
+        name: ceq-redis-auth

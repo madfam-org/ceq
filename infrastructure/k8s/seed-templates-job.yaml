@@ -44,12 +44,12 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: ceq-secrets
-                  key: database-url
+                  key: DATABASE_URL
             - name: REDIS_URL
               valueFrom:
                 secretKeyRef:
                   name: ceq-secrets
-                  key: redis-url
+                  key: REDIS_URL
           resources:
             requests:
               memory: "128Mi"
