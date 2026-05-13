@@ -19,6 +19,8 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
+      imagePullSecrets:
+        - name: ghcr-credentials
       containers:
         - name: ceq-api
           image: ghcr.io/madfam-org/ceq-api:latest

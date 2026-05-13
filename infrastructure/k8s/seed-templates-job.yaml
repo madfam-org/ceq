@@ -26,6 +26,8 @@ spec:
       restartPolicy: Never
       securityContext:
         runAsNonRoot: true
+      imagePullSecrets:
+        - name: ghcr-credentials
       containers:
         - name: seed
           image: ghcr.io/madfam-org/ceq-api:latest

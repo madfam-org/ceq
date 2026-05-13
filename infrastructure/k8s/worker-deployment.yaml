@@ -29,6 +29,8 @@ spec:
         fsGroup: 1001
         seccompProfile:
           type: RuntimeDefault
+      imagePullSecrets:
+        - name: ghcr-credentials
       containers:
         - name: ceq-worker
           image: ghcr.io/madfam-org/ceq-worker:latest
