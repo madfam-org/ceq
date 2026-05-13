@@ -97,7 +97,7 @@ spec:
   triggers:
     - type: redis
       metadata:
-        address: redis.ceq.svc.cluster.local:6379
+        address: redis.data.svc.cluster.local:6379
         databaseIndex: "14"
         listName: ceq:jobs:pending
         listLength: "1"
