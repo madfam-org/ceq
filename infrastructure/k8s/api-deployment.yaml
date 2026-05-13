@@ -43,6 +43,26 @@ spec:
                 secretKeyRef:
                   name: ceq-secrets
                   key: REDIS_URL
+            - name: R2_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: R2_ENDPOINT
+            - name: R2_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: R2_ACCESS_KEY
+            - name: R2_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: R2_SECRET_KEY
+            - name: R2_BUCKET_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: R2_BUCKET_NAME
             - name: JANUA_API_URL
               value: "http://janua-api.janua.svc.cluster.local:4100"
             - name: FURNACE_API_URL
