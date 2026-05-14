@@ -230,6 +230,7 @@ CEQ uses [Janua](https://github.com/madfam-io/janua) for authentication:
 |----------|-------------|
 | [docs/PRD.md](./docs/PRD.md) | Product requirements & manifesto |
 | [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md) | Production deployment guide |
+| [docs/CEQ_STABILITY_ROADMAP.md](./docs/CEQ_STABILITY_ROADMAP.md) | Stabilization record and remaining roadmap |
 | [apps/api/README.md](./apps/api/README.md) | API documentation (incl. `/v1/render/*` contract) |
 | [apps/workers/README.md](./apps/workers/README.md) | GPU worker documentation |
 | [packages/sdk/README.md](./packages/sdk/README.md) | `@ceq/sdk` — JS/TS client for the render API |

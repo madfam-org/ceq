@@ -238,10 +238,12 @@ Cancels a queued or running job.
 ### Stream Job Updates (WebSocket)
 
 ```
-WS /v1/jobs/{id}/stream
+WS /v1/jobs/{id}/stream?token=<janua-jwt>
 ```
 
-Real-time job progress updates.
+Real-time job progress updates. The WebSocket endpoint requires the Janua JWT
+as the `token` query parameter; bearer headers are not available during the
+browser WebSocket handshake.
 
 **Messages:**
 ```json

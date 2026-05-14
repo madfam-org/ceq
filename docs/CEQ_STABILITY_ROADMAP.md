@@ -52,16 +52,24 @@ Run CEQ as a deterministic, observable system:
 5. **Worker image-name drift**
    - Worker defaults, Vast/Furnace provider defaults, and Vast deployment docs now use the production dash-form image name: `ghcr.io/madfam-org/ceq-worker`.
 
+6. **Studio execution contract drift**
+   - Studio workflow/template run calls now send `params`, matching the API routers.
+   - Studio job WebSocket subscriptions now append the Janua token required by `/v1/jobs/{job_id}/stream`.
+
 ### Remediation status in this change set
 
 - P1 runtime contract fixes are implemented for DB session access, synthesis workflow creation, queue cancellation, output API shape, and worker completion persistence.
 - P2 schema/config/infra alignment is implemented with a dedicated Alembic migration, callback token settings, R2 bucket env alias support, Kubernetes worker/API env wiring, and dash-form worker image defaults.
 - P3 regression coverage is added for callback persistence/idempotency/auth, cancel queue removal, modern output registration/listing, worker upload descriptors, and worker callback posting.
+- Follow-up implementation wave closed the Studio request/websocket contract gap and added an API-only production smoke runner.
 - Verification completed locally:
   - `apps/api`: `291 passed, 1 skipped`
   - `apps/workers`: `109 passed`
-  - `apps/studio`: typecheck passed; `71 passed`
+  - `apps/studio`: typecheck passed; `75 passed`
   - Alembic has one head: `20260513_align_outputs`
+- Production public-edge smoke completed with `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`:
+  - `https://api.ceq.lol/health`: `ok`
+  - `https://ceq.lol`: HTTP `200`
 
 ## Remaining Roadmap To Full Stability
 
@@ -79,6 +87,7 @@ The items below are what remains after the current stabilization patch. They are
 
 3. **Run a real end-to-end GPU smoke**
    - Studio/API job submission -> Redis pending queue -> worker execution -> R2 upload -> API callback -> PostgreSQL output row -> Studio gallery render.
+   - Use `scripts/production-smoke.sh` with `CEQ_AUTH_TOKEN` and `CEQ_TEMPLATE_ID` after deployment.
    - Acceptance: the final job is `completed`, output rows are durable, and gallery URLs open from the browser.
 
 4. **Verify network policy paths**
@@ -92,19 +101,15 @@ The items below are what remains after the current stabilization patch. They are
 
 ### P1 — Remaining Functional Correctness
 
-1. **Fix Studio request and websocket contracts**
-   - `runWorkflow()` / `runTemplate()` currently pass `input_params`; API routers expect `params`.
-   - `subscribeToJob()` must append the auth token because `/v1/jobs/{job_id}/stream` requires `?token=...`.
-
-2. **Implement user-provided job webhooks**
+1. **Implement user-provided job webhooks**
    - `webhook_url` is accepted and stored today, but completion delivery to that URL is not yet implemented.
    - Add signed delivery, retry, and failure metadata.
 
-3. **Implement active worker cancellation**
+2. **Implement active worker cancellation**
    - API publishes a cancel control message, but workers need to subscribe per active job and interrupt ComfyUI execution.
    - Acceptance: cancelling a running job stops GPU work and persists `cancelled`.
 
-4. **Broaden worker output collection**
+3. **Broaden worker output collection**
    - Current ComfyUI output collection is image-oriented.
    - Add video/audio/3D/arbitrary file collection, MIME mapping, dimensions/duration extraction, and tests.
 

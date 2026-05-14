@@ -5,6 +5,7 @@
  */
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5800";
+const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || API_BASE.replace(/^http/, "ws");
 
 // === Types ===
 
@@ -174,13 +175,15 @@ export interface WorkflowRunResponse {
   message: string;
 }
 
+export interface WorkflowRunRequest {
+  params?: Record<string, unknown>;
+  priority?: number;
+  webhook_url?: string;
+}
+
 export async function runWorkflow(
   id: string,
-  params: {
-    input_params?: Record<string, unknown>;
-    priority?: number;
-    webhook_url?: string;
-  }
+  data: WorkflowRunRequest = {}
 ): Promise<WorkflowRunResponse> {
   const response = await fetch(`${API_BASE}/v1/workflows/${id}/run`, {
     method: "POST",
@@ -188,7 +191,7 @@ export async function runWorkflow(
       "Content-Type": "application/json",
       ...getAuthHeaders(),
     },
-    body: JSON.stringify(params),
+    body: JSON.stringify(data),
   });
   return handleResponse(response);
 }
@@ -271,8 +274,15 @@ export function subscribeToJob(
   onError?: (error: Event) => void,
   onClose?: () => void
 ): WebSocket {
-  const wsUrl = API_BASE.replace(/^http/, "ws");
-  const ws = new WebSocket(`${wsUrl}/v1/jobs/${jobId}/stream`);
+  const token = getToken();
+  const query = new URLSearchParams();
+  if (token) {
+    query.set("token", token);
+  }
+
+  const wsPath = `/v1/jobs/${jobId}/stream`;
+  const wsUrl = query.size > 0 ? `${WS_BASE}${wsPath}?${query}` : `${WS_BASE}${wsPath}`;
+  const ws = new WebSocket(wsUrl);
 
   ws.onmessage = (event) => {
     try {
@@ -353,9 +363,10 @@ export async function getTemplate(id: string): Promise<Template> {
 
 export async function runTemplate(
   id: string,
-  params: {
-    input_params: Record<string, unknown>;
+  data: {
+    params: Record<string, unknown>;
     priority?: number;
+    webhook_url?: string;
   }
 ): Promise<WorkflowRunResponse> {
   const response = await fetch(`${API_BASE}/v1/templates/${id}/run`, {
@@ -364,7 +375,7 @@ export async function runTemplate(
       "Content-Type": "application/json",
       ...getAuthHeaders(),
     },
-    body: JSON.stringify(params),
+    body: JSON.stringify(data),
   });
   return handleResponse(response);
 }

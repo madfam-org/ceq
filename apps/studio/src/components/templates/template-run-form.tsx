@@ -74,7 +74,7 @@ export function TemplateRunForm({ template, className }: TemplateRunFormProps) {
 
   const runMutation = useMutation({
     mutationFn: () =>
-      runTemplate(template.id, { input_params: formValues }),
+      runTemplate(template.id, { params: formValues }),
     onSuccess: (result) => {
       toast({
         title: "Transmutation initiated",

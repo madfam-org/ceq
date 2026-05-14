@@ -45,6 +45,7 @@ gap or incident link.
 - `docs/CEQ_STABILITY_ROADMAP.md` records the 2026-05 stabilization pass, completed remediation, verification status, and remaining P0-P3 roadmap.
 - `docs/PRODUCTION_DEPLOYMENT.md` is the production rollout reference for callback secrets, migration verification, and the full Studio -> API -> Redis -> worker -> R2 -> callback -> PostgreSQL -> gallery smoke.
 - `docs/API.md` documents public API contracts and the internal worker completion callback.
+- `scripts/production-smoke.sh` performs public edge checks and, with a Janua token plus template id, verifies the durable template job completion path through the API.
 - `apps/api/README.md`, `apps/workers/README.md`, and `docs/VAST_AI_SETUP.md` document callback/R2/image env required for local and worker deployments.
 
 ## Maintenance

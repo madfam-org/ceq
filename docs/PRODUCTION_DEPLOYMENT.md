@@ -212,6 +212,22 @@ Stability smoke after the 2026-05 output-contract remediation:
 
 The release is not considered stable until the full Studio -> API -> Redis -> worker -> R2 -> callback -> PostgreSQL -> gallery loop has passed once in the target environment.
 
+The API-level smoke runner exercises the same durable completion path without
+raw cluster access:
+
+```bash
+CEQ_AUTH_TOKEN="<janua-jwt>" \
+CEQ_TEMPLATE_ID="<template-uuid>" \
+CEQ_TEMPLATE_PARAMS_JSON='{}' \
+scripts/production-smoke.sh
+```
+
+For public edge checks only:
+
+```bash
+CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh
+```
+
 ---
 
 ## Troubleshooting
