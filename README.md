@@ -40,7 +40,8 @@ CEQ is MADFAM's internal content generation platform. It enables:
 
 ```
 ceq.lol
-├── ceq-studio (Next.js 14)     → https://ceq.lol       (port 5801)
+├── ceq-landing (Next.js 14)    → https://ceq.lol       (marketing + demo)
+├── ceq-studio (Next.js 14)     → https://app.ceq.lol   (authenticated app)
 ├── ceq-api (FastAPI)           → https://api.ceq.lol   (port 5800)
 ├── ceq-workers (ComfyUI)       → GPU instances          (ports 5810-5819)
 └── Dependencies
@@ -198,7 +199,8 @@ CEQ is deployed to Enclii infrastructure via Cloudflare Tunnels:
 
 | Domain | Service | Status |
 |--------|---------|--------|
-| ceq.lol | Studio | Live (2 pods) |
+| ceq.lol | Landing + demo | Live (2 pods) |
+| app.ceq.lol | Studio app | Live route; Janua client registration required |
 | api.ceq.lol | API | Live (2 pods) |
 | ws.ceq.lol | WebSocket | Configured |
 
@@ -208,7 +210,7 @@ See [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md) for detaile
 
 | Component | Status |
 |-----------|--------|
-| Janua OAuth Client | Registered |
+| Janua OAuth Client | Action required: register/rotate active `app.ceq.lol` client |
 | Cloudflare R2 Bucket | Live (`ceq-assets`; render cache under `render/{template}/{hash}.{ext}`) |
 | Cloudflare Tunnel Routes | Configured |
 | `/v1/render/*` pipeline | Shipped — card renderer + R2 cache + `@ceq/sdk` |
@@ -224,8 +226,12 @@ CEQ uses [Janua](https://github.com/madfam-io/janua) for authentication:
 - **OAuth Provider:** auth.madfam.io
 - **Client ID:** `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`
 - **Redirect URIs:**
-  - `https://ceq.lol/auth/callback` (production)
+  - `https://app.ceq.lol/auth/callback` (production Studio)
   - `http://localhost:5801/auth/callback` (development)
+
+Public visitors should land on `https://ceq.lol` for the marketing/demo
+experience. Authenticated product use starts at `https://app.ceq.lol`, which
+redirects unauthenticated users to Janua.
 
 ---
 

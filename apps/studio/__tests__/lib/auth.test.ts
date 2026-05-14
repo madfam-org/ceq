@@ -229,7 +229,7 @@ describe('URL Generation', () => {
     const url = getLoginUrl()
 
     expect(url).toContain(AUTH_CONFIG.januaUrl)
-    expect(url).toContain('/authorize')
+    expect(url).toContain('/api/v1/oauth/authorize')
     expect(url).toContain('client_id=')
     expect(url).toContain('redirect_uri=')
     expect(url).toContain('response_type=code')

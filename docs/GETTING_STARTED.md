@@ -95,7 +95,7 @@ Your workflows run on dedicated GPU instances:
 
 ## Authentication
 
-CEQ uses Janua for authentication. Log in at [ceq.lol](https://ceq.lol) with your MADFAM credentials.
+CEQ uses Janua for authentication. Visit [ceq.lol](https://ceq.lol) for the public demo/landing experience, then log in to Studio at [app.ceq.lol](https://app.ceq.lol) with your MADFAM credentials.
 
 ## Need Help?
 

@@ -9,6 +9,15 @@
 export const AUTH_CONFIG = {
   // Janua OIDC endpoints
   januaUrl: process.env.NEXT_PUBLIC_JANUA_URL || "https://auth.madfam.io",
+  authorizationEndpoint: `${
+    process.env.NEXT_PUBLIC_JANUA_URL || "https://auth.madfam.io"
+  }/api/v1/oauth/authorize`,
+  tokenEndpoint: `${
+    process.env.NEXT_PUBLIC_JANUA_URL || "https://auth.madfam.io"
+  }/api/v1/oauth/token`,
+  userInfoEndpoint: `${
+    process.env.NEXT_PUBLIC_JANUA_URL || "https://auth.madfam.io"
+  }/api/v1/oauth/userinfo`,
   clientId: process.env.NEXT_PUBLIC_JANUA_CLIENT_ID || "ceq-studio",
 
   // CEQ endpoints
@@ -143,7 +152,7 @@ export function getLoginUrl(returnTo?: string): string {
     state: returnTo || "/",
   });
 
-  return `${AUTH_CONFIG.januaUrl}/authorize?${params}`;
+  return `${AUTH_CONFIG.authorizationEndpoint}?${params}`;
 }
 
 /**
@@ -235,7 +244,7 @@ export async function refreshAccessToken(): Promise<string | null> {
  */
 export async function validateToken(token: string): Promise<User | null> {
   try {
-    const response = await fetch(`${AUTH_CONFIG.januaUrl}/api/v1/auth/me`, {
+    const response = await fetch(AUTH_CONFIG.userInfoEndpoint, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -245,10 +254,10 @@ export async function validateToken(token: string): Promise<User | null> {
 
     const data = await response.json();
     return {
-      id: data.id,
+      id: data.sub || data.id,
       email: data.email,
-      name: data.first_name || data.email?.split("@")[0],
-      avatar: data.avatar_url,
+      name: data.name || data.first_name || data.email?.split("@")[0],
+      avatar: data.picture || data.avatar_url,
     };
   } catch {
     return null;

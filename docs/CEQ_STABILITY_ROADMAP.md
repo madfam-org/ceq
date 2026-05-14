@@ -208,7 +208,9 @@ The items below are what remains after the current stabilization patch. They are
    - Worker/API -> Cloudflare R2.
 
 7. **Verify Janua production client**
-   - Confirm Janua knows the active CEQ client ID and redirect URIs.
+   - Confirm Janua knows the active CEQ client ID and `https://app.ceq.lol/auth/callback`.
+   - Live check on 2026-05-14 returned `invalid_client: Unknown client_id` for the documented client ID.
+   - CEQ Studio now uses Janua OIDC `/api/v1/oauth/*` endpoints and reserves `ceq.lol` for landing/demo traffic.
    - Acceptance: production Studio login succeeds and websocket auth token can be used for job streams.
 
 ### P1 — Functional Correctness

@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     const redirectUri = `${origin}/auth/callback`;
 
     // Exchange code for tokens with Janua
-    const tokenResponse = await fetch(`${JANUA_URL}/api/v1/auth/token`, {
+    const tokenResponse = await fetch(`${JANUA_URL}/api/v1/oauth/token`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",

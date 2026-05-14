@@ -30,7 +30,9 @@ function startSignIn(returnTo: string, login: (path: string) => void) {
     return;
   }
   if (typeof window !== "undefined") {
-    window.location.href = `${APP_BASE}${returnTo === "/" ? "" : returnTo}`;
+    const url = new URL("/login", APP_BASE);
+    url.searchParams.set("returnTo", returnTo);
+    window.location.href = url.toString();
   }
 }
 

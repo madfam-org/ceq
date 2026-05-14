@@ -23,8 +23,8 @@
 
 | Step | Status | Notes |
 |------|--------|-------|
-| Janua OAuth Client | Done | `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk` |
-| Cloudflare Tunnel Routes | Done | ceq.lol, api.ceq.lol, ws.ceq.lol |
+| Janua OAuth Client | Action required | Active client currently rejected by Janua; register/rotate for `app.ceq.lol` |
+| Cloudflare Tunnel Routes | Done | ceq.lol, app.ceq.lol, api.ceq.lol, ws.ceq.lol |
 | R2 Bucket + Token | Done | `ceq-assets` with Object Read & Write |
 | secrets.prod.yaml | Done | R2 + OAuth done, DB/Redis configured |
 | Enclii Infrastructure | Done | Terraform applied |
@@ -63,9 +63,18 @@ vim infra/terraform/terraform.tfvars
 # 4. Note the connection details
 ```
 
-### 3. Register OAuth Client in Janua (Done)
+### 3. Register OAuth Client in Janua (Action Required)
 
-**Completed 2026-04-30.** Client registered with:
+The Studio uses Janua's OIDC discovery endpoints:
+
+- Authorization: `https://auth.madfam.io/api/v1/oauth/authorize`
+- Token: `https://auth.madfam.io/api/v1/oauth/token`
+- UserInfo: `https://auth.madfam.io/api/v1/oauth/userinfo`
+
+As of 2026-05-14, live Janua returns `invalid_client: Unknown client_id` for
+`jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`. Register that client again or rotate
+CEQ to a new client and update `NEXT_PUBLIC_JANUA_CLIENT_ID` plus
+`JANUA_CLIENT_SECRET` before declaring Studio login healthy.
 
 | Field | Value |
 |-------|-------|
@@ -73,7 +82,7 @@ vim infra/terraform/terraform.tfvars
 | **Client ID** | `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk` |
 | **Client Secret** | Stored in `secrets.prod.yaml` |
 | **Grant Types** | `authorization_code`, `refresh_token` |
-| **Redirect URIs** | `https://ceq.lol/auth/callback`, `http://localhost:5801/auth/callback` |
+| **Redirect URIs** | `https://app.ceq.lol/auth/callback`, `http://localhost:5801/auth/callback` |
 | **Scopes** | `openid`, `profile`, `email` |
 
 ### 4. Create Cloudflare R2 Bucket (Done)
@@ -95,10 +104,12 @@ vim infra/terraform/terraform.tfvars
 | Public Hostname | Service | Port |
 |-----------------|---------|------|
 | `ceq.lol` | `http://ceq-studio.ceq.svc.cluster.local` | 5801 |
+| `app.ceq.lol` | `http://ceq-studio.ceq.svc.cluster.local` | 5801 |
 | `api.ceq.lol` | `http://ceq-api.ceq.svc.cluster.local` | 5800 |
 | `ws.ceq.lol` | `http://ceq-api.ceq.svc.cluster.local` | 5800 |
 
-WebSocket support enabled for `ws.ceq.lol`.
+`ceq.lol` is the marketing/demo surface. `app.ceq.lol` is the authenticated
+Studio surface. WebSocket support is enabled for `ws.ceq.lol`.
 
 ### 6. Configure Production Secrets
 

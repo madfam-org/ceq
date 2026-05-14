@@ -15,6 +15,8 @@ export function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
   const isAppHost = APP_HOSTNAMES.has(host) || host.startsWith("app.");
+  const protocol =
+    request.headers.get("x-forwarded-proto") === "http" ? "http" : "https";
 
   if (!isAppHost) {
     // Marketing host (ceq.lol). Root path rewrites server-side to the
@@ -31,24 +33,21 @@ export function middleware(request: NextRequest) {
       url.pathname = "/landing";
       return NextResponse.rewrite(url);
     }
-    if (
-      pathname.startsWith("/auth/") ||
-      pathname.startsWith("/api/") ||
-      pathname.startsWith("/landing")
-    ) {
+    if (pathname.startsWith("/landing")) {
       return NextResponse.next();
     }
-    const protocol =
-      request.headers.get("x-forwarded-proto") === "http" ? "http" : "https";
     return NextResponse.redirect(
       `${protocol}://app.ceq.lol${pathname}${search}`,
       307,
     );
   }
 
-  // App host (app.ceq.lol). Studio renders at `/`; unauthenticated visitors
-  // fall through to the landing component inside page.tsx, but on the
-  // app's own URL/cache entry — no cross-host cache pollution.
+  if (pathname.startsWith("/landing")) {
+    return NextResponse.redirect(`${protocol}://ceq.lol/`, 307);
+  }
+
+  // App host (app.ceq.lol). Studio renders at `/`; client-side auth gates
+  // redirect unauthenticated users to Janua because tokens live in localStorage.
   return NextResponse.next();
 }
 

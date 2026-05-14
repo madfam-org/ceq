@@ -1,11 +1,11 @@
 "use client";
 
+import { useEffect } from "react";
 import { Suspense } from "react";
 import { MainLayout } from "@/components/layout/main-layout";
 import { WorkflowList } from "@/components/workflows/workflow-list";
 import { QueueMonitor } from "@/components/queue/queue-monitor";
 import { QuickActions } from "@/components/quick-actions";
-import { MarketingLanding } from "@/components/landing/marketing-landing";
 import { useAuth } from "@/contexts/auth-context";
 
 // App-host root page. Reached at app.ceq.lol/. Marketing-host requests
@@ -13,7 +13,13 @@ import { useAuth } from "@/contexts/auth-context";
 // for the why (Cloudflare cached the SSR HTML across hosts and the
 // previous client-side window.location.host gate didn't survive that).
 export default function HomePage() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, login } = useAuth();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      login("/");
+    }
+  }, [isAuthenticated, isLoading, login]);
 
   if (isLoading) {
     return (
@@ -25,11 +31,14 @@ export default function HomePage() {
     );
   }
 
-  // Unauthenticated visitors on app.ceq.lol see the landing as a soft
-  // gate. URL stays "/" so the cache entry is distinct from
-  // ceq.lol/landing — no cross-host pollution.
   if (!isAuthenticated) {
-    return <MarketingLanding />;
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="font-mono text-sm text-muted-foreground">
+          <span className="text-primary">›</span> redirecting to Janua…
+        </div>
+      </div>
+    );
   }
 
   return (
