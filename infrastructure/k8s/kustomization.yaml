@@ -88,14 +88,15 @@ resources:
 # line in run 25030756141, jobs 73311672398 (api) and 73311672389 (studio),
 # 2026-04-28T02:40-46Z, commit c9da2ce.
 images:
-- digest: sha256:6e1592176d6a9cdf47e2ac43ba1a82703d68445d0eb6ba5a9b5d5dddf39db8ad
+- digest: sha256:e8ff78211a12f02cd0dddbcf17d2dfe302f79e336e8942f347f485fe55b0d8a2
   name: ghcr.io/madfam-org/ceq-api
   newName: ghcr.io/madfam-org/ceq-api
-- digest: sha256:85194de1a12bf72104bc8376d87a2911b619801349a6dd42ebf1910010c2f21d
+- digest: sha256:515dc924c21343e1e56291336543bb94e6a9aa7b1e37c2e784753346220081b6
   name: ghcr.io/madfam-org/ceq-studio
   newName: ghcr.io/madfam-org/ceq-studio
-- name: ghcr.io/madfam-org/ceq-worker
-  newTag: latest
+- digest: sha256:bd3e375847ab2ea02bae36f88537d9edf9a59b22781c2433eddd80222e3d721f
+  name: ghcr.io/madfam-org/ceq-worker
+  newName: ghcr.io/madfam-org/ceq-worker
 
 # ConfigMap generator for environment-specific values
 configMapGenerator:
