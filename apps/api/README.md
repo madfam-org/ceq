@@ -134,6 +134,7 @@ Clients should prefer the `@ceq/sdk` package (`packages/sdk`) over raw HTTP.
 | `R2_SECRET_KEY` | Yes | | R2 secret access key |
 | `R2_BUCKET` / `R2_BUCKET_NAME` | Yes | `ceq-assets` | R2 bucket name |
 | `JOB_COMPLETION_CALLBACK_TOKEN` | Production / workers | | Shared token required for worker completion callbacks |
+| `JOB_COMPLETION_DEAD_LETTER_KEY` | No | `ceq:jobs:completion:dead` | Redis list for exhausted worker completion callback payloads |
 | `JOB_WEBHOOK_SECRET` | If `webhook_url` is used | | HMAC signing secret for user job completion webhooks |
 | `JOB_WEBHOOK_TIMEOUT_SECONDS` | No | `5.0` | Per-attempt webhook HTTP timeout |
 | `JOB_WEBHOOK_MAX_ATTEMPTS` | No | `3` | Webhook delivery attempts for retryable failures |
@@ -143,10 +144,20 @@ Worker completion callback notes:
 
 - Workers retry retryable `POST /v1/jobs/{job_id}/outputs/report` failures and
   write exhausted payloads to Redis `ceq:jobs:completion:dead`.
+- Admins can inspect/replay/discard exhausted completion callbacks through
+  `/v1/operations/completion-dead-letters`; replay uses
+  `JOB_COMPLETION_CALLBACK_TOKEN` and removes the Redis item only after a
+  successful upstream callback response.
+- `GET /v1/operations/status` exposes admin-only acceptance signals for
+  runtime secrets, Alembic revision, queue depth, processing depth, and
+  completion dead-letter depth.
 - `DELETE /v1/jobs/{job_id}` records `cancel_requested=true` in Redis and
   publishes a per-job cancel control message for active workers.
 - Late non-cancelled worker reports cannot overwrite an already-cancelled job.
 - `outputs` has a DB-level uniqueness guard on `(job_id, storage_uri)`.
+- `/metrics` includes CEQ counters for worker completion reports, output
+  persistence, cancellations, dead-letter replay outcomes, and user webhook
+  delivery outcomes.
 
 ### Example .env
 

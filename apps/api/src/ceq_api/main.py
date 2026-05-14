@@ -41,6 +41,7 @@ from ceq_api.routers import (  # noqa: E402
     intent,
     interest,
     jobs,
+    operations,
     outputs,
     printability,
     render,
@@ -114,6 +115,7 @@ app.include_router(assets.router, prefix="/v1/assets", tags=["assets"])
 app.include_router(outputs.router, prefix="/v1/outputs", tags=["outputs"])
 app.include_router(render.router, prefix="/v1/render", tags=["render"])
 app.include_router(interest.router)
+app.include_router(operations.router, prefix="/v1/operations", tags=["operations"])
 # Intelligence layer — CEQ Cognitive Reasoning
 app.include_router(synthesis.router, prefix="/v1/synthesis", tags=["synthesis"])
 app.include_router(printability.router, prefix="/v1/printability", tags=["printability"])

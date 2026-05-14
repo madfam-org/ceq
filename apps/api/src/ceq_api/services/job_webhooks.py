@@ -8,11 +8,13 @@ import hmac
 import json
 import logging
 from datetime import UTC, datetime
+from time import perf_counter
 from typing import Any
 
 import httpx
 
 from ceq_api.config import get_settings
+from ceq_api.metrics import record_job_webhook_delivery
 from ceq_api.models.job import Job
 from ceq_api.models.output import Output
 from ceq_api.storage import StorageClient
@@ -115,6 +117,7 @@ async def deliver_job_webhook(
         return previous_delivery
 
     settings = get_settings()
+    started_at = perf_counter()
     event = f"job.{job.status}"
     secret = settings.job_webhook_secret
 
@@ -127,6 +130,7 @@ async def deliver_job_webhook(
         )
         metadata["webhook_delivery"] = delivery
         job.output_metadata = metadata
+        record_job_webhook_delivery("skipped", perf_counter() - started_at)
         logger.warning("Skipping job webhook for job %s: secret not configured", job.id)
         return delivery
 
@@ -175,6 +179,7 @@ async def deliver_job_webhook(
                 )
                 metadata["webhook_delivery"] = delivery
                 job.output_metadata = metadata
+                record_job_webhook_delivery("delivered", perf_counter() - started_at)
                 logger.info("Delivered job webhook for job %s", job.id)
                 return delivery
 
@@ -196,5 +201,6 @@ async def deliver_job_webhook(
     )
     metadata["webhook_delivery"] = delivery
     job.output_metadata = metadata
+    record_job_webhook_delivery("failed", perf_counter() - started_at)
     logger.warning("Job webhook failed for job %s: %s", job.id, last_error)
     return delivery

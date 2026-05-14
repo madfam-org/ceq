@@ -83,6 +83,7 @@ class Settings(BaseSettings):
     job_completion_callback_token: str = ""
     job_completion_callback_path: str = "/v1/jobs/{job_id}/outputs/report"
     job_completion_callback_timeout_seconds: float = 5.0
+    job_completion_dead_letter_key: str = "ceq:jobs:completion:dead"
 
     # User job completion webhooks
     job_webhook_secret: str = ""

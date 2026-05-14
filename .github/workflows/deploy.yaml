@@ -188,7 +188,7 @@ jobs:
           cosign sign --yes ${{ env.IMAGE_NAMESPACE }}/ceq-studio@${{ steps.build.outputs.digest }}
 
   # ===========================================================================
-  # Build Worker Image (when needed)
+  # Build Worker Image
   # ===========================================================================
   build-worker:
     name: Build Worker
@@ -196,12 +196,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    # Only build worker on manual dispatch or when worker files change. When
-    # it runs, deploy waits for its digest so worker rollouts are pinned too.
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      contains(toJson(github.event.commits), 'apps/workers/')
-
+      id-token: write
     outputs:
       # docker/build-push-action's `outputs.digest` IS the manifest-list
       # digest for multi-arch and the image manifest digest for single-arch
@@ -213,6 +208,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -244,6 +242,12 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Sign image with cosign
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          cosign sign --yes ${{ env.IMAGE_NAMESPACE }}/ceq-worker@${{ steps.build.outputs.digest }}
+
 
   # ===========================================================================
   # GitOps Deploy: commit digests to kustomization.yaml
@@ -263,7 +267,7 @@ jobs:
       always() &&
       needs.build-api.result == 'success' &&
       needs.build-studio.result == 'success' &&
-      (needs.build-worker.result == 'success' || needs.build-worker.result == 'skipped')
+      needs.build-worker.result == 'success'
     environment: production
     permissions:
       contents: write
@@ -296,8 +300,8 @@ jobs:
           STUDIO_DIGEST="${{ needs.build-studio.outputs.digest }}"
           WORKER_DIGEST="${{ needs.build-worker.outputs.digest }}"
 
-          if [ -z "$API_DIGEST" ] || [ -z "$STUDIO_DIGEST" ]; then
-            echo "Missing required digest (api=$API_DIGEST, studio=$STUDIO_DIGEST)" >&2
+          if [ -z "$API_DIGEST" ] || [ -z "$STUDIO_DIGEST" ] || [ -z "$WORKER_DIGEST" ]; then
+            echo "Missing required digest (api=$API_DIGEST, studio=$STUDIO_DIGEST, worker=$WORKER_DIGEST)" >&2
             exit 1
           fi
 
@@ -313,11 +317,8 @@ jobs:
                 "ghcr.io/madfam-org/ceq-api=ghcr.io/madfam-org/ceq-api@${API_DIGEST}"
               kustomize edit set image \
                 "ghcr.io/madfam-org/ceq-studio=ghcr.io/madfam-org/ceq-studio@${STUDIO_DIGEST}"
-              # Worker digest is optional — only present when build-worker ran.
-              if [ -n "$WORKER_DIGEST" ]; then
-                kustomize edit set image \
-                  "ghcr.io/madfam-org/ceq-worker=ghcr.io/madfam-org/ceq-worker@${WORKER_DIGEST}"
-              fi
+              kustomize edit set image \
+                "ghcr.io/madfam-org/ceq-worker=ghcr.io/madfam-org/ceq-worker@${WORKER_DIGEST}"
             )
             git add infrastructure/k8s/kustomization.yaml
             if git diff --staged --quiet; then

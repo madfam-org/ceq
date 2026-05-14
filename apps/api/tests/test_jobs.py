@@ -121,6 +121,7 @@ class TestGetJob:
             progress=0.5,
             current_node="KSampler",
             input_params={"prompt": "test"},
+            output_metadata={"cancel_requested_at": "2026-05-14T00:00:00+00:00"},
             queued_at=datetime.now(timezone.utc),
         )
         db_session.add(job)
@@ -133,6 +134,7 @@ class TestGetJob:
         assert data["status"] == "running"
         assert data["progress"] == 0.5
         assert data["current_node"] == "KSampler"
+        assert data["output_metadata"]["cancel_requested_at"] == "2026-05-14T00:00:00+00:00"
         assert "brand_message" in data
 
     @pytest.mark.asyncio

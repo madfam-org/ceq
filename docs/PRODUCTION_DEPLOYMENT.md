@@ -227,12 +227,13 @@ The release is not considered stable until the full Studio -> API -> Redis -> wo
 
 Additional 2026-05-14 wave gates:
 
-1. Confirm `JOB_COMPLETION_CALLBACK_TOKEN` and `JOB_WEBHOOK_SECRET` are present in `ceq-secrets`.
-2. Confirm the PreSync migration job applied `20260514_outputs_unique`.
-3. Confirm exhausted worker callback payloads are inspectable at Redis `ceq:jobs:completion:dead`.
-4. Cancel one actively running GPU job and verify the API remains `cancelled`.
-5. Run at least one image, video, audio, and 3D/model template and confirm Studio gallery rendering/opening behavior.
-6. Confirm the next worker-touching deploy commit pins `ceq-worker` by digest.
+1. Confirm `JOB_COMPLETION_CALLBACK_TOKEN` and `JOB_WEBHOOK_SECRET` are present through `GET /v1/operations/status`.
+2. Confirm the PreSync migration job applied `20260514_outputs_unique` through the same operations status response.
+3. Confirm exhausted worker callback payloads are inspectable through `GET /v1/operations/completion-dead-letters`.
+4. Replay or discard any exhausted callback payloads through `/v1/operations/completion-dead-letters/{index}`.
+5. Cancel one actively running GPU job and verify the API remains `cancelled`.
+6. Run at least one image, video, audio, and 3D/model template and confirm Studio gallery rendering/opening behavior.
+7. Confirm the next deploy commit pins `ceq-worker` by digest.
 
 The API-level smoke runner exercises the same durable completion path without
 raw cluster access:
@@ -241,6 +242,34 @@ raw cluster access:
 CEQ_AUTH_TOKEN="<janua-jwt>" \
 CEQ_TEMPLATE_ID="<template-uuid>" \
 CEQ_TEMPLATE_PARAMS_JSON='{}' \
+scripts/production-smoke.sh
+```
+
+Admin acceptance status can be included in the same run:
+
+```bash
+CEQ_AUTH_TOKEN="<janua-jwt>" \
+CEQ_ADMIN_AUTH_TOKEN="<admin-janua-jwt>" \
+CEQ_RUN_OPERATIONS_STATUS=true \
+CEQ_TEMPLATE_ID="<template-uuid>" \
+scripts/production-smoke.sh
+```
+
+Multi-modal and cancellation acceptance can be run without raw Redis or pod
+access:
+
+```bash
+CEQ_AUTH_TOKEN="<janua-jwt>" \
+CEQ_ADMIN_AUTH_TOKEN="<admin-janua-jwt>" \
+CEQ_RUN_OPERATIONS_STATUS=true \
+CEQ_TEMPLATE_SMOKES_JSON='[
+  {"label":"image","template_id":"<image-template-id>","params":{}},
+  {"label":"video","template_id":"<video-template-id>","params":{}},
+  {"label":"audio","template_id":"<audio-template-id>","params":{}},
+  {"label":"3d","template_id":"<3d-template-id>","params":{}}
+]' \
+CEQ_RUN_CANCEL_SMOKE=true \
+CEQ_CANCEL_TEMPLATE_ID="<long-running-template-id>" \
 scripts/production-smoke.sh
 ```
 
@@ -266,7 +295,7 @@ This means the Cloudflare tunnel cannot reach the origin server. Common causes:
 ### API not starting
 
 ```bash
-kubectl logs -n ceq deployment/ceq-api
+enclii ops pods diagnose --namespace ceq --workload ceq-api
 ```
 
 Common issues:
@@ -277,13 +306,15 @@ Common issues:
 
 ### Worker completions not persisting
 
-1. Verify `JOB_COMPLETION_CALLBACK_TOKEN` exists in `ceq-secrets`.
-2. Verify API and worker pods both received the same token value.
-3. Verify workers can reach `http://ceq-api.ceq.svc.cluster.local`.
-4. Check worker logs for callback HTTP errors.
-5. Check Redis hash `ceq:job:{job_id}` for `callback_error`.
-6. Check Redis list `ceq:jobs:completion:dead` for exhausted callback payloads.
-7. Confirm NetworkPolicies allow intra-namespace traffic and egress to R2/Redis.
+1. Use `GET /v1/operations/status` to verify `JOB_COMPLETION_CALLBACK_TOKEN` is configured and Redis is reachable.
+2. Use `GET /v1/operations/completion-dead-letters` to inspect exhausted callback payloads.
+3. Replay a known-good payload with `POST /v1/operations/completion-dead-letters/{index}/replay`.
+4. Use Enclii workload diagnostics for API/worker logs and network path checks.
+5. Confirm NetworkPolicies allow intra-namespace traffic and egress to R2/Redis.
+
+Raw `kubectl`/Redis inspection is break-glass only when Enclii or the
+operations API is unavailable; record the missing Enclii adapter gap if that is
+required.
 
 ### Database connection issues
 

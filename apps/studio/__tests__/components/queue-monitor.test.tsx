@@ -39,6 +39,7 @@ const mockJob = (overrides = {}) => ({
   error: null,
   input_params: {},
   outputs: [],
+  output_metadata: {},
   queued_at: '2025-01-01T00:00:00Z',
   started_at: '2025-01-01T00:01:00Z',
   completed_at: null,

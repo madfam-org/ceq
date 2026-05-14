@@ -29,6 +29,7 @@ from ceq_api.config import get_settings
 from ceq_api.db.redis import get_redis, publish_job_update
 from ceq_api.db.session import get_db
 from ceq_api.logging import audit_logger
+from ceq_api.metrics import record_job_cancellation, record_worker_completion_report
 from ceq_api.models.job import Job
 from ceq_api.models.job import JobStatus as JobStatusEnum
 from ceq_api.models.output import Output
@@ -73,6 +74,7 @@ class JobStatusResponse(BaseModel):
     error: str | None = None
     input_params: dict[str, Any]
     outputs: list[OutputResponse] = Field(default_factory=list)
+    output_metadata: dict[str, Any] = Field(default_factory=dict)
     queued_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -96,6 +98,7 @@ class JobStatusResponse(BaseModel):
             error=job.error,
             input_params=job.input_params,
             outputs=[OutputResponse.from_orm(o) for o in job.outputs] if hasattr(job, 'outputs') and job.outputs else [],
+            output_metadata=job.output_metadata or {},
             queued_at=job.queued_at,
             started_at=job.started_at,
             completed_at=job.completed_at,
@@ -379,6 +382,7 @@ async def report_job_outputs(
             },
         }
         await db.flush()
+        record_worker_completion_report(job.status, 0)
         return JobCompletionReportResponse(
             job_id=job.id,
             status=job.status,
@@ -457,6 +461,7 @@ async def report_job_outputs(
         outputs_persisted += 1
 
     await db.flush()
+    record_worker_completion_report(job.status, outputs_persisted)
 
     if job.status in {
         JobStatusEnum.COMPLETED.value,
@@ -574,6 +579,7 @@ async def cancel_job(
 
     # Remove from queue if still queued.
     await _remove_pending_job(redis, job_id)
+    record_job_cancellation()
 
     # Publish status update for WebSocket listeners
     await publish_job_update(

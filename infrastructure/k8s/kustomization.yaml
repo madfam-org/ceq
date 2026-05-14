@@ -78,11 +78,11 @@ resources:
 # delete the `newName` line — name and newName matching is the
 # kustomize default).
 #
-# `ceq-worker` is still `:latest` in this source snapshot only until the
-# next workflow run that builds worker files. `.github/workflows/deploy.yaml`
-# now makes `deploy` depend on `build-worker` when it runs, so the GitOps
-# digest commit can pin the worker image the same way API and Studio are
-# pinned.
+# `ceq-worker` remains `:latest` in this source snapshot because the
+# f422b54b deploy commit did not produce a worker digest even though worker
+# files changed. `.github/workflows/deploy.yaml` now builds/signs worker on
+# every deploy and requires WORKER_DIGEST before committing image updates, so
+# the next deploy commit must pin worker the same way API and Studio are pinned.
 #
 # Digest provenance: `pushing manifest for ghcr.io/madfam-org/<img>:latest@sha256:…`
 # line in run 25030756141, jobs 73311672398 (api) and 73311672389 (studio),

@@ -78,10 +78,19 @@ Run CEQ as a deterministic, observable system:
   - Worker completion callbacks now retry retryable failures and dead-letter exhausted payloads to Redis.
   - `outputs(job_id, storage_uri)` DB-level idempotency migration added locally.
   - Deploy workflow now waits for `build-worker` when it runs so worker images can be pinned by digest during GitOps deploy commits.
+- Operations acceptance wave closed locally on 2026-05-14:
+  - Admin operations API added for runtime status, completion dead-letter listing, replay, and discard.
+  - Job status responses now expose `output_metadata` so cancellation, webhook, and callback state is visible through normal APIs.
+  - Prometheus counters added for worker completion reports, persisted outputs, cancellations, dead-letter replay outcomes, and user webhook delivery outcomes.
+  - Production smoke runner now supports admin status, multi-template modality smokes, and active cancellation smokes without raw cluster/Redis access.
+  - Deploy workflow now builds and signs `ceq-worker` on every deploy and requires a worker digest before committing GitOps image updates.
 - Next-wave local verification:
-  - `apps/api`: `298 passed, 1 skipped`
+  - `apps/api`: `305 passed, 2 skipped`
+  - Targeted API operations/jobs/migration verification: `36 passed, 1 skipped`
+  - Changed API files linted with Ruff: passed
   - `apps/workers`: `119 passed`
   - `apps/studio`: typecheck passed; `75 passed`
+  - `bash -n scripts/production-smoke.sh`: passed
   - Alembic has one head: `20260514_outputs_unique`
   - `kubectl kustomize infrastructure/k8s` rendered successfully
   - Public production smoke passed: `https://api.ceq.lol/health` ok and `https://ceq.lol` HTTP 200
@@ -117,12 +126,32 @@ control and artifact-contract hardening.
    - Deploy workflow now includes `build-worker` in the deploy dependency graph.
    - When worker files change and the worker image builds, the GitOps digest commit can pin `ceq-worker` like API and Studio.
 
+6. **Operations recovery surface**
+   - `GET /v1/operations/status` exposes admin-only readiness signals for callback/webhook secrets, R2/auth configuration, Alembic revision, and Redis queue/dead-letter depth.
+   - `GET /v1/operations/completion-dead-letters` lists exhausted worker completion callbacks from Redis.
+   - `POST /v1/operations/completion-dead-letters/{index}/replay` replays one callback with `JOB_COMPLETION_CALLBACK_TOKEN` and removes the exact Redis item after success.
+   - `DELETE /v1/operations/completion-dead-letters/{index}` discards handled poison payloads.
+
+7. **Acceptance automation**
+   - `scripts/production-smoke.sh` now supports `CEQ_RUN_OPERATIONS_STATUS=true`, `CEQ_TEMPLATE_SMOKES_JSON`, and `CEQ_RUN_CANCEL_SMOKE=true`.
+   - The smoke path remains API-first and does not require raw Redis, pod, or cluster access.
+
+8. **Observability hooks**
+   - `/metrics` now includes CEQ application counters for worker completion reports, persisted outputs, user/API cancellations, dead-letter replay outcomes, and user webhook delivery outcomes.
+
+9. **Worker rollout hardening**
+   - Deploy workflow now builds/signs worker on every deploy, requires `WORKER_DIGEST`, and commits the worker digest alongside API and Studio.
+   - Current source still shows `ceq-worker:latest`; the next deploy commit must replace it with a digest.
+
 ### Local Acceptance
 
-- API suite: `298 passed, 1 skipped`
+- API suite: `305 passed, 2 skipped`
+- Targeted API operations/jobs/migration suite: `36 passed, 1 skipped`
+- Changed API files Ruff lint: passed
 - Worker suite: `119 passed`
 - Studio suite: `75 passed`
 - Studio typecheck: passed
+- Smoke script syntax: passed
 - Alembic heads: one head, `20260514_outputs_unique`
 - Kustomize render: passed
 - Public production smoke: API health `ok`, Studio HTTP `200`
@@ -146,24 +175,29 @@ The items below are what remains after the current stabilization patch. They are
    - Add `JOB_COMPLETION_CALLBACK_TOKEN` to production `ceq-secrets`.
    - The API requires this in production; workers use the same value when POSTing completion reports.
    - Add `JOB_WEBHOOK_SECRET` before enabling user-provided `webhook_url` delivery.
+   - Acceptance can now be checked with admin `GET /v1/operations/status`.
 
 2. **Run and verify migrations**
    - Apply Alembic head through the GitOps migration job.
    - Confirm existing `outputs` rows have non-null `filename`, `file_type`, and `file_size_bytes`.
    - Confirm `uq_outputs_job_storage_uri` exists after `20260514_outputs_unique`.
+   - Acceptance can now use `GET /v1/operations/status` for the visible Alembic revision, with DB-level constraint proof handled by the optional PostgreSQL migration test harness.
 
 3. **Run a real end-to-end GPU smoke**
    - Studio/API job submission -> Redis pending queue -> worker execution -> R2 upload -> API callback -> PostgreSQL output row -> Studio gallery render.
    - Use `scripts/production-smoke.sh` with `CEQ_AUTH_TOKEN` and `CEQ_TEMPLATE_ID` after deployment.
+   - Add `CEQ_RUN_OPERATIONS_STATUS=true` and `CEQ_ADMIN_AUTH_TOKEN` to verify admin readiness gates in the same run.
    - Acceptance: the final job is `completed`, output rows are durable, and gallery URLs open from the browser.
 
 4. **Run active cancellation smoke**
    - Submit a long-running GPU job.
    - Cancel it from Studio/API while it is running.
+   - Use `CEQ_RUN_CANCEL_SMOKE=true` with `CEQ_CANCEL_TEMPLATE_ID`.
    - Acceptance: worker interrupts ComfyUI, API remains `cancelled`, and no late success report overwrites the cancelled state.
 
 5. **Run multi-modal artifact smoke**
    - Exercise image, video, audio, and 3D/model workflows.
+   - Use `CEQ_TEMPLATE_SMOKES_JSON` to run modality template IDs in one smoke pass.
    - Acceptance: each output persists with correct MIME/metadata and renders or opens from Studio gallery.
 
 6. **Verify network policy paths**
@@ -198,24 +232,26 @@ The items below are what remains after the current stabilization patch. They are
 1. **Add callback retry and dead-letter handling** — completed locally for worker callbacks
    - Failed worker -> API callbacks retry with configurable backoff.
    - Exhausted callbacks land in Redis `ceq:jobs:completion:dead` and mark `ceq:job:{job_id}` with callback failure metadata.
+   - Admin operations endpoints now list, replay, and discard those dead letters.
 
 2. **Add DB-level idempotency** — completed locally
    - Added Alembic revision `20260514_outputs_unique`.
    - Migration removes duplicate `(job_id, storage_uri)` rows before adding `uq_outputs_job_storage_uri`.
    - Keep the app-level idempotency already added.
 
-3. **Add production-grade migration tests**
-   - Add PostgreSQL-backed migration tests for legacy output rows.
-   - SQLite model tests are not enough for JSONB/constraint behavior.
+3. **Add production-grade migration tests** — completed locally
+   - Added a deterministic migration operation test for dedupe SQL and constraint creation.
+   - Added an optional PostgreSQL-backed regression harness gated by `CEQ_TEST_POSTGRES_URL`.
 
-4. **Pin worker images by digest** — workflow fixed locally
-   - Deploy job now depends on `build-worker` when it runs and can commit the worker digest.
-   - Current `kustomization.yaml` remains `ceq-worker:latest` until the next successful worker build/deploy commit produces a real digest.
+4. **Pin worker images by digest** — workflow hardened locally
+   - Deploy job now builds/signs `ceq-worker` on every deploy and requires `WORKER_DIGEST`.
+   - Current `kustomization.yaml` remains `ceq-worker:latest` until the next successful deploy commit produces and commits a real digest.
 
 ### P3 — Observability And Product Completion
 
 1. **Add alerts and dashboards**
    - Queue depth, stuck running jobs, callback failures, R2 upload failures, GPU worker health, migration failures.
+   - Prometheus counters now exist for key API runtime paths; dashboards and alert rules still need to be wired.
 
 2. **Finalize monetization path**
    - Replace InterestGate with checkout/tier enforcement once pricing and billing are locked.

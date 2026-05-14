@@ -215,13 +215,35 @@ Returns job details including outputs if complete.
   "id": "uuid",
   "workflow_id": "uuid",
   "status": "completed",
+  "progress": 1.0,
+  "current_node": null,
+  "error": null,
   "input_params": { "prompt": "...", "seed": 42 },
-  "output_urls": [
-    "https://ceq-assets.r2.cloudflarestorage.com/outputs/abc123.png"
+  "outputs": [
+    {
+      "id": "uuid",
+      "filename": "output.png",
+      "storage_uri": "r2://ceq-assets/outputs/job/output.png",
+      "public_url": "https://...",
+      "file_type": "image/png",
+      "file_size_bytes": 524288,
+      "width": 512,
+      "height": 768,
+      "duration_seconds": null,
+      "preview_url": "https://..."
+    }
   ],
-  "execution_time_ms": 45000,
+  "output_metadata": {
+    "worker_callback_reported_at": "2026-05-14T12:00:00+00:00",
+    "webhook_delivery": {"status": "delivered", "attempts": 1}
+  },
   "queued_at": "2025-12-10T12:00:00Z",
-  "completed_at": "2025-12-10T12:02:30Z"
+  "started_at": "2025-12-10T12:00:10Z",
+  "completed_at": "2025-12-10T12:02:30Z",
+  "gpu_seconds": 12.4,
+  "cold_start_ms": 0,
+  "worker_id": "ceq-worker-0",
+  "brand_message": "Materialized. ✨"
 }
 ```
 
@@ -509,6 +531,34 @@ If the job was created with `webhook_url`, terminal reports (`completed`,
 
 Delivery status is stored on the job under
 `output_metadata.webhook_delivery`.
+
+## Admin Operations
+
+All operations endpoints require a Janua user with the `admin` role.
+
+### Runtime Status
+
+```http
+GET /v1/operations/status
+```
+
+Returns production acceptance signals without raw cluster access: environment,
+app version, R2/auth/secret readiness, current Alembic revision when readable,
+and Redis queue/dead-letter lengths.
+
+### Completion Dead Letters
+
+```http
+GET /v1/operations/completion-dead-letters?skip=0&limit=50
+POST /v1/operations/completion-dead-letters/{index}/replay
+DELETE /v1/operations/completion-dead-letters/{index}
+```
+
+Workers push exhausted completion callback payloads to Redis
+`ceq:jobs:completion:dead`. Admins can list them, replay one payload back to its
+stored callback URL with the configured `JOB_COMPLETION_CALLBACK_TOKEN`, or
+discard a payload after manual handling. Successful replay removes the exact
+Redis list item and marks the job Redis hash with `callback_replayed_at`.
 
 ### Get Output
 

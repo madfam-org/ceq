@@ -39,6 +39,7 @@ export interface Job {
   error: string | null;
   input_params: Record<string, unknown>;
   outputs: Output[];
+  output_metadata: Record<string, unknown>;
   queued_at: string;
   started_at: string | null;
   completed_at: string | null;
