@@ -206,7 +206,7 @@ CEQ is deployed to Enclii infrastructure via Cloudflare Tunnels:
 
 See [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md) for detailed deployment guide.
 
-### Deployment Status (2026-04-30)
+### Deployment Status (2026-05-14)
 
 | Component | Status |
 |-----------|--------|
@@ -214,6 +214,7 @@ See [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md) for detaile
 | Cloudflare R2 Bucket | Live (`ceq-assets`; render cache under `render/{template}/{hash}.{ext}`) |
 | Cloudflare Tunnel Routes | Configured |
 | `/v1/render/*` pipeline | Shipped — card renderer + R2 cache + `@ceq/sdk` |
+| Studio auth gate | Implemented locally; deploy pending |
 | K8s Secrets | Applied |
 | Infrastructure | Live on Enclii k3s |
 
@@ -231,7 +232,10 @@ CEQ uses [Janua](https://github.com/madfam-io/janua) for authentication:
 
 Public visitors should land on `https://ceq.lol` for the marketing/demo
 experience. Authenticated product use starts at `https://app.ceq.lol`, which
-redirects unauthenticated users to Janua.
+redirects unauthenticated users to Janua. The Studio also sets httpOnly
+session cookies after OAuth callback so app-host routes can be gated before the
+React shell renders; browser bearer-token storage remains as a compatibility
+bridge for the current direct API client.
 
 ---
 

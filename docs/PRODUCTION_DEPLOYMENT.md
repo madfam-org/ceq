@@ -76,6 +76,18 @@ As of 2026-05-14, live Janua returns `invalid_client: Unknown client_id` for
 CEQ to a new client and update `NEXT_PUBLIC_JANUA_CLIENT_ID` plus
 `JANUA_CLIENT_SECRET` before declaring Studio login healthy.
 
+The Studio route is now server-gated with CEQ session cookies:
+
+- `app.ceq.lol/` redirects unauthenticated browsers to
+  `/login?returnTo=%2F` before rendering the Studio shell.
+- `/login` redirects to Janua using the OIDC endpoints above.
+- `/auth/callback` exchanges the authorization code, sets httpOnly CEQ session
+  cookies, and preserves the existing browser access-token bridge for direct
+  CEQ API calls.
+- `/api/auth/session` bootstraps the client from the httpOnly session cookie
+  and refreshes via Janua when the refresh cookie is present.
+- `/api/auth/logout` clears CEQ session cookies before Janua logout.
+
 | Field | Value |
 |-------|-------|
 | **Name** | CEQ Studio |
@@ -289,6 +301,14 @@ For public edge checks only:
 ```bash
 CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh
 ```
+
+The public-only smoke checks the landing/app host split as well as API health:
+
+- `ceq.lol` serves the public landing/demo surface.
+- `ceq.lol/login` redirects to `app.ceq.lol/login`.
+- `app.ceq.lol/landing` redirects back to `ceq.lol`.
+- `app.ceq.lol/` redirects no-cookie users to `app.ceq.lol/login` unless
+  `CEQ_EXPECT_APP_AUTH_REDIRECT=false` is set for a pre-auth-gate rollout.
 
 ---
 

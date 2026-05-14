@@ -25,6 +25,7 @@ import {
   getLoginUrl,
   getLogoutUrl,
   parseJwt,
+  getSessionAuth,
 } from "@/lib/auth";
 
 interface AuthContextType {
@@ -70,6 +71,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setToken(storedToken);
           setUser(storedUser);
         }
+      } else {
+        const session = await getSessionAuth();
+        if (session) {
+          setToken(session.accessToken);
+          setUser(session.user);
+          setAuth(session.accessToken, null, session.user);
+        }
       }
 
       setIsLoading(false);
@@ -86,10 +94,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Logout - clear local state and redirect to Janua logout
   const logout = useCallback(() => {
+    const logoutUrl = getLogoutUrl();
     clearAuth();
     setUser(null);
     setToken(null);
-    window.location.href = getLogoutUrl();
+    void fetch("/api/auth/logout", {
+      method: "POST",
+      keepalive: true,
+    })
+      .catch(() => undefined)
+      .finally(() => {
+        window.location.href = logoutUrl;
+      });
   }, []);
 
   // Refresh token

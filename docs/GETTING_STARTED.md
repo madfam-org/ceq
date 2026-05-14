@@ -95,7 +95,14 @@ Your workflows run on dedicated GPU instances:
 
 ## Authentication
 
-CEQ uses Janua for authentication. Visit [ceq.lol](https://ceq.lol) for the public demo/landing experience, then log in to Studio at [app.ceq.lol](https://app.ceq.lol) with your MADFAM credentials.
+CEQ uses Janua for authentication. Visit [ceq.lol](https://ceq.lol) for the
+public demo/landing experience, then log in to Studio at
+[app.ceq.lol](https://app.ceq.lol) with your MADFAM credentials. Studio routes
+are protected by CEQ session cookies; unauthenticated visitors are redirected
+to Janua through `/login`.
+
+If Janua returns `invalid_client`, the CEQ OAuth client still needs operator
+registration or rotation with `https://app.ceq.lol/auth/callback`.
 
 ## Need Help?
 

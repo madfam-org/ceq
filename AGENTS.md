@@ -78,7 +78,7 @@ Regenerate or repair these files with
 | app.ceq.lol (studio) | Live route | Janua client registration/rotation required |
 | api.ceq.lol (api) | Live | 2 pods Running |
 | `/v1/render/*` pipeline | Shipped | Card renderer + R2 cache + @ceq/sdk (62fcfe9) |
-| Janua OAuth Client | Registered | `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk` |
+| Janua OAuth Client | Action required | `invalid_client` for `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`; register/rotate |
 | Cloudflare R2 Bucket | Live | `ceq-assets` — render cache under `render/{template}/{hash}.{ext}` |
 | Cloudflare Tunnel | Configured | Routes for ceq.lol, api.ceq.lol, ws.ceq.lol |
 
@@ -178,7 +178,7 @@ pnpm typecheck
 
 ## Authentication Configuration
 
-### Production OAuth Client (Registered 2025-12-10)
+### Production OAuth Client (Registration Required)
 
 | Property | Value |
 |----------|-------|
@@ -187,6 +187,11 @@ pnpm typecheck
 | **Grant Types** | authorization_code, refresh_token |
 | **Scopes** | openid, profile, email |
 | **Redirect URIs** | `https://app.ceq.lol/auth/callback`, `http://localhost:5801/auth/callback` |
+
+Live Janua verification on 2026-05-14 returned
+`invalid_client: Unknown client_id` for the documented client ID. Register that
+client again or rotate CEQ to a new client ID/secret before declaring Studio
+login healthy.
 
 ### Usage in Code
 

@@ -167,6 +167,89 @@ control and artifact-contract hardening.
 - Run video/audio/3D template smoke to prove multi-modal output handling in production.
 - Monitor the next deploys for worker image build duration and digest commit consistency.
 
+## Implementation Wave 2026-05-14 Auth + Conversion Hardening
+
+This wave addresses the landing-vs-Studio split and the missing hard auth
+boundary on `app.ceq.lol`.
+
+### Delivered Locally
+
+1. **Server-gated Studio routes**
+   - `app.ceq.lol` Studio routes now require a CEQ session cookie before the
+     React shell renders.
+   - No-cookie app-host users are redirected to `/login?returnTo=...`.
+   - Public app-host routes remain open for `/login`, `/auth/*`, and
+     `/api/auth/*`.
+
+2. **CEQ session cookie bridge**
+   - OAuth token exchange now sets httpOnly access/refresh cookies.
+   - Token refresh can use the httpOnly refresh cookie when local storage does
+     not contain a refresh token.
+   - Logout clears CEQ cookies before redirecting to Janua logout.
+
+3. **Session bootstrap endpoint**
+   - `GET /api/auth/session` returns the current user and access token from
+     httpOnly cookies.
+   - If the access cookie has expired and a refresh cookie exists, the endpoint
+     refreshes with Janua and rotates cookies.
+   - The current direct browser-to-API bearer-token client remains compatible
+     while CEQ moves toward a fuller server/proxy session model.
+
+4. **Route-level smoke coverage**
+   - Public production smoke now verifies `ceq.lol` remains landing/demo only,
+     `ceq.lol/login` hands off to `app.ceq.lol/login`, `app.ceq.lol/landing`
+     returns to the marketing host, and no-cookie `app.ceq.lol/` is protected.
+
+5. **Regression coverage**
+   - Added tests for JWT/session helper behavior.
+   - Added middleware helper tests for host split, public auth paths, session
+     cookie checks, and `returnTo` login redirects.
+
+### Local Acceptance
+
+- `pnpm --filter @ceq/studio lint`: passed with no warnings.
+- `pnpm --filter @ceq/studio typecheck`: passed.
+- `pnpm --filter @ceq/studio exec vitest run`: `85 passed`.
+- `pnpm --filter @ceq/studio build`: passed; existing
+  `outputFileTracingRoot` Next config warning remains.
+- `bash -n scripts/production-smoke.sh`: passed.
+- Local middleware smoke:
+  - `Host: ceq.lol /` rewrites to `/landing`.
+  - `Host: ceq.lol /login` redirects to `app.ceq.lol/login`.
+  - `Host: app.ceq.lol /landing` redirects to `ceq.lol/`.
+  - `Host: app.ceq.lol /` without CEQ session cookies redirects to
+    `/login?returnTo=%2F`.
+  - `Host: app.ceq.lol /` with a refresh cookie reaches the Studio shell.
+- Current production public smoke remains compatible before this wave is
+  deployed with
+  `CEQ_PUBLIC_ONLY=true CEQ_EXPECT_APP_AUTH_REDIRECT=false scripts/production-smoke.sh`.
+- Live Janua check still returns `invalid_client: Unknown client_id` for
+  `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`.
+
+### Remaining Acceptance
+
+- Register or rotate the Janua OAuth client so
+  `https://app.ceq.lol/auth/callback` is accepted.
+- Deploy the auth-gate wave through GitOps and run
+  `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`.
+- Complete a browser login with real credentials and verify session bootstrap,
+  refresh, logout, Studio API calls, and job WebSocket token use.
+- Follow up with a deeper session migration that proxies CEQ API calls through
+  the Studio server so access tokens no longer need browser storage.
+
+### Deployment Handoff
+
+After this wave is committed and deployed, the public-only production smoke
+should run with the default auth-gate assertion enabled:
+
+```bash
+CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh
+```
+
+If that fails on the `Unauthenticated app gate` check, verify ArgoCD has rolled
+the new Studio image and that `app.ceq.lol` is reaching the current pod. Do not
+disable the assertion after rollout except for a documented rollback.
+
 ## Remaining Roadmap To Full Stability
 
 The items below are what remains after the current stabilization patch. They are ordered by production risk and should be treated as the next execution plan.
@@ -211,7 +294,8 @@ The items below are what remains after the current stabilization patch. They are
    - Confirm Janua knows the active CEQ client ID and `https://app.ceq.lol/auth/callback`.
    - Live check on 2026-05-14 returned `invalid_client: Unknown client_id` for the documented client ID.
    - CEQ Studio now uses Janua OIDC `/api/v1/oauth/*` endpoints and reserves `ceq.lol` for landing/demo traffic.
-   - Acceptance: production Studio login succeeds and websocket auth token can be used for job streams.
+   - CEQ Studio routes are server-gated by CEQ session cookies before the React shell renders.
+   - Acceptance: production Studio login succeeds, `/api/auth/session` bootstraps the browser, and websocket auth token can be used for job streams.
 
 ### P1 — Functional Correctness
 
@@ -390,8 +474,10 @@ The table below records ownership for the completed remediation and the next rec
   - Next: provision production tokens, verify NetworkPolicies, and monitor GitOps digest commits.
 
 - **frontend** (`apps/studio/src`)
-  - Completed gallery URL consumption through `public_url` fallback.
-  - Next: video/audio/3D smoke fixtures and output-type-specific gallery polish.
+  - Completed gallery URL consumption through `public_url` fallback and added
+    session-cookie auth gating for `app.ceq.lol`.
+  - Next: browser E2E auth fixture after Janua client registration, then
+    video/audio/3D smoke fixtures and output-type-specific gallery polish.
 
 ## Risk Register (short and explicit)
 
@@ -421,12 +507,12 @@ The table below records ownership for the completed remediation and the next rec
   - Wired callback env vars, token secret, API callback URL, and R2 bucket alias.
 
 - **apps/studio**
-  - `src/lib/api.ts`, gallery components
-  - Consumes `public_url` where available, preserves `storage_uri` fallback behavior, and renders audio/video/model output types.
+  - `src/lib/api.ts`, gallery components, auth context/routes, middleware
+  - Consumes `public_url` where available, preserves `storage_uri` fallback behavior, renders audio/video/model output types, and gates app-host Studio routes with CEQ session cookies.
 
 - **docs/tests**
-  - `docs/CEQ_STABILITY_ROADMAP.md`, `tests/*`
-  - Documents remediation and keeps tests in sync with contracts.
+  - `docs/CEQ_STABILITY_ROADMAP.md`, `tests/*`, `scripts/production-smoke.sh`
+  - Documents remediation and keeps tests/smokes in sync with runtime contracts.
 
 ## Completed Acceptance Criteria
 

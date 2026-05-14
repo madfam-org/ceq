@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { setSessionCookies } from "@/lib/session-cookies";
 
 const JANUA_URL = process.env.NEXT_PUBLIC_JANUA_URL || "https://auth.madfam.io";
 const CLIENT_ID = process.env.NEXT_PUBLIC_JANUA_CLIENT_ID || "ceq-studio";
@@ -53,12 +54,18 @@ export async function POST(request: NextRequest) {
 
     const tokens = await tokenResponse.json();
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
       expires_in: tokens.expires_in,
       token_type: tokens.token_type || "Bearer",
     });
+    setSessionCookies(response, request, {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      expiresIn: tokens.expires_in,
+    });
+    return response;
   } catch (error) {
     console.error("Token exchange error:", error);
     return NextResponse.json(

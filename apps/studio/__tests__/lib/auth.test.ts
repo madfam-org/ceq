@@ -35,6 +35,7 @@ import {
   isTokenExpired,
   getLoginUrl,
   getLogoutUrl,
+  getSessionAuth,
   AUTH_CONFIG,
 } from '@/lib/auth'
 
@@ -249,5 +250,60 @@ describe('URL Generation', () => {
     expect(url).toContain('/logout')
     expect(url).toContain('client_id=')
     expect(url).toContain('post_logout_redirect_uri=')
+  })
+})
+
+describe('Session bootstrap', () => {
+  const originalFetch = global.fetch
+
+  afterEach(() => {
+    global.fetch = originalFetch
+  })
+
+  function createTestJwt(payload: object): string {
+    const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+    const body = btoa(JSON.stringify(payload))
+    const signature = 'test-signature'
+    return `${header}.${body}.${signature}`
+  }
+
+  it('returns null when the server session is absent', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+    })
+
+    await expect(getSessionAuth()).resolves.toBeNull()
+    expect(global.fetch).toHaveBeenCalledWith('/api/auth/session', {
+      method: 'GET',
+      credentials: 'same-origin',
+      cache: 'no-store',
+    })
+  })
+
+  it('returns the server session user and access token', async () => {
+    const accessToken = createTestJwt({
+      sub: 'user-123',
+      email: 'test@example.com',
+    })
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        access_token: accessToken,
+        user: {
+          id: 'user-123',
+          email: 'test@example.com',
+          name: 'test',
+        },
+      }),
+    })
+
+    await expect(getSessionAuth()).resolves.toEqual({
+      accessToken,
+      user: {
+        id: 'user-123',
+        email: 'test@example.com',
+        name: 'test',
+      },
+    })
   })
 })

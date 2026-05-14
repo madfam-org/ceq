@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import {
+  ACCESS_TOKEN_COOKIE,
+  REFRESH_TOKEN_COOKIE,
+} from "@/lib/session-cookies";
+import { isJwtExpired } from "@/lib/jwt";
 
 const APP_HOSTNAMES = new Set([
   "app.ceq.lol",
@@ -10,15 +15,47 @@ const APP_HOSTNAMES = new Set([
   "localhost:5801",
 ]);
 
+export function isAppHost(host: string): boolean {
+  return APP_HOSTNAMES.has(host) || host.startsWith("app.");
+}
+
+export function isPublicAppPath(pathname: string): boolean {
+  return (
+    pathname === "/login" ||
+    pathname.startsWith("/login/") ||
+    pathname === "/auth" ||
+    pathname.startsWith("/auth/") ||
+    pathname === "/api/auth" ||
+    pathname.startsWith("/api/auth/")
+  );
+}
+
+export function hasUsableSessionCookie(request: NextRequest): boolean {
+  const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
+  const refreshToken = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
+
+  if (refreshToken) return true;
+  return Boolean(accessToken && !isJwtExpired(accessToken));
+}
+
+export function buildLoginRedirect(request: NextRequest): URL {
+  const url = request.nextUrl.clone();
+  const returnTo = `${url.pathname}${url.search}`;
+  url.pathname = "/login";
+  url.search = "";
+  url.searchParams.set("returnTo", returnTo || "/");
+  return url;
+}
+
 export function middleware(request: NextRequest) {
   const host = request.headers.get("host") ?? "";
   const { pathname, search } = request.nextUrl;
 
-  const isAppHost = APP_HOSTNAMES.has(host) || host.startsWith("app.");
+  const appHost = isAppHost(host);
   const protocol =
     request.headers.get("x-forwarded-proto") === "http" ? "http" : "https";
 
-  if (!isAppHost) {
+  if (!appHost) {
     // Marketing host (ceq.lol). Root path rewrites server-side to the
     // dedicated /landing route. The previous design used a CLIENT-side
     // window.location check inside a "use client" page; Cloudflare cached
@@ -46,8 +83,10 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(`${protocol}://ceq.lol/`, 307);
   }
 
-  // App host (app.ceq.lol). Studio renders at `/`; client-side auth gates
-  // redirect unauthenticated users to Janua because tokens live in localStorage.
+  if (!isPublicAppPath(pathname) && !hasUsableSessionCookie(request)) {
+    return NextResponse.redirect(buildLoginRedirect(request), 307);
+  }
+
   return NextResponse.next();
 }
 

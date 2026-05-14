@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/command";
 import {
   Workflow,
-  Image,
+  Image as ImageIcon,
   Video,
   Box,
   Settings,
@@ -120,7 +120,7 @@ export function CommandPalette() {
           <CommandItem
             onSelect={() => runCommand(() => router.push("/gallery"))}
           >
-            <Image className="mr-2 h-4 w-4" />
+            <ImageIcon className="mr-2 h-4 w-4" />
             <span>Gallery</span>
             <span className="ml-auto text-xs text-muted-foreground">⌘4</span>
           </CommandItem>
@@ -137,7 +137,7 @@ export function CommandPalette() {
           <CommandItem
             onSelect={() => runCommand(() => router.push("/templates/social"))}
           >
-            <Image className="mr-2 h-4 w-4" />
+            <ImageIcon className="mr-2 h-4 w-4" />
             <span>Social Media</span>
           </CommandItem>
           <CommandItem

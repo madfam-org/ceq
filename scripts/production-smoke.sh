@@ -15,6 +15,7 @@ set -euo pipefail
 
 API_URL="${CEQ_API_URL:-https://api.ceq.lol}"
 STUDIO_URL="${CEQ_STUDIO_URL:-https://ceq.lol}"
+APP_URL="${CEQ_APP_URL:-https://app.ceq.lol}"
 AUTH_TOKEN="${CEQ_AUTH_TOKEN:-}"
 ADMIN_AUTH_TOKEN="${CEQ_ADMIN_AUTH_TOKEN:-$AUTH_TOKEN}"
 TEMPLATE_ID="${CEQ_TEMPLATE_ID:-}"
@@ -27,6 +28,7 @@ EXPECT_OUTPUTS="${CEQ_EXPECT_OUTPUTS:-true}"
 RUN_OPERATIONS_STATUS="${CEQ_RUN_OPERATIONS_STATUS:-false}"
 REQUIRE_OPERATIONS_STATUS="${CEQ_REQUIRE_OPERATIONS_STATUS:-false}"
 RUN_CANCEL_SMOKE="${CEQ_RUN_CANCEL_SMOKE:-false}"
+EXPECT_APP_AUTH_REDIRECT="${CEQ_EXPECT_APP_AUTH_REDIRECT:-true}"
 CANCEL_TEMPLATE_ID="${CEQ_CANCEL_TEMPLATE_ID:-$TEMPLATE_ID}"
 CANCEL_TEMPLATE_PARAMS_JSON="${CEQ_CANCEL_TEMPLATE_PARAMS_JSON:-$TEMPLATE_PARAMS_JSON}"
 CANCEL_AFTER_SECONDS="${CEQ_CANCEL_AFTER_SECONDS:-10}"
@@ -67,6 +69,33 @@ curl_json() {
 
 http_status() {
   curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$1"
+}
+
+redirect_status_and_target() {
+  curl --silent --show-error --output /dev/null --write-out '%{http_code} %{redirect_url}' "$1"
+}
+
+assert_redirect_target() {
+  local name="$1"
+  local url="$2"
+  local expected_prefix="$3"
+  local result
+  local status
+  local target
+
+  result="$(redirect_status_and_target "$url")"
+  read -r status target <<<"$result"
+
+  case "$status" in
+    301|302|307|308)
+      ;;
+    *)
+      fail "${name} expected redirect but returned HTTP ${status}"
+      ;;
+  esac
+
+  [[ "$target" == "$expected_prefix"* ]] || fail "${name} redirected to ${target}, expected ${expected_prefix}..."
+  log "${name} redirect ok: ${status} -> ${target}"
 }
 
 assert_json() {
@@ -289,6 +318,17 @@ case "$studio_status" in
     fail "Studio returned HTTP ${studio_status}"
     ;;
 esac
+
+studio_base="${STUDIO_URL%/}"
+app_base="${APP_URL%/}"
+
+log "Checking landing/app host split"
+assert_redirect_target "Marketing login handoff" "${studio_base}/login" "${app_base}/login"
+assert_redirect_target "App landing handoff" "${app_base}/landing" "${studio_base}/"
+
+if [[ "$EXPECT_APP_AUTH_REDIRECT" == "true" ]]; then
+  assert_redirect_target "Unauthenticated app gate" "${app_base}/" "${app_base}/login"
+fi
 
 if [[ "$PUBLIC_ONLY" == "true" ]]; then
   log "Public-only smoke complete."

@@ -5,6 +5,8 @@
  * for the MADFAM ecosystem SSO.
  */
 
+import { isJwtExpired, parseJwtUser } from "@/lib/jwt";
+
 // Auth configuration from environment
 export const AUTH_CONFIG = {
   // Janua OIDC endpoints
@@ -102,42 +104,14 @@ export function clearAuth(): void {
  * Parse JWT to get user info (without verification - that's done by API)
  */
 export function parseJwt(token: string): User | null {
-  try {
-    const base64Url = token.split(".")[1];
-    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-    const payload = JSON.parse(
-      decodeURIComponent(
-        atob(base64)
-          .split("")
-          .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-          .join("")
-      )
-    );
-
-    return {
-      id: payload.sub,
-      email: payload.email,
-      name: payload.name || payload.email?.split("@")[0],
-      avatar: payload.avatar,
-    };
-  } catch {
-    return null;
-  }
+  return parseJwtUser(token);
 }
 
 /**
  * Check if token is expired
  */
 export function isTokenExpired(token: string): boolean {
-  try {
-    const base64Url = token.split(".")[1];
-    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-    const payload = JSON.parse(atob(base64));
-    const exp = payload.exp * 1000; // Convert to milliseconds
-    return Date.now() >= exp - 60000; // Expired or expiring in 1 minute
-  } catch {
-    return true;
-  }
+  return isJwtExpired(token);
 }
 
 /**
@@ -211,13 +185,14 @@ export async function exchangeCodeForTokens(
  */
 export async function refreshAccessToken(): Promise<string | null> {
   const refreshToken = getRefreshToken();
-  if (!refreshToken) return null;
 
   try {
     const response = await fetch("/api/auth/refresh", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      body: refreshToken
+        ? JSON.stringify({ refresh_token: refreshToken })
+        : undefined,
     });
 
     if (!response.ok) {
@@ -235,6 +210,36 @@ export async function refreshAccessToken(): Promise<string | null> {
     return data.access_token;
   } catch {
     clearAuth();
+    return null;
+  }
+}
+
+/**
+ * Bootstrap auth from the httpOnly Studio session cookie.
+ */
+export async function getSessionAuth(): Promise<{
+  accessToken: string;
+  user: User;
+} | null> {
+  try {
+    const response = await fetch("/api/auth/session", {
+      method: "GET",
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const user = data.user || parseJwt(data.access_token);
+
+    if (!data.access_token || !user) return null;
+
+    return {
+      accessToken: data.access_token,
+      user,
+    };
+  } catch {
     return null;
   }
 }
