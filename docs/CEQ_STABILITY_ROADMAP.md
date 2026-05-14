@@ -84,6 +84,7 @@ Run CEQ as a deterministic, observable system:
   - Prometheus counters added for worker completion reports, persisted outputs, cancellations, dead-letter replay outcomes, and user webhook delivery outcomes.
   - Production smoke runner now supports admin status, multi-template modality smokes, and active cancellation smokes without raw cluster/Redis access.
   - Deploy workflow now builds and signs `ceq-worker` on every deploy and requires a worker digest before committing GitOps image updates.
+  - GitOps deploy run `25850545748` completed successfully and commit `44f2e0b` pinned API, Studio, and Worker by digest.
 - Next-wave local verification:
   - `apps/api`: `305 passed, 2 skipped`
   - Targeted API operations/jobs/migration verification: `36 passed, 1 skipped`
@@ -124,7 +125,7 @@ control and artifact-contract hardening.
 
 5. **GitOps reproducibility**
    - Deploy workflow now includes `build-worker` in the deploy dependency graph.
-   - When worker files change and the worker image builds, the GitOps digest commit can pin `ceq-worker` like API and Studio.
+   - GitOps deploy commit `44f2e0b` now pins `ceq-worker` by digest alongside API and Studio.
 
 6. **Operations recovery surface**
    - `GET /v1/operations/status` exposes admin-only readiness signals for callback/webhook secrets, R2/auth configuration, Alembic revision, and Redis queue/dead-letter depth.
@@ -141,7 +142,8 @@ control and artifact-contract hardening.
 
 9. **Worker rollout hardening**
    - Deploy workflow now builds/signs worker on every deploy, requires `WORKER_DIGEST`, and commits the worker digest alongside API and Studio.
-   - Current source still shows `ceq-worker:latest`; the next deploy commit must replace it with a digest.
+   - Deploy run `25850545748` confirmed the first gated worker build and pushed digest commit `44f2e0b`.
+   - The first cold worker build took about 26 minutes; CI/CD optimization remains a follow-up stability target.
 
 ### Local Acceptance
 
@@ -163,7 +165,7 @@ control and artifact-contract hardening.
 - Run authenticated end-to-end GPU smoke through Studio/API -> Redis -> worker -> R2 -> callback -> PostgreSQL -> gallery.
 - Run active-cancel smoke on a real running GPU job.
 - Run video/audio/3D template smoke to prove multi-modal output handling in production.
-- Confirm the next worker build produces and commits a pinned worker digest.
+- Monitor the next deploys for worker image build duration and digest commit consistency.
 
 ## Remaining Roadmap To Full Stability
 
@@ -243,9 +245,10 @@ The items below are what remains after the current stabilization patch. They are
    - Added a deterministic migration operation test for dedupe SQL and constraint creation.
    - Added an optional PostgreSQL-backed regression harness gated by `CEQ_TEST_POSTGRES_URL`.
 
-4. **Pin worker images by digest** — workflow hardened locally
+4. **Pin worker images by digest** — completed in GitOps
    - Deploy job now builds/signs `ceq-worker` on every deploy and requires `WORKER_DIGEST`.
-   - Current `kustomization.yaml` remains `ceq-worker:latest` until the next successful deploy commit produces and commits a real digest.
+   - Deploy commit `44f2e0b` pins `ceq-worker` by digest alongside API and Studio.
+   - Next: reduce cold worker image build time with a cached base image or digest reuse for unchanged worker sources.
 
 ### P3 — Observability And Product Completion
 
@@ -382,7 +385,7 @@ The table below records ownership for the completed remediation and the next rec
 - **infra** (`infrastructure/k8s/*`)
   - `worker-deployment.yaml`, `secrets.yaml`
   - Completed callback token wiring and R2 env alias wiring.
-  - Next: provision production tokens, verify NetworkPolicies, and confirm worker digest pin after the next worker build.
+  - Next: provision production tokens, verify NetworkPolicies, and monitor GitOps digest commits.
 
 - **frontend** (`apps/studio/src`)
   - Completed gallery URL consumption through `public_url` fallback.

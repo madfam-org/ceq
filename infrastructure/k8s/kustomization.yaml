@@ -55,38 +55,14 @@ resources:
 # digest. ArgoCD's `ceq-services` application reconciles the change
 # within ~3 min.
 #
-# 2026-05-03 — pinned api + studio per RFC 0017 + the 2026-05-03
-# ecosystem-health audit (Kyverno fail-closed mutable-tag policy).
+# 2026-05-14 — API, Studio, and Worker are pinned by digest through the
+# CEQ Deploy GitOps workflow. Run 25850545748 produced deploy commit
+# 44f2e0b, the first deploy commit after worker digest gating, and
+# confirmed dash-form GHCR images exist for all three services.
 #
-# Why `newName` redirects to slash-form: the deploy.yaml workflow as
-# refactored at acecfd5 builds + pushes to `ceq-{api,studio,worker}`
-# (dash-form), but every CEQ Deploy run since acecfd5 has failed at the
-# digest-resolve step — those dash-form images have never been
-# successfully pushed to GHCR. Meanwhile, the running pods (per the
-# 2026-05-03 audit) pull `ghcr.io/madfam-org/ceq/{api,studio}:latest`
-# (slash-form), the legacy image path that was successfully built up
-# through 2026-04-28T02:33Z (pre-GitOps-refactor commit c9da2ce, run
-# 25030756141). Pinning `name` to dash-form (what the Deployment
-# manifests reference) and `newName` to slash-form (what actually
-# exists on GHCR) plus the digest redirects to the real, present-on-
-# registry image and removes the `:latest` violation in one step.
-#
-# The CEQ Deploy workflow itself is broken (dash-form push failure)
-# and is tracked separately (see ecosystem-health audit § 2 / RFC 0017
-# CI burn-down). Once the workflow is fixed and dash-form images
-# actually exist, swap `newName` back to `ceq-{api,studio}` (or just
-# delete the `newName` line — name and newName matching is the
-# kustomize default).
-#
-# `ceq-worker` remains `:latest` in this source snapshot because the
-# f422b54b deploy commit did not produce a worker digest even though worker
-# files changed. `.github/workflows/deploy.yaml` now builds/signs worker on
-# every deploy and requires WORKER_DIGEST before committing image updates, so
-# the next deploy commit must pin worker the same way API and Studio are pinned.
-#
-# Digest provenance: `pushing manifest for ghcr.io/madfam-org/<img>:latest@sha256:…`
-# line in run 25030756141, jobs 73311672398 (api) and 73311672389 (studio),
-# 2026-04-28T02:40-46Z, commit c9da2ce.
+# Keep `name` and `newName` in dash-form. Deployment manifests reference
+# `ghcr.io/madfam-org/ceq-{api,studio,worker}:latest`; kustomize rewrites
+# those mutable references to the immutable digest entries below.
 images:
 - digest: sha256:e8ff78211a12f02cd0dddbcf17d2dfe302f79e336e8942f347f485fe55b0d8a2
   name: ghcr.io/madfam-org/ceq-api

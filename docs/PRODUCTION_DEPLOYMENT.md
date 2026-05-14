@@ -233,7 +233,7 @@ Additional 2026-05-14 wave gates:
 4. Replay or discard any exhausted callback payloads through `/v1/operations/completion-dead-letters/{index}`.
 5. Cancel one actively running GPU job and verify the API remains `cancelled`.
 6. Run at least one image, video, audio, and 3D/model template and confirm Studio gallery rendering/opening behavior.
-7. Confirm the next deploy commit pins `ceq-worker` by digest.
+7. Confirm the active deploy commit pins API, Studio, and Worker by digest.
 
 The API-level smoke runner exercises the same durable completion path without
 raw cluster access:
