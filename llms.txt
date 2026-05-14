@@ -22,4 +22,7 @@ before raw infrastructure tools. Direct `kubectl`, `helm`, SSH, provider CLIs,
 - `docs/API.md` — endpoint contracts, including worker completion callbacks.
 - `scripts/production-smoke.sh` — public/API-level production smoke runner for the main job completion path.
 - User job completion webhooks are signed with `JOB_WEBHOOK_SECRET` and recorded in `job.output_metadata.webhook_delivery`.
+- Active cancellation uses Redis `ceq:job:{id}:control` plus `cancel_requested=true`; workers interrupt ComfyUI and report durable `cancelled`.
+- Exhausted worker completion callbacks are dead-lettered to `ceq:jobs:completion:dead`.
+- Output rows are guarded by `uq_outputs_job_storage_uri` on `(job_id, storage_uri)`.
 - `apps/api/README.md` and `apps/workers/README.md` — local env and service-specific runtime details.

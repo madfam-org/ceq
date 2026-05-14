@@ -9,6 +9,8 @@ CEQ Workers execute ComfyUI workflows on GPU instances:
 - Execute workflows via `comfy_runner`
 - Upload outputs to Cloudflare R2
 - Report status back to CEQ API
+- Listen for active cancellation on `ceq:job:{id}:control`
+- Retry worker completion callbacks and dead-letter exhausted payloads
 
 **Ports:** 5810-5819
 **GPU Providers:** Vast.ai (current), Furnace (future)
@@ -53,6 +55,8 @@ export REDIS_URL="redis://localhost:6379/14"
 # Required for durable completion persistence
 export API_URL="http://localhost:5800"
 export API_JOB_COMPLETION_TOKEN="dev-shared-worker-callback-token"
+export API_JOB_COMPLETION_MAX_ATTEMPTS=3
+export JOB_COMPLETION_DEAD_LETTER_KEY="ceq:jobs:completion:dead"
 
 # Optional: R2 storage for outputs
 export R2_ENDPOINT="https://12f1353f7819865c56161ce00297668e.r2.cloudflarestorage.com"
@@ -90,6 +94,20 @@ python -m ceq_worker.orchestrator
 | `orchestrator.py` | Auto-scaling worker manager |
 | `providers/` | GPU provider abstraction (Vast.ai, Furnace) |
 | `storage.py` | R2/S3 output storage |
+
+## Output Collection
+
+Workers collect ComfyUI output descriptors from image, video, audio, model, and
+generic file lists. Uploaded descriptors include MIME type, size, browser URL,
+preview URL for images, image dimensions, WAV duration, best-effort MP4/MOV
+duration, and GLB header metadata when available.
+
+## Active Cancellation
+
+The API writes `cancel_requested=true` to `ceq:job:{id}` and publishes
+`{"action":"cancel"}` on `ceq:job:{id}:control`. While processing a job, the
+worker watches both surfaces, cancels the handler task, interrupts ComfyUI, and
+reports `cancelled` through the durable completion callback.
 
 ## GPU Provider Abstraction
 
@@ -151,6 +169,9 @@ docker build -f Dockerfile.slim -t ceq-worker:slim .
 | `API_JOB_COMPLETION_TOKEN` | | Shared token mapped from API `JOB_COMPLETION_CALLBACK_TOKEN` |
 | `API_JOB_COMPLETION_PATH` | `/v1/jobs/{job_id}/outputs/report` | API callback path |
 | `API_JOB_COMPLETION_TIMEOUT_SECONDS` | `5.0` | Callback HTTP timeout |
+| `API_JOB_COMPLETION_MAX_ATTEMPTS` | `3` | Retry attempts for retryable worker completion callback failures |
+| `API_JOB_COMPLETION_RETRY_BACKOFF_SECONDS` | `1.0` | Linear retry backoff base for completion callbacks |
+| `JOB_COMPLETION_DEAD_LETTER_KEY` | `ceq:jobs:completion:dead` | Redis list for exhausted completion callback payloads |
 | `GPU_PROVIDER` | `vast` | Provider: vast, furnace |
 | `VAST_API_KEY` | | Vast.ai API key |
 | `VAST_MAX_PRICE` | `1.0` | Max $/hour per instance |

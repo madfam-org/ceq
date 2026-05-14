@@ -123,6 +123,7 @@ R2_BUCKET=ceq-assets
 JANUA_URL=https://api.janua.dev
 JOB_COMPLETION_CALLBACK_TOKEN=dev-shared-worker-callback-token
 JOB_WEBHOOK_SECRET=dev-shared-user-webhook-secret
+JOB_WEBHOOK_MAX_ATTEMPTS=3
 ```
 
 #### Studio (`apps/studio/.env.local`)
@@ -138,6 +139,9 @@ NEXT_PUBLIC_JANUA_CLIENT_ID=jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk
 REDIS_URL=redis://:password@host:6379/14
 API_URL=http://localhost:5800
 API_JOB_COMPLETION_TOKEN=dev-shared-worker-callback-token
+API_JOB_COMPLETION_MAX_ATTEMPTS=3
+API_JOB_COMPLETION_RETRY_BACKOFF_SECONDS=1
+JOB_COMPLETION_DEAD_LETTER_KEY=ceq:jobs:completion:dead
 R2_ENDPOINT=https://xxx.r2.cloudflarestorage.com
 R2_ACCESS_KEY=your-access-key
 R2_SECRET_KEY=your-secret-key

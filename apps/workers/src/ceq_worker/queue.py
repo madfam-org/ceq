@@ -5,6 +5,7 @@ Listens for jobs from Redis and dispatches to the handler.
 """
 
 import asyncio
+import contextlib
 import json
 import signal
 from typing import Any
@@ -86,8 +87,10 @@ class QueueConsumer:
             # Update job status to running
             await self._update_status(job_id, "running")
 
-            # Execute the handler
-            result = await handler(job)
+            if await self._is_cancel_requested(job_id):
+                result = self._cancelled_result()
+            else:
+                result = await self._run_handler_with_cancel(job_id, job)
 
             # Store result
             await self._store_result(job_id, result)
@@ -97,11 +100,15 @@ class QueueConsumer:
                 print(f"⚠️ Job {job_id} completion callback was not persisted")
 
             # Update status based on result
-            if result.get("success"):
-                await self._update_status(job_id, "completed")
+            final_status = self._status_from_result(result)
+            if final_status == "completed":
+                await self._update_status(job_id, final_status)
                 print(f"✅ Job {job_id} completed successfully")
+            elif final_status == "cancelled":
+                await self._update_status(job_id, final_status, result.get("error"))
+                print(f"⏹️ Job {job_id} cancelled")
             else:
-                await self._update_status(job_id, "failed", result.get("error"))
+                await self._update_status(job_id, final_status, result.get("error"))
                 print(f"❌ Job {job_id} failed: {result.get('error')}")
 
             # Remove from processing queue
@@ -163,70 +170,251 @@ class QueueConsumer:
             json.dumps({"job_id": job_id, **result}),
         )
 
+    async def _run_handler_with_cancel(
+        self,
+        job_id: str,
+        job: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Run a job while listening for active cancellation."""
+        handler_task = asyncio.create_task(handler(job))
+        cancel_task = asyncio.create_task(self._watch_cancel(job_id))
+
+        try:
+            done, _pending = await asyncio.wait(
+                {handler_task, cancel_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            if cancel_task in done and cancel_task.result():
+                handler_task.cancel()
+                try:
+                    return await handler_task
+                except asyncio.CancelledError:
+                    return self._cancelled_result()
+
+            return await handler_task
+        finally:
+            if not cancel_task.done():
+                cancel_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await cancel_task
+
+    async def _watch_cancel(self, job_id: str) -> bool:
+        """Watch the per-job control channel and Redis status for cancellation."""
+        if self._redis is None:
+            return False
+
+        channel = f"ceq:job:{job_id}:control"
+        pubsub = self._redis.pubsub()
+
+        try:
+            await pubsub.subscribe(channel)
+            while self._running and self._current_job_id == job_id:
+                if await self._is_cancel_requested(job_id):
+                    return True
+
+                message = await pubsub.get_message(
+                    ignore_subscribe_messages=True,
+                    timeout=1.0,
+                )
+                if self._is_cancel_message(message):
+                    return True
+
+            return False
+        finally:
+            with contextlib.suppress(Exception):
+                await pubsub.unsubscribe(channel)
+            with contextlib.suppress(Exception):
+                await pubsub.close()
+
+    async def _is_cancel_requested(self, job_id: str) -> bool:
+        """Return True when API-side Redis state has requested cancellation."""
+        if self._redis is None:
+            return False
+
+        try:
+            job_state = await self._redis.hgetall(f"ceq:job:{job_id}")
+        except Exception as exc:  # noqa: BLE001 - cancellation polling is best effort
+            print(f"   Warning: Failed to check cancellation state: {exc}")
+            return False
+
+        if not isinstance(job_state, dict):
+            return False
+
+        return (
+            job_state.get("status") == "cancelled"
+            or str(job_state.get("cancel_requested", "")).lower() == "true"
+        )
+
+    def _is_cancel_message(self, message: Any) -> bool:
+        """Return True when a Redis pub/sub message is a cancel command."""
+        if not isinstance(message, dict) or message.get("type") != "message":
+            return False
+
+        try:
+            payload = json.loads(message.get("data") or "{}")
+        except (TypeError, json.JSONDecodeError):
+            return False
+
+        return payload.get("action") == "cancel"
+
+    def _cancelled_result(self) -> dict[str, Any]:
+        """Build the standard cancelled handler result."""
+        return {
+            "success": False,
+            "cancelled": True,
+            "error": "Job cancelled",
+            "outputs": [],
+            "metadata": {"cancelled": True},
+            "execution_time": 0.0,
+        }
+
+    def _status_from_result(self, result: dict[str, Any]) -> str:
+        """Map handler result shape to the durable job status."""
+        if result.get("cancelled"):
+            return "cancelled"
+        if result.get("success"):
+            return "completed"
+        return "failed"
+
     async def _report_completion(self, job_id: str, result: dict[str, Any]) -> bool:
         """Post final job status and output descriptors back to ceq-api."""
         token = settings.api_job_completion_token
         if not token:
             return False
 
-        status = "completed" if result.get("success") else "failed"
+        status = self._status_from_result(result)
         path = settings.api_job_completion_path.format(job_id=job_id)
         url = f"{settings.api_url.rstrip('/')}/{path.lstrip('/')}"
         payload = {
             "status": status,
-            "progress": 1.0 if result.get("success") else 0.0,
+            "progress": 1.0 if status == "completed" else 0.0,
             "error": result.get("error"),
-            "outputs": [
-                {
-                    "filename": output["filename"],
-                    "storage_uri": output["storage_uri"],
-                    "file_type": output["file_type"],
-                    "file_size_bytes": output["file_size_bytes"],
-                    "width": output.get("width"),
-                    "height": output.get("height"),
-                    "duration_seconds": output.get("duration_seconds"),
-                    "preview_url": output.get("preview_url"),
-                    "metadata": {
-                        key: value
-                        for key, value in output.items()
-                        if key not in {
-                            "filename",
-                            "storage_uri",
-                            "file_type",
-                            "file_size_bytes",
-                            "width",
-                            "height",
-                            "duration_seconds",
-                            "preview_url",
-                        }
-                    },
-                }
-                for output in result.get("outputs", [])
-            ],
-            "metadata": result.get("metadata", {}),
+            "outputs": [self._completion_output_payload(output) for output in result.get("outputs", [])],
+            "metadata": {
+                **(result.get("metadata", {}) if isinstance(result.get("metadata"), dict) else {}),
+                "cancelled": bool(result.get("cancelled")),
+            },
             "worker_id": settings.worker_id,
             "gpu_seconds": result.get("execution_time", 0.0),
         }
+
+        max_attempts = max(1, settings.api_job_completion_max_attempts)
+        retry_backoff = max(0.0, settings.api_job_completion_retry_backoff_seconds)
+        last_error = ""
+        last_status_code: int | None = None
+        attempts_made = 0
 
         try:
             async with httpx.AsyncClient(
                 timeout=settings.api_job_completion_timeout_seconds,
             ) as client:
-                response = await client.post(
-                    url,
-                    headers={"X-CEQ-Worker-Token": token},
-                    json=payload,
-                )
-                response.raise_for_status()
-            return True
+                for attempt in range(1, max_attempts + 1):
+                    attempts_made = attempt
+                    try:
+                        response = await client.post(
+                            url,
+                            headers={"X-CEQ-Worker-Token": token},
+                            json=payload,
+                        )
+                        last_status_code = int(getattr(response, "status_code", 200))
+                        if 200 <= last_status_code < 300:
+                            return True
+
+                        last_error = f"HTTP {last_status_code}"
+                        if not self._should_retry_completion_status(last_status_code):
+                            break
+                    except httpx.HTTPError as exc:
+                        last_error = str(exc)
+                        last_status_code = None
+
+                    if attempt < max_attempts and retry_backoff > 0:
+                        await asyncio.sleep(retry_backoff * attempt)
         except httpx.HTTPError as exc:
-            if self._redis is not None:
-                await self._redis.hset(
-                    f"ceq:job:{job_id}",
-                    mapping={"callback_error": str(exc)},
-                )
-            print(f"⚠️ Completion callback failed for {job_id}: {exc}")
-            return False
+            last_error = str(exc)
+
+        await self._record_completion_dead_letter(
+            job_id=job_id,
+            url=url,
+            payload=payload,
+            error=last_error or "Completion callback failed",
+            status_code=last_status_code,
+            attempts=attempts_made or max_attempts,
+        )
+        print(f"⚠️ Completion callback failed for {job_id}: {last_error}")
+        return False
+
+    def _completion_output_payload(self, output: dict[str, Any]) -> dict[str, Any]:
+        """Normalize one worker output descriptor for the API callback."""
+        metadata = output.get("metadata") if isinstance(output.get("metadata"), dict) else {}
+        metadata = dict(metadata)
+        for key, value in output.items():
+            if key in {
+                "filename",
+                "storage_uri",
+                "file_type",
+                "file_size_bytes",
+                "width",
+                "height",
+                "duration_seconds",
+                "preview_url",
+                "metadata",
+            }:
+                continue
+            if value is not None:
+                metadata[key] = value
+
+        return {
+            "filename": output["filename"],
+            "storage_uri": output["storage_uri"],
+            "file_type": output["file_type"],
+            "file_size_bytes": output["file_size_bytes"],
+            "width": output.get("width"),
+            "height": output.get("height"),
+            "duration_seconds": output.get("duration_seconds"),
+            "preview_url": output.get("preview_url"),
+            "metadata": metadata,
+        }
+
+    def _should_retry_completion_status(self, status_code: int) -> bool:
+        """Retry transient callback responses only."""
+        return status_code >= 500 or status_code in {408, 409, 425, 429}
+
+    async def _record_completion_dead_letter(
+        self,
+        *,
+        job_id: str,
+        url: str,
+        payload: dict[str, Any],
+        error: str,
+        status_code: int | None,
+        attempts: int,
+    ) -> None:
+        """Persist an exhausted completion callback for operator inspection."""
+        if self._redis is None:
+            return
+
+        dead_letter = {
+            "job_id": job_id,
+            "worker_id": settings.worker_id,
+            "url": url,
+            "payload": payload,
+            "error": error,
+            "status_code": status_code,
+            "attempts": attempts,
+        }
+        await self._redis.hset(
+            f"ceq:job:{job_id}",
+            mapping={
+                "callback_error": error,
+                "callback_attempts": str(attempts),
+                "callback_dead_lettered": "true",
+            },
+        )
+        await self._redis.lpush(
+            settings.job_completion_dead_letter_key,
+            json.dumps(dead_letter),
+        )
 
     async def stop(self) -> None:
         """Stop the consumer gracefully."""

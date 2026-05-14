@@ -139,6 +139,15 @@ Clients should prefer the `@ceq/sdk` package (`packages/sdk`) over raw HTTP.
 | `JOB_WEBHOOK_MAX_ATTEMPTS` | No | `3` | Webhook delivery attempts for retryable failures |
 | `JOB_WEBHOOK_RETRY_BACKOFF_SECONDS` | No | `1.0` | Linear retry backoff base in seconds |
 
+Worker completion callback notes:
+
+- Workers retry retryable `POST /v1/jobs/{job_id}/outputs/report` failures and
+  write exhausted payloads to Redis `ceq:jobs:completion:dead`.
+- `DELETE /v1/jobs/{job_id}` records `cancel_requested=true` in Redis and
+  publishes a per-job cancel control message for active workers.
+- Late non-cancelled worker reports cannot overwrite an already-cancelled job.
+- `outputs` has a DB-level uniqueness guard on `(job_id, storage_uri)`.
+
 ### Example .env
 
 ```bash

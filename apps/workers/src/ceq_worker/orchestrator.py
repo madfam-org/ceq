@@ -245,6 +245,9 @@ class Orchestrator:
                             "API_URL": settings.api_url,
                             "API_JOB_COMPLETION_PATH": settings.api_job_completion_path,
                             "API_JOB_COMPLETION_TOKEN": settings.api_job_completion_token,
+                            "API_JOB_COMPLETION_MAX_ATTEMPTS": str(settings.api_job_completion_max_attempts),
+                            "API_JOB_COMPLETION_RETRY_BACKOFF_SECONDS": str(settings.api_job_completion_retry_backoff_seconds),
+                            "JOB_COMPLETION_DEAD_LETTER_KEY": settings.job_completion_dead_letter_key,
                         },
                         labels={
                             "app": "ceq-worker",

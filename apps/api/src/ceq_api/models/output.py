@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from sqlalchemy import BigInteger, Float, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ceq_api.models.base import JSONB, Base, GUIDString, TimestampMixin
@@ -16,6 +16,9 @@ class Output(Base, TimestampMixin):
     """
 
     __tablename__ = "outputs"
+    __table_args__ = (
+        UniqueConstraint("job_id", "storage_uri", name="uq_outputs_job_storage_uri"),
+    )
 
     # References
     job_id: Mapped[UUID] = mapped_column(

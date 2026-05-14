@@ -1,8 +1,7 @@
 """Tests for ComfyUI executor."""
 
-import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -281,6 +280,19 @@ class TestComfyUIExecutorExecution:
         assert len(progress_calls) > 0
         assert progress_calls[0]["node"] == "KSampler"
 
+    @pytest.mark.asyncio
+    async def test_interrupt_posts_to_comfyui(self):
+        """Interrupt should call the ComfyUI interrupt endpoint."""
+        executor = ComfyUIExecutor(
+            comfyui_path=Path("/tmp/ComfyUI"),
+            models_path=Path("/models"),
+        )
+        executor._client = AsyncMock()
+
+        await executor.interrupt()
+
+        executor._client.post.assert_called_once_with("http://127.0.0.1:8188/interrupt")
+
 
 class TestComfyUIExecutorOutputCollection:
     """Tests for output collection."""
@@ -318,6 +330,54 @@ class TestComfyUIExecutorOutputCollection:
 
         assert len(outputs) == 1
         assert outputs[0] == test_file
+
+    def test_collect_outputs_with_video_audio_and_subfolders(self, tmp_path):
+        """Should collect non-image ComfyUI outputs from output subfolders."""
+        executor = ComfyUIExecutor(
+            comfyui_path=tmp_path,
+            models_path=Path("/models"),
+        )
+
+        output_dir = tmp_path / "output" / "renders"
+        output_dir.mkdir(parents=True)
+        video_file = output_dir / "clip.mp4"
+        audio_file = output_dir / "tone.wav"
+        video_file.write_bytes(b"fake mp4 data")
+        audio_file.write_bytes(b"fake wav data")
+
+        outputs_data = {
+            "9": {
+                "videos": [{"filename": "clip.mp4", "subfolder": "renders"}],
+                "audio": [{"filename": "tone.wav", "subfolder": "renders"}],
+            }
+        }
+
+        outputs = executor._collect_outputs(outputs_data, "test-job")
+
+        assert outputs == [video_file, audio_file]
+
+    def test_collect_outputs_rejects_path_traversal(self, tmp_path):
+        """Output collection should ignore unsafe descriptors."""
+        executor = ComfyUIExecutor(
+            comfyui_path=tmp_path,
+            models_path=Path("/models"),
+        )
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        outside_file = tmp_path / "outside.png"
+        outside_file.write_bytes(b"nope")
+
+        outputs_data = {
+            "9": {
+                "images": [
+                    {"filename": "../outside.png"},
+                    {"filename": "outside.png", "subfolder": ".."},
+                ]
+            }
+        }
+
+        assert executor._collect_outputs(outputs_data, "test-job") == []
 
     def test_extract_timings(self):
         """Should extract execution time from history."""

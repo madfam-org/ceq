@@ -54,6 +54,23 @@ class TestSchemaIntegrity:
         for col in required_columns:
             assert col in columns, f"Missing column: {col}"
 
+    @pytest.mark.asyncio
+    async def test_outputs_have_job_storage_unique_constraint(self, db_session):
+        """Output persistence should have a DB-level idempotency guard."""
+        def get_unique_constraints(conn):
+            inspector = inspect(conn)
+            return inspector.get_unique_constraints("outputs")
+
+        constraints = await db_session.run_sync(
+            lambda sync_session: get_unique_constraints(sync_session.get_bind())
+        )
+
+        assert any(
+            constraint["name"] == "uq_outputs_job_storage_uri"
+            and constraint["column_names"] == ["job_id", "storage_uri"]
+            for constraint in constraints
+        )
+
 
 class TestWorkflowModel:
     """Tests for Workflow model relationships and constraints."""

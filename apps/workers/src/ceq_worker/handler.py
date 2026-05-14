@@ -8,6 +8,7 @@ The handler pattern is designed to be compatible with RunPod's serverless
 SDK for easy migration.
 """
 
+import asyncio
 import json
 import time
 from typing import Any
@@ -159,6 +160,13 @@ class WorkflowHandler:
                 "execution_time": execution_time,
             }
 
+        except asyncio.CancelledError:
+            return {
+                "error": "Job cancelled",
+                "success": False,
+                "cancelled": True,
+                "execution_time": time.time() - start_time,
+            }
         except TimeoutError:
             return {
                 "error": "Chaos won: Execution timeout",

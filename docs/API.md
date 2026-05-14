@@ -231,7 +231,11 @@ Returns job details including outputs if complete.
 DELETE /v1/jobs/{id}
 ```
 
-Cancels a queued or running job.
+Cancels a queued or running job. CEQ removes queued Redis payloads when the job
+has not started. For active worker jobs, the API writes `cancel_requested=true`
+to `ceq:job:{id}`, publishes `{"action":"cancel"}` on
+`ceq:job:{id}:control`, and workers interrupt ComfyUI before reporting durable
+`cancelled` completion.
 
 **Response:** `204 No Content`
 
@@ -433,11 +437,24 @@ Internal worker callback. Requires `X-CEQ-Worker-Token` matching the API `JOB_CO
       "storage_uri": "r2://ceq-assets/outputs/job/output.png",
       "file_type": "image/png",
       "file_size_bytes": 524288,
+      "width": 512,
+      "height": 768,
+      "duration_seconds": null,
       "preview_url": "https://..."
     }
   ]
 }
 ```
+
+Worker callback behavior:
+
+- `completed`, `failed`, and `cancelled` are terminal reports.
+- Retryable worker-to-API callback failures are retried by the worker.
+- Exhausted worker callback payloads are pushed to Redis
+  `ceq:jobs:completion:dead` and marked on `ceq:job:{id}` with
+  `callback_dead_lettered=true`.
+- If a job is already `cancelled`, a late non-cancelled worker report is
+  recorded in metadata and does not overwrite the cancelled status.
 
 If the job was created with `webhook_url`, terminal reports (`completed`,
 `failed`, `cancelled`) trigger a signed user webhook delivery.
@@ -491,8 +508,7 @@ If the job was created with `webhook_url`, terminal reports (`completed`,
 ```
 
 Delivery status is stored on the job under
-`output_metadata.webhook_delivery`. Retry/dead-letter infrastructure remains
-part of the P2 hardening roadmap.
+`output_metadata.webhook_delivery`.
 
 ### Get Output
 

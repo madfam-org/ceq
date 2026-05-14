@@ -5,12 +5,15 @@ Handles uploading generated outputs to Cloudflare R2.
 """
 
 import asyncio
+import struct
+import wave
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 import boto3
 from botocore.config import Config
+from PIL import Image, UnidentifiedImageError
 
 from ceq_worker.config import get_settings
 
@@ -77,6 +80,7 @@ class StorageClient:
         """
         if content_type is None:
             content_type = self._guess_content_type(local_path)
+        file_metadata = self._inspect_output_file(local_path, content_type)
 
         if self._client is None:
             local_url = str(local_path)
@@ -87,6 +91,7 @@ class StorageClient:
                 "file_type": content_type,
                 "file_size_bytes": local_path.stat().st_size,
                 "preview_url": local_url if content_type.startswith("image/") else None,
+                **file_metadata,
             }
 
         # Generate unique key
@@ -122,6 +127,7 @@ class StorageClient:
             "file_type": content_type,
             "file_size_bytes": local_path.stat().st_size,
             "preview_url": public_url if content_type.startswith("image/") else None,
+            **file_metadata,
         }
 
     async def upload_asset(
@@ -205,11 +211,146 @@ class StorageClient:
             ".jpeg": "image/jpeg",
             ".webp": "image/webp",
             ".gif": "image/gif",
+            ".bmp": "image/bmp",
+            ".tif": "image/tiff",
+            ".tiff": "image/tiff",
+            ".wav": "audio/wav",
+            ".mp3": "audio/mpeg",
+            ".m4a": "audio/mp4",
+            ".ogg": "audio/ogg",
             ".mp4": "video/mp4",
+            ".m4v": "video/mp4",
+            ".mov": "video/quicktime",
             ".webm": "video/webm",
+            ".mkv": "video/x-matroska",
             ".glb": "model/gltf-binary",
             ".gltf": "model/gltf+json",
+            ".obj": "model/obj",
+            ".fbx": "application/octet-stream",
+            ".usdz": "model/vnd.usdz+zip",
+            ".ply": "model/ply",
+            ".stl": "model/stl",
+            ".json": "application/json",
+            ".zip": "application/zip",
             ".safetensors": "application/octet-stream",
             ".ckpt": "application/octet-stream",
         }
         return content_types.get(extension, "application/octet-stream")
+
+    def _inspect_output_file(self, path: Path, content_type: str) -> dict[str, Any]:
+        """Extract stable metadata for gallery/API output descriptors."""
+        descriptor: dict[str, Any] = {}
+        metadata: dict[str, Any] = {}
+
+        if content_type.startswith("image/"):
+            try:
+                with Image.open(path) as image:
+                    descriptor["width"] = image.width
+                    descriptor["height"] = image.height
+                    metadata["image_format"] = image.format
+                    metadata["image_mode"] = image.mode
+            except (UnidentifiedImageError, OSError):
+                metadata["inspection_error"] = "image_metadata_unavailable"
+        elif content_type == "audio/wav":
+            try:
+                with wave.open(str(path), "rb") as audio:
+                    frames = audio.getnframes()
+                    frame_rate = audio.getframerate()
+                    descriptor["duration_seconds"] = frames / frame_rate if frame_rate else 0.0
+                    metadata["audio_channels"] = audio.getnchannels()
+                    metadata["audio_sample_rate"] = frame_rate
+                    metadata["audio_sample_width_bytes"] = audio.getsampwidth()
+            except (wave.Error, OSError, EOFError):
+                metadata["inspection_error"] = "audio_metadata_unavailable"
+        elif content_type in {"video/mp4", "video/quicktime"}:
+            duration_seconds = self._read_mp4_duration_seconds(path)
+            if duration_seconds is not None:
+                descriptor["duration_seconds"] = duration_seconds
+            else:
+                metadata["inspection_error"] = "video_duration_unavailable"
+        elif content_type == "model/gltf-binary":
+            try:
+                header = path.read_bytes()[:12]
+                if len(header) == 12:
+                    magic, version, declared_length = struct.unpack("<4sII", header)
+                    if magic == b"glTF":
+                        metadata["glb_version"] = version
+                        metadata["glb_declared_length_bytes"] = declared_length
+            except OSError:
+                metadata["inspection_error"] = "model_metadata_unavailable"
+
+        if metadata:
+            descriptor["metadata"] = metadata
+        return descriptor
+
+    def _read_mp4_duration_seconds(self, path: Path) -> float | None:
+        """Read MP4/MOV duration from the mvhd box without shelling out."""
+        try:
+            with path.open("rb") as file_obj:
+                file_size = path.stat().st_size
+                return self._find_mvhd_duration(file_obj, file_size)
+        except (OSError, struct.error):
+            return None
+
+    def _find_mvhd_duration(self, file_obj: Any, end: int) -> float | None:
+        """Recursively scan MP4 boxes until mvhd duration is found."""
+        while file_obj.tell() + 8 <= end:
+            box_start = file_obj.tell()
+            header = file_obj.read(8)
+            if len(header) < 8:
+                return None
+
+            box_size, box_type = struct.unpack(">I4s", header)
+            header_size = 8
+            if box_size == 1:
+                large_size = file_obj.read(8)
+                if len(large_size) < 8:
+                    return None
+                box_size = struct.unpack(">Q", large_size)[0]
+                header_size = 16
+            elif box_size == 0:
+                box_size = end - box_start
+
+            box_end = box_start + box_size
+            payload_start = box_start + header_size
+            if box_end <= payload_start or box_end > end:
+                return None
+
+            if box_type == b"mvhd":
+                file_obj.seek(payload_start)
+                return self._parse_mvhd_duration(file_obj, box_end)
+
+            if box_type in {b"moov", b"trak", b"mdia"}:
+                file_obj.seek(payload_start)
+                duration = self._find_mvhd_duration(file_obj, box_end)
+                if duration is not None:
+                    return duration
+
+            file_obj.seek(box_end)
+
+        return None
+
+    def _parse_mvhd_duration(self, file_obj: Any, box_end: int) -> float | None:
+        """Parse duration from an mvhd box payload."""
+        header = file_obj.read(4)
+        if len(header) < 4:
+            return None
+
+        version = header[0]
+        if version == 1:
+            payload = file_obj.read(28)
+            if len(payload) < 28:
+                return None
+            timescale = struct.unpack(">I", payload[16:20])[0]
+            duration = struct.unpack(">Q", payload[20:28])[0]
+        else:
+            payload = file_obj.read(16)
+            if len(payload) < 16:
+                return None
+            timescale = struct.unpack(">I", payload[8:12])[0]
+            duration = struct.unpack(">I", payload[12:16])[0]
+
+        file_obj.seek(box_end)
+        if not timescale:
+            return None
+        return duration / timescale

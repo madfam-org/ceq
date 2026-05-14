@@ -52,6 +52,12 @@ spec:
                 secretKeyRef:
                   name: ceq-secrets
                   key: JOB_COMPLETION_CALLBACK_TOKEN
+            - name: API_JOB_COMPLETION_MAX_ATTEMPTS
+              value: "3"
+            - name: API_JOB_COMPLETION_RETRY_BACKOFF_SECONDS
+              value: "1"
+            - name: JOB_COMPLETION_DEAD_LETTER_KEY
+              value: "ceq:jobs:completion:dead"
             - name: R2_ENDPOINT
               valueFrom:
                 secretKeyRef:

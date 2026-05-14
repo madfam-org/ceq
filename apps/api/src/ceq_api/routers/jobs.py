@@ -10,7 +10,16 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    Header,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -360,6 +369,22 @@ async def report_job_outputs(
             detail="Job not found.",
         )
 
+    if job.status == JobStatusEnum.CANCELLED.value and data.status != JobStatusEnum.CANCELLED.value:
+        job.output_metadata = {
+            **(job.output_metadata or {}),
+            "ignored_worker_report_after_cancel": {
+                "status": data.status,
+                "reported_at": datetime.now(UTC).isoformat(),
+                "worker_id": data.worker_id,
+            },
+        }
+        await db.flush()
+        return JobCompletionReportResponse(
+            job_id=job.id,
+            status=job.status,
+            outputs_persisted=0,
+        )
+
     now = datetime.now(UTC)
     job.status = data.status
     if data.progress is not None:
@@ -513,7 +538,12 @@ async def cancel_job(
 
     # Update job status
     job.status = JobStatusEnum.CANCELLED.value
+    job.progress = 0.0
     job.completed_at = datetime.now(UTC)
+    job.output_metadata = {
+        **(job.output_metadata or {}),
+        "cancel_requested_at": job.completed_at.isoformat(),
+    }
 
     # Audit log the cancellation
     audit_logger.log_job_operation(
@@ -525,7 +555,22 @@ async def cancel_job(
 
     # Publish cancel signal to worker via Redis
     redis = get_redis()
-    await redis.publish(f"ceq:job:{job_id}:control", json.dumps({"action": "cancel"}))
+    await redis.hset(
+        f"ceq:job:{job_id}",
+        mapping={
+            "status": JobStatusEnum.CANCELLED.value,
+            "progress": "0.0",
+            "cancel_requested": "true",
+        },
+    )
+    await redis.publish(
+        f"ceq:job:{job_id}:control",
+        json.dumps({
+            "action": "cancel",
+            "job_id": str(job_id),
+            "requested_at": job.completed_at.isoformat(),
+        }),
+    )
 
     # Remove from queue if still queued.
     await _remove_pending_job(redis, job_id)

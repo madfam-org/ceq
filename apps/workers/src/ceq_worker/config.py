@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     api_job_completion_path: str = "/v1/jobs/{job_id}/outputs/report"
     api_job_completion_token: str = ""
     api_job_completion_timeout_seconds: float = 5.0
+    api_job_completion_max_attempts: int = 3
+    api_job_completion_retry_backoff_seconds: float = 1.0
+    job_completion_dead_letter_key: str = "ceq:jobs:completion:dead"
 
     # R2 Storage
     r2_endpoint: str = ""

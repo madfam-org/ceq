@@ -189,16 +189,29 @@ class ComfyUIExecutor:
             result.vram_peak_gb = await self._get_vram_usage()
             result.success = True
 
+        except asyncio.CancelledError:
+            await self.interrupt()
+            raise
         except TimeoutError:
             result.success = False
             result.error = "Execution timeout"
             # Cancel the running prompt
-            await self._client.post(f"{self.base_url}/interrupt")
+            await self.interrupt()
         except Exception as e:
             result.success = False
             result.error = str(e)
 
         return result
+
+    async def interrupt(self) -> None:
+        """Interrupt the currently running ComfyUI prompt, best effort."""
+        if self._client is None:
+            return
+
+        try:
+            await self._client.post(f"{self.base_url}/interrupt")
+        except Exception as exc:  # noqa: BLE001 - cancellation must stay best effort
+            logger.warning("Failed to interrupt ComfyUI execution: %s", exc)
 
     def _collect_outputs(
         self,
@@ -210,15 +223,47 @@ class ComfyUIExecutor:
         output_dir = self.comfyui_path / "output"
 
         for _node_id, node_outputs in outputs.items():
-            images = node_outputs.get("images", [])
-            for img in images:
-                filename = img.get("filename")
-                if filename:
-                    path = output_dir / filename
-                    if path.exists():
+            if not isinstance(node_outputs, dict):
+                continue
+
+            for value in node_outputs.values():
+                candidates = value if isinstance(value, list) else [value]
+                for candidate in candidates:
+                    if not isinstance(candidate, dict):
+                        continue
+
+                    filename = candidate.get("filename")
+                    if not filename:
+                        continue
+
+                    path = self._resolve_output_path(output_dir, candidate)
+                    if path and path.exists() and path not in output_paths:
                         output_paths.append(path)
 
         return output_paths
+
+    def _resolve_output_path(
+        self,
+        output_dir: Path,
+        file_info: dict[str, Any],
+    ) -> Path | None:
+        """Resolve a ComfyUI output descriptor to a local path."""
+        filename = file_info.get("filename")
+        if not isinstance(filename, str) or "/" in filename or "\\" in filename:
+            return None
+
+        subfolder = file_info.get("subfolder") or ""
+        if not isinstance(subfolder, str) or ".." in Path(subfolder).parts:
+            return None
+
+        output_type = file_info.get("type")
+        base_dir = output_dir
+        if output_type == "temp":
+            base_dir = self.comfyui_path / "temp"
+        elif output_type == "input":
+            base_dir = self.comfyui_path / "input"
+
+        return base_dir / subfolder / filename
 
     def _extract_timings(self, history: dict[str, Any]) -> dict[str, float]:
         """Extract node execution timings from history."""

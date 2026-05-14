@@ -114,10 +114,9 @@ kubectl apply -f infrastructure/k8s/secrets.local.yaml
 ```
 
 Required values:
-- `database-url`: Ubicloud PostgreSQL connection string
-- `redis-url`: Redis Sentinel URL (DB 14)
-- `r2-*`: Cloudflare R2 credentials (already filled)
-- `janua-client-secret`: From Janua admin (already filled)
+- `DATABASE_URL`: PostgreSQL connection string
+- `REDIS_URL`: Redis URL (DB 14)
+- `R2_ENDPOINT`, `R2_ACCESS_KEY`, `R2_SECRET_KEY`, `R2_BUCKET_NAME`: Cloudflare R2 credentials
 - `JOB_COMPLETION_CALLBACK_TOKEN`: Shared API/worker token for `POST /v1/jobs/{job_id}/outputs/report`
 - `JOB_WEBHOOK_SECRET`: HMAC signing secret for user-provided job completion webhooks
 
@@ -125,6 +124,8 @@ Callback token rules:
 - Generate a high-entropy secret and store the exact same value for API and workers.
 - The API refuses worker completion callbacks in production when this value is missing.
 - The worker deployment maps this secret into `API_JOB_COMPLETION_TOKEN`.
+- Workers retry retryable callback failures and push exhausted payloads to
+  Redis `ceq:jobs:completion:dead`.
 - Rotate by updating the secret and rolling API + worker pods together.
 
 Job webhook rules:
@@ -195,6 +196,9 @@ gh workflow run deploy.yaml
 
 ### 12. Verify Deployment
 
+Use Enclii web/API/CLI first for routine rollout verification. The raw
+commands below are legacy/break-glass references only.
+
 ```bash
 # Check pods
 kubectl get pods -n ceq
@@ -215,8 +219,20 @@ Stability smoke after the 2026-05 output-contract remediation:
 4. Confirm `POST /v1/jobs/{job_id}/outputs/report` persists final job status and output rows.
 5. Confirm `/v1/jobs/{job_id}` and `/v1/outputs` show the same output metadata.
 6. Confirm the Studio gallery opens `public_url`/preview URLs in the browser.
+7. Cancel one running GPU job and confirm the worker reports durable `cancelled`.
+8. Confirm the migration chain includes `20260514_outputs_unique` and the
+   `outputs(job_id, storage_uri)` uniqueness guard is present.
 
 The release is not considered stable until the full Studio -> API -> Redis -> worker -> R2 -> callback -> PostgreSQL -> gallery loop has passed once in the target environment.
+
+Additional 2026-05-14 wave gates:
+
+1. Confirm `JOB_COMPLETION_CALLBACK_TOKEN` and `JOB_WEBHOOK_SECRET` are present in `ceq-secrets`.
+2. Confirm the PreSync migration job applied `20260514_outputs_unique`.
+3. Confirm exhausted worker callback payloads are inspectable at Redis `ceq:jobs:completion:dead`.
+4. Cancel one actively running GPU job and verify the API remains `cancelled`.
+5. Run at least one image, video, audio, and 3D/model template and confirm Studio gallery rendering/opening behavior.
+6. Confirm the next worker-touching deploy commit pins `ceq-worker` by digest.
 
 The API-level smoke runner exercises the same durable completion path without
 raw cluster access:
@@ -243,9 +259,9 @@ CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh
 This means the Cloudflare tunnel cannot reach the origin server. Common causes:
 
 1. **Infrastructure not deployed**: The k8s cluster doesn't exist
-2. **Pods not running**: Check `kubectl get pods -n ceq`
-3. **Service not created**: Check `kubectl get svc -n ceq`
-4. **Cloudflared not running**: Check `kubectl logs -n ceq deployment/cloudflared`
+2. **Pods not running**: use Enclii workload diagnostics first; raw pod checks are break-glass only
+3. **Service not created**: use Enclii service diagnostics first; raw service checks are break-glass only
+4. **Cloudflared not running**: check the platform tunnel through Enclii first
 
 ### API not starting
 
@@ -266,7 +282,8 @@ Common issues:
 3. Verify workers can reach `http://ceq-api.ceq.svc.cluster.local`.
 4. Check worker logs for callback HTTP errors.
 5. Check Redis hash `ceq:job:{job_id}` for `callback_error`.
-6. Confirm NetworkPolicies allow intra-namespace traffic and egress to R2/Redis.
+6. Check Redis list `ceq:jobs:completion:dead` for exhausted callback payloads.
+7. Confirm NetworkPolicies allow intra-namespace traffic and egress to R2/Redis.
 
 ### Database connection issues
 

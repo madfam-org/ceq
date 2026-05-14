@@ -188,7 +188,7 @@ jobs:
           cosign sign --yes ${{ env.IMAGE_NAMESPACE }}/ceq-studio@${{ steps.build.outputs.digest }}
 
   # ===========================================================================
-  # Build Worker Image (Optional)
+  # Build Worker Image (when needed)
   # ===========================================================================
   build-worker:
     name: Build Worker
@@ -196,13 +196,11 @@ jobs:
     permissions:
       contents: read
       packages: write
-    # Only build worker on manual dispatch or when worker files change.
-    # Worker is also currently failing on a separate concern (Dockerfile
-    # `pip install -e .` fails because README.md isn't in the build
-    # context); see the PR body. Out of scope for this GitOps refactor.
+    # Only build worker on manual dispatch or when worker files change. When
+    # it runs, deploy waits for its digest so worker rollouts are pinned too.
     if: |
       github.event_name == 'workflow_dispatch' ||
-      contains(github.event.head_commit.modified, 'apps/workers/')
+      contains(toJson(github.event.commits), 'apps/workers/')
 
     outputs:
       # docker/build-push-action's `outputs.digest` IS the manifest-list
@@ -260,8 +258,12 @@ jobs:
   deploy:
     name: Commit deploy digests (GitOps)
     runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-latest' }}
-    needs: [build-api, build-studio]
-    # Don't gate on build-worker — it only runs when worker files change.
+    needs: [build-api, build-studio, build-worker]
+    if: |
+      always() &&
+      needs.build-api.result == 'success' &&
+      needs.build-studio.result == 'success' &&
+      (needs.build-worker.result == 'success' || needs.build-worker.result == 'skipped')
     environment: production
     permissions:
       contents: write

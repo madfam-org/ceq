@@ -1,9 +1,11 @@
 """Tests for R2 storage client."""
 
+import wave
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
+from PIL import Image
 
 from ceq_worker.storage import StorageClient
 
@@ -70,12 +72,20 @@ class TestStorageClientContentType:
         client = StorageClient()
         assert client._guess_content_type(Path("test.mp4")) == "video/mp4"
         assert client._guess_content_type(Path("test.webm")) == "video/webm"
+        assert client._guess_content_type(Path("test.mov")) == "video/quicktime"
+
+    def test_guess_content_type_audio(self):
+        """Should detect audio content types."""
+        client = StorageClient()
+        assert client._guess_content_type(Path("test.wav")) == "audio/wav"
+        assert client._guess_content_type(Path("test.mp3")) == "audio/mpeg"
 
     def test_guess_content_type_3d(self):
         """Should detect 3D model content types."""
         client = StorageClient()
         assert client._guess_content_type(Path("model.glb")) == "model/gltf-binary"
         assert client._guess_content_type(Path("model.gltf")) == "model/gltf+json"
+        assert client._guess_content_type(Path("model.obj")) == "model/obj"
 
     def test_guess_content_type_model_files(self):
         """Should detect ML model file types."""
@@ -113,6 +123,38 @@ class TestStorageClientUpload:
         assert result["filename"] == "output.png"
         assert result["file_type"] == "image/png"
         assert result["file_size_bytes"] == len(b"fake image data")
+
+    @pytest.mark.asyncio
+    async def test_upload_output_extracts_image_dimensions(self, tmp_path):
+        """Image outputs should include dimensions for API/gallery consumers."""
+        client = StorageClient()
+
+        test_file = tmp_path / "output.png"
+        Image.new("RGB", (32, 24), color="red").save(test_file)
+
+        result = await client.upload_output(test_file, "test-job")
+
+        assert result["width"] == 32
+        assert result["height"] == 24
+        assert result["metadata"]["image_format"] == "PNG"
+
+    @pytest.mark.asyncio
+    async def test_upload_output_extracts_wav_duration(self, tmp_path):
+        """WAV outputs should include duration and audio metadata."""
+        client = StorageClient()
+
+        test_file = tmp_path / "tone.wav"
+        with wave.open(str(test_file), "wb") as audio:
+            audio.setnchannels(1)
+            audio.setsampwidth(2)
+            audio.setframerate(8000)
+            audio.writeframes(b"\x00\x00" * 4000)
+
+        result = await client.upload_output(test_file, "test-job")
+
+        assert result["file_type"] == "audio/wav"
+        assert result["duration_seconds"] == 0.5
+        assert result["metadata"]["audio_sample_rate"] == 8000
 
     @pytest.mark.asyncio
     async def test_upload_output_success(self, tmp_path):

@@ -4,7 +4,7 @@ import hashlib
 import hmac
 import json
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import httpx
@@ -255,6 +255,23 @@ class TestCancelJob:
         updated_job = result.scalar_one()
         assert updated_job.status == JobStatus.CANCELLED.value
         mock_redis.lrem.assert_any_call("ceq:jobs:pending", 0, queued_payload)
+        mock_redis.hset.assert_any_call(
+            f"ceq:job:{job.id}",
+            mapping={
+                "status": JobStatus.CANCELLED.value,
+                "progress": "0.0",
+                "cancel_requested": "true",
+            },
+        )
+        control_calls = [
+            call
+            for call in mock_redis.publish.call_args_list
+            if call.args[0] == f"ceq:job:{job.id}:control"
+        ]
+        assert control_calls
+        control_payload = json.loads(control_calls[0].args[1])
+        assert control_payload["action"] == "cancel"
+        assert control_payload["job_id"] == str(job.id)
 
     @pytest.mark.asyncio
     async def test_cancel_job_already_completed(self, async_client, db_session, mock_user):
@@ -825,6 +842,76 @@ class TestJobCompletionReport:
             select(Output).where(Output.job_id == job.id)
         )
         assert len(output_result.scalars().all()) == 1
+
+    @pytest.mark.asyncio
+    async def test_report_job_outputs_does_not_override_cancelled_job(
+        self,
+        async_client,
+        db_session,
+        mock_user,
+        monkeypatch,
+    ):
+        """Late worker success reports should not overwrite API-side cancellation."""
+        from sqlalchemy import select
+        from ceq_api.models.output import Output
+        from ceq_api.models.workflow import Workflow
+        from ceq_api.routers import jobs as jobs_router
+
+        monkeypatch.setattr(
+            jobs_router.settings,
+            "job_completion_callback_token",
+            "test-token",
+        )
+
+        workflow = Workflow(
+            name="Test Workflow",
+            description="Test",
+            workflow_json={"test": "data"},
+            input_schema={},
+            user_id=mock_user.id,
+        )
+        db_session.add(workflow)
+        await db_session.flush()
+
+        job = Job(
+            workflow_id=workflow.id,
+            user_id=mock_user.id,
+            status=JobStatus.CANCELLED.value,
+            progress=0.0,
+            input_params={},
+            queued_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        response = await async_client.post(
+            f"/v1/jobs/{job.id}/outputs/report",
+            headers={"X-CEQ-Worker-Token": "test-token"},
+            json={
+                "status": "completed",
+                "outputs": [
+                    {
+                        "filename": "late.png",
+                        "storage_uri": "r2://ceq-assets/outputs/job/late.png",
+                        "file_type": "image/png",
+                        "file_size_bytes": 1024,
+                    }
+                ],
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["status"] == JobStatus.CANCELLED.value
+        assert response.json()["outputs_persisted"] == 0
+
+        job_result = await db_session.execute(select(Job).where(Job.id == job.id))
+        updated_job = job_result.scalar_one()
+        assert updated_job.status == JobStatus.CANCELLED.value
+        assert updated_job.output_metadata["ignored_worker_report_after_cancel"]["status"] == "completed"
+
+        output_result = await db_session.execute(select(Output).where(Output.job_id == job.id))
+        assert output_result.scalars().all() == []
 
     @pytest.mark.asyncio
     async def test_report_job_outputs_rejects_invalid_token(

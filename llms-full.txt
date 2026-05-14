@@ -47,6 +47,9 @@ gap or incident link.
 - `docs/API.md` documents public API contracts and the internal worker completion callback.
 - `scripts/production-smoke.sh` performs public edge checks and, with a Janua token plus template id, verifies the durable template job completion path through the API.
 - User-provided `webhook_url` job completion delivery is signed with `JOB_WEBHOOK_SECRET`; delivery metadata is stored under `job.output_metadata.webhook_delivery`.
+- Active cancellation uses Redis `ceq:job:{id}:control` plus `cancel_requested=true`; workers interrupt ComfyUI and report durable `cancelled`.
+- Exhausted worker completion callbacks are dead-lettered to Redis `ceq:jobs:completion:dead`.
+- `outputs(job_id, storage_uri)` is protected by `uq_outputs_job_storage_uri` after migration `20260514_outputs_unique`.
 - `apps/api/README.md`, `apps/workers/README.md`, and `docs/VAST_AI_SETUP.md` document callback/R2/image env required for local and worker deployments.
 
 ## Maintenance

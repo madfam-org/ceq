@@ -72,6 +72,69 @@ Run CEQ as a deterministic, observable system:
   - `https://ceq.lol`: HTTP `200`
 - API webhook implementation verification:
   - `apps/api`: `296 passed, 1 skipped`
+- Implementation wave closed locally on 2026-05-14:
+  - Active worker cancellation implemented locally across API Redis control signals, worker pub/sub, ComfyUI interrupt, and cancelled callback persistence.
+  - Worker output collection broadened beyond images with image dimensions, WAV duration, MP4/MOV duration best-effort, GLB metadata, and Studio audio/video/model gallery handling.
+  - Worker completion callbacks now retry retryable failures and dead-letter exhausted payloads to Redis.
+  - `outputs(job_id, storage_uri)` DB-level idempotency migration added locally.
+  - Deploy workflow now waits for `build-worker` when it runs so worker images can be pinned by digest during GitOps deploy commits.
+- Next-wave local verification:
+  - `apps/api`: `298 passed, 1 skipped`
+  - `apps/workers`: `119 passed`
+  - `apps/studio`: typecheck passed; `75 passed`
+  - Alembic has one head: `20260514_outputs_unique`
+  - `kubectl kustomize infrastructure/k8s` rendered successfully
+  - Public production smoke passed: `https://api.ceq.lol/health` ok and `https://ceq.lol` HTTP 200
+
+## Implementation Wave 2026-05-14 Wrap-Up
+
+This wave moved CEQ from durable completion persistence into active runtime
+control and artifact-contract hardening.
+
+### Delivered
+
+1. **Running-job cancellation**
+   - API cancellation now writes durable Redis cancellation state and publishes a per-job control command.
+   - Workers watch the control channel while a job is active, cancel the handler task, interrupt ComfyUI, and report terminal `cancelled`.
+   - API ignores late non-cancelled worker reports after a user cancellation, preserving the user-visible terminal state.
+
+2. **Multi-modal output contract**
+   - ComfyUI output collection now accepts image, video, audio, model, and generic file descriptors.
+   - Worker storage descriptors now include richer metadata: MIME type, size, preview URL, image dimensions, WAV duration/audio data, best-effort MP4/MOV duration, and GLB header metadata.
+   - Studio gallery now renders image previews, video playback, audio playback, model categorization, and generic files.
+
+3. **Completion callback reliability**
+   - Worker -> API completion callbacks retry retryable failures with configurable backoff.
+   - Exhausted completion callback payloads are retained in Redis `ceq:jobs:completion:dead`.
+   - Job Redis hashes are marked with callback failure metadata for operator inspection.
+
+4. **Durable idempotency**
+   - Added migration `20260514_outputs_unique`.
+   - Migration removes duplicate `(job_id, storage_uri)` rows before adding `uq_outputs_job_storage_uri`.
+   - The app-level idempotency behavior remains in place.
+
+5. **GitOps reproducibility**
+   - Deploy workflow now includes `build-worker` in the deploy dependency graph.
+   - When worker files change and the worker image builds, the GitOps digest commit can pin `ceq-worker` like API and Studio.
+
+### Local Acceptance
+
+- API suite: `298 passed, 1 skipped`
+- Worker suite: `119 passed`
+- Studio suite: `75 passed`
+- Studio typecheck: passed
+- Alembic heads: one head, `20260514_outputs_unique`
+- Kustomize render: passed
+- Public production smoke: API health `ok`, Studio HTTP `200`
+
+### Production Acceptance Still Required
+
+- Provision/verify `JOB_COMPLETION_CALLBACK_TOKEN` and `JOB_WEBHOOK_SECRET` in production `ceq-secrets`.
+- Let ArgoCD run the PreSync migration job and confirm `20260514_outputs_unique` is applied.
+- Run authenticated end-to-end GPU smoke through Studio/API -> Redis -> worker -> R2 -> callback -> PostgreSQL -> gallery.
+- Run active-cancel smoke on a real running GPU job.
+- Run video/audio/3D template smoke to prove multi-modal output handling in production.
+- Confirm the next worker build produces and commits a pinned worker digest.
 
 ## Remaining Roadmap To Full Stability
 
@@ -79,25 +142,36 @@ The items below are what remains after the current stabilization patch. They are
 
 ### P0 — Production Rollout Gates
 
-1. **Provision the callback secret**
+1. **Provision runtime callback/webhook secrets**
    - Add `JOB_COMPLETION_CALLBACK_TOKEN` to production `ceq-secrets`.
    - The API requires this in production; workers use the same value when POSTing completion reports.
+   - Add `JOB_WEBHOOK_SECRET` before enabling user-provided `webhook_url` delivery.
 
 2. **Run and verify migrations**
    - Apply Alembic head through the GitOps migration job.
    - Confirm existing `outputs` rows have non-null `filename`, `file_type`, and `file_size_bytes`.
+   - Confirm `uq_outputs_job_storage_uri` exists after `20260514_outputs_unique`.
 
 3. **Run a real end-to-end GPU smoke**
    - Studio/API job submission -> Redis pending queue -> worker execution -> R2 upload -> API callback -> PostgreSQL output row -> Studio gallery render.
    - Use `scripts/production-smoke.sh` with `CEQ_AUTH_TOKEN` and `CEQ_TEMPLATE_ID` after deployment.
    - Acceptance: the final job is `completed`, output rows are durable, and gallery URLs open from the browser.
 
-4. **Verify network policy paths**
+4. **Run active cancellation smoke**
+   - Submit a long-running GPU job.
+   - Cancel it from Studio/API while it is running.
+   - Acceptance: worker interrupts ComfyUI, API remains `cancelled`, and no late success report overwrites the cancelled state.
+
+5. **Run multi-modal artifact smoke**
+   - Exercise image, video, audio, and 3D/model workflows.
+   - Acceptance: each output persists with correct MIME/metadata and renders or opens from Studio gallery.
+
+6. **Verify network policy paths**
    - Worker -> `ceq-api` callback path.
    - Worker/API -> Redis DB 14.
    - Worker/API -> Cloudflare R2.
 
-5. **Verify Janua production client**
+7. **Verify Janua production client**
    - Confirm Janua knows the active CEQ client ID and redirect URIs.
    - Acceptance: production Studio login succeeds and websocket auth token can be used for job streams.
 
@@ -108,31 +182,35 @@ The items below are what remains after the current stabilization patch. They are
    - Delivery attempts, failures, and success metadata are recorded under `job.output_metadata.webhook_delivery`.
    - Production still needs `JOB_WEBHOOK_SECRET` provisioned before webhook delivery is enabled.
 
-2. **Implement active worker cancellation** — remaining
-   - API publishes a cancel control message, but workers need to subscribe per active job and interrupt ComfyUI execution.
-   - Acceptance: cancelling a running job stops GPU work and persists `cancelled`.
+2. **Implement active worker cancellation** — completed locally
+   - API records `cancel_requested=true`, publishes a per-job cancel command, and prevents late success reports from overriding `cancelled`.
+   - Workers subscribe while processing a job, cancel the handler task, interrupt ComfyUI, and report durable `cancelled`.
+   - Production acceptance still requires a real running GPU cancel smoke after rollout.
 
-3. **Broaden worker output collection** — remaining
-   - Current ComfyUI output collection is image-oriented.
-   - Add video/audio/3D/arbitrary file collection, MIME mapping, dimensions/duration extraction, and tests.
+3. **Broaden worker output collection** — completed locally
+   - ComfyUI descriptors now collect image, video, audio, model, and arbitrary file outputs.
+   - Storage descriptors include expanded MIME mapping plus image dimensions, WAV duration, best-effort MP4/MOV duration, and GLB metadata.
+   - Studio gallery now renders video controls, audio controls, and 3D/model categorization.
+   - Production acceptance still requires video/audio/3D template smoke coverage.
 
 ### P2 — Reliability Hardening
 
-1. **Add callback retry and dead-letter handling**
-   - Failed worker -> API callbacks should retry with backoff.
-   - Exhausted callbacks should land in an inspectable dead-letter queue.
+1. **Add callback retry and dead-letter handling** — completed locally for worker callbacks
+   - Failed worker -> API callbacks retry with configurable backoff.
+   - Exhausted callbacks land in Redis `ceq:jobs:completion:dead` and mark `ceq:job:{job_id}` with callback failure metadata.
 
-2. **Add DB-level idempotency**
-   - Add a unique constraint for `(job_id, storage_uri)` after live data is checked for duplicates.
+2. **Add DB-level idempotency** — completed locally
+   - Added Alembic revision `20260514_outputs_unique`.
+   - Migration removes duplicate `(job_id, storage_uri)` rows before adding `uq_outputs_job_storage_uri`.
    - Keep the app-level idempotency already added.
 
 3. **Add production-grade migration tests**
    - Add PostgreSQL-backed migration tests for legacy output rows.
    - SQLite model tests are not enough for JSONB/constraint behavior.
 
-4. **Pin worker images by digest**
-   - `ceq-worker:latest` remains a rollout reproducibility risk.
-   - Update CI/GitOps to publish and pin worker digests like API and Studio.
+4. **Pin worker images by digest** — workflow fixed locally
+   - Deploy job now depends on `build-worker` when it runs and can commit the worker digest.
+   - Current `kustomization.yaml` remains `ceq-worker:latest` until the next successful worker build/deploy commit produces a real digest.
 
 ### P3 — Observability And Product Completion
 
@@ -253,26 +331,26 @@ The table below records ownership for the completed remediation and the next rec
 - **api-core** (`apps/api/src/ceq_api`)
   - `db/session.py`, `db/__init__.py`, `routers/synthesis.py`, `routers/jobs.py`, `routers/outputs.py`, `config.py`
   - Completed runtime contracts, callback endpoint, output persistence, and API settings.
-  - Next: stronger callback observability and active-cancel persistence support.
+  - Next: production smoke for active cancellation and richer callback observability.
 
 - **worker** (`apps/workers/src/ceq_worker`)
   - `handler.py`, `queue.py`, `storage.py`, `config.py`
   - Completed execution payloads, R2 descriptors, callback posting, and Redis fallback writes.
-  - Next: retry/dead-letter handling, active cancellation, and broader non-image output collection.
+  - Next: production GPU smoke across image/video/audio/3D outputs and replay tooling for dead-lettered callbacks.
 
 - **data**
   - `apps/api/src/ceq_api/alembic/versions/*`
   - Completed outputs schema alignment.
-  - Next: live duplicate audit, DB-level `(job_id, storage_uri)` idempotency, and PostgreSQL-backed migration tests.
+  - Next: PostgreSQL-backed migration test harness and live duplicate audit confirmation during rollout.
 
 - **infra** (`infrastructure/k8s/*`)
   - `worker-deployment.yaml`, `secrets.yaml`
   - Completed callback token wiring and R2 env alias wiring.
-  - Next: provision production token, verify NetworkPolicies, and pin worker images by digest.
+  - Next: provision production tokens, verify NetworkPolicies, and confirm worker digest pin after the next worker build.
 
 - **frontend** (`apps/studio/src`)
   - Completed gallery URL consumption through `public_url` fallback.
-  - Next: workflow/template submit payload alignment and websocket token handling.
+  - Next: video/audio/3D smoke fixtures and output-type-specific gallery polish.
 
 ## Risk Register (short and explicit)
 
@@ -295,7 +373,7 @@ The table below records ownership for the completed remediation and the next rec
 
 - **apps/workers**
   - `handler.py`, `queue.py`, `storage.py`, `config.py`, `comfyui.py`, `orchestrator.py`
-  - Built rich output descriptors, sent callbacks with auth, awaited async progress callbacks, and kept Redis fallback writes.
+  - Built rich output descriptors, sent callbacks with auth, awaited async progress callbacks, added active cancellation, retried callbacks, and kept Redis fallback/dead-letter writes.
 
 - **infrastructure/k8s**
   - `api-deployment.yaml`, `worker-deployment.yaml`, `secrets.yaml`
@@ -303,7 +381,7 @@ The table below records ownership for the completed remediation and the next rec
 
 - **apps/studio**
   - `src/lib/api.ts`, gallery components
-  - Consumes `public_url` where available and preserves `storage_uri` fallback behavior.
+  - Consumes `public_url` where available, preserves `storage_uri` fallback behavior, and renders audio/video/model output types.
 
 - **docs/tests**
   - `docs/CEQ_STABILITY_ROADMAP.md`, `tests/*`
@@ -316,6 +394,10 @@ The table below records ownership for the completed remediation and the next rec
 - Worker completions persist final `Job` status and durable `Output` rows.
 - `apps/api` migration chain has a committed revision that aligns `outputs` schema.
 - Callback endpoint accepts worker completion payload and authenticates via shared token.
+- Active worker cancellation interrupts running handler work and reports durable `cancelled`.
+- Worker completion callback failures retry and dead-letter exhausted payloads.
+- Output persistence has DB-level `(job_id, storage_uri)` idempotency.
+- Worker/Studio output handling covers image, video, audio, model, and generic file descriptors.
 - CI includes regression for at least:
   - synthesis template fallback logic
   - queue cancel payload

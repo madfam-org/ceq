@@ -9,12 +9,14 @@
 import { useState } from "react";
 import Image from "next/image";
 import {
+  Box,
   Download,
   Share2,
   ExternalLink,
   Image as ImageIcon,
   Video,
   File,
+  Music,
   MoreVertical,
   Copy,
   Check,
@@ -43,8 +45,14 @@ export function OutputCard({ output, className }: OutputCardProps) {
 
   const isImage = output.file_type.startsWith("image/");
   const isVideo = output.file_type.startsWith("video/");
+  const isAudio = output.file_type.startsWith("audio/");
+  const isModel = output.file_type.startsWith("model/");
   const outputUrl = output.public_url || output.storage_uri;
   const previewUrl = output.preview_url || (isImage ? outputUrl : null);
+  const extension = output.filename.includes(".")
+    ? output.filename.split(".").pop()?.toUpperCase()
+    : null;
+  const fileSubtype = extension || output.file_type.split("/")[1]?.toUpperCase() || "FILE";
 
   const handleDownload = async () => {
     try {
@@ -124,13 +132,32 @@ export function OutputCard({ output, className }: OutputCardProps) {
             className="object-cover transition-transform group-hover:scale-105"
           />
         ) : isVideo ? (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Video className="h-12 w-12 text-muted-foreground/50" />
+          <div className="absolute inset-0 flex items-center justify-center bg-black">
+            <video
+              src={outputUrl}
+              controls
+              preload="metadata"
+              className="h-full w-full object-contain"
+            />
             {output.duration_seconds && (
               <span className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/70 text-white text-xs rounded">
                 {formatDuration(output.duration_seconds)}
               </span>
             )}
+          </div>
+        ) : isAudio ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-4">
+            <Music className="h-12 w-12 text-muted-foreground/50" />
+            <audio controls preload="metadata" src={outputUrl} className="w-full" />
+            {output.duration_seconds && (
+              <span className="px-2 py-0.5 bg-black/70 text-white text-xs rounded">
+                {formatDuration(output.duration_seconds)}
+              </span>
+            )}
+          </div>
+        ) : isModel ? (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Box className="h-12 w-12 text-muted-foreground/50" />
           </div>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
@@ -138,27 +165,28 @@ export function OutputCard({ output, className }: OutputCardProps) {
           </div>
         )}
 
-        {/* Hover overlay */}
-        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-          <Button
-            size="sm"
-            variant="secondary"
-            className="gap-1"
-            onClick={handleDownload}
-          >
-            <Download className="h-3 w-3" />
-            Download
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1"
-            onClick={handleShare}
-          >
-            <Share2 className="h-3 w-3" />
-            Share
-          </Button>
-        </div>
+        {!isVideo && !isAudio && (
+          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              className="gap-1"
+              onClick={handleDownload}
+            >
+              <Download className="h-3 w-3" />
+              Download
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1"
+              onClick={handleShare}
+            >
+              <Share2 className="h-3 w-3" />
+              Share
+            </Button>
+          </div>
+        )}
 
         {/* File type badge */}
         <div className="absolute top-2 left-2">
@@ -167,10 +195,14 @@ export function OutputCard({ output, className }: OutputCardProps) {
               <ImageIcon className="h-3 w-3" />
             ) : isVideo ? (
               <Video className="h-3 w-3" />
+            ) : isAudio ? (
+              <Music className="h-3 w-3" />
+            ) : isModel ? (
+              <Box className="h-3 w-3" />
             ) : (
               <File className="h-3 w-3" />
             )}
-            {output.file_type.split("/")[1].toUpperCase()}
+            {fileSubtype}
           </span>
         </div>
 

@@ -78,12 +78,11 @@ resources:
 # delete the `newName` line — name and newName matching is the
 # kustomize default).
 #
-# `ceq-worker` is left as `:latest` because (a) it's not in the audit
-# list of running deployments — Vast.ai scheduling means workers are
-# scaled-to-zero in-cluster — and (b) no successful slash-form
-# `ceq/worker` build exists in the workflow history to source a digest
-# from. Pinning a non-existent image would break ArgoCD sync if the
-# pod ever scaled up.
+# `ceq-worker` is still `:latest` in this source snapshot only until the
+# next workflow run that builds worker files. `.github/workflows/deploy.yaml`
+# now makes `deploy` depend on `build-worker` when it runs, so the GitOps
+# digest commit can pin the worker image the same way API and Studio are
+# pinned.
 #
 # Digest provenance: `pushing manifest for ghcr.io/madfam-org/<img>:latest@sha256:…`
 # line in run 25030756141, jobs 73311672398 (api) and 73311672389 (studio),

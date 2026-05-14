@@ -1,7 +1,6 @@
 """Tests for worker configuration."""
 
 import os
-import pytest
 from unittest.mock import patch
 
 
@@ -35,6 +34,8 @@ class TestWorkerConfig:
             # Redis DB 14 per PORT_ALLOCATION.md
             assert "/14" in str(settings.redis_url)
             assert settings.worker_id is not None
+            assert settings.api_job_completion_max_attempts == 3
+            assert settings.job_completion_dead_letter_key == "ceq:jobs:completion:dead"
 
     def test_redis_url_parsing(self):
         """Test Redis URL is properly configured."""
@@ -68,8 +69,9 @@ class TestWorkerConfig:
 
     def test_paths_are_path_objects(self):
         """Test that path settings are Path objects."""
-        from ceq_worker.config import Settings
         from pathlib import Path
+
+        from ceq_worker.config import Settings
 
         settings = Settings()
         assert isinstance(settings.comfyui_path, Path)
