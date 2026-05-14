@@ -134,6 +134,10 @@ Clients should prefer the `@ceq/sdk` package (`packages/sdk`) over raw HTTP.
 | `R2_SECRET_KEY` | Yes | | R2 secret access key |
 | `R2_BUCKET` / `R2_BUCKET_NAME` | Yes | `ceq-assets` | R2 bucket name |
 | `JOB_COMPLETION_CALLBACK_TOKEN` | Production / workers | | Shared token required for worker completion callbacks |
+| `JOB_WEBHOOK_SECRET` | If `webhook_url` is used | | HMAC signing secret for user job completion webhooks |
+| `JOB_WEBHOOK_TIMEOUT_SECONDS` | No | `5.0` | Per-attempt webhook HTTP timeout |
+| `JOB_WEBHOOK_MAX_ATTEMPTS` | No | `3` | Webhook delivery attempts for retryable failures |
+| `JOB_WEBHOOK_RETRY_BACKOFF_SECONDS` | No | `1.0` | Linear retry backoff base in seconds |
 
 ### Example .env
 
@@ -157,6 +161,9 @@ R2_BUCKET=ceq-assets
 
 # Worker completion callback
 JOB_COMPLETION_CALLBACK_TOKEN=dev-shared-worker-callback-token
+
+# User job completion webhooks
+JOB_WEBHOOK_SECRET=dev-shared-user-webhook-secret
 ```
 
 ## Database Migrations

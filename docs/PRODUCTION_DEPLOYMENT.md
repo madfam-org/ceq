@@ -119,12 +119,18 @@ Required values:
 - `r2-*`: Cloudflare R2 credentials (already filled)
 - `janua-client-secret`: From Janua admin (already filled)
 - `JOB_COMPLETION_CALLBACK_TOKEN`: Shared API/worker token for `POST /v1/jobs/{job_id}/outputs/report`
+- `JOB_WEBHOOK_SECRET`: HMAC signing secret for user-provided job completion webhooks
 
 Callback token rules:
 - Generate a high-entropy secret and store the exact same value for API and workers.
 - The API refuses worker completion callbacks in production when this value is missing.
 - The worker deployment maps this secret into `API_JOB_COMPLETION_TOKEN`.
 - Rotate by updating the secret and rolling API + worker pods together.
+
+Job webhook rules:
+- Generate a separate high-entropy `JOB_WEBHOOK_SECRET`; do not reuse worker callback tokens.
+- CEQ signs user webhook payloads with `X-CEQ-Signature: sha256=<hmac>`.
+- If this value is missing, jobs still complete but webhook delivery is skipped and recorded in job metadata.
 
 ### 7. Create CEQ Namespace
 

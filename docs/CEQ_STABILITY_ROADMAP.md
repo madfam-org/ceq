@@ -70,6 +70,8 @@ Run CEQ as a deterministic, observable system:
 - Production public-edge smoke completed with `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`:
   - `https://api.ceq.lol/health`: `ok`
   - `https://ceq.lol`: HTTP `200`
+- API webhook implementation verification:
+  - `apps/api`: `296 passed, 1 skipped`
 
 ## Remaining Roadmap To Full Stability
 
@@ -99,17 +101,18 @@ The items below are what remains after the current stabilization patch. They are
    - Confirm Janua knows the active CEQ client ID and redirect URIs.
    - Acceptance: production Studio login succeeds and websocket auth token can be used for job streams.
 
-### P1 — Remaining Functional Correctness
+### P1 — Functional Correctness
 
-1. **Implement user-provided job webhooks**
-   - `webhook_url` is accepted and stored today, but completion delivery to that URL is not yet implemented.
-   - Add signed delivery, retry, and failure metadata.
+1. **Implement user-provided job webhooks** — completed locally
+   - `webhook_url` completion delivery now sends signed terminal job events.
+   - Delivery attempts, failures, and success metadata are recorded under `job.output_metadata.webhook_delivery`.
+   - Production still needs `JOB_WEBHOOK_SECRET` provisioned before webhook delivery is enabled.
 
-2. **Implement active worker cancellation**
+2. **Implement active worker cancellation** — remaining
    - API publishes a cancel control message, but workers need to subscribe per active job and interrupt ComfyUI execution.
    - Acceptance: cancelling a running job stops GPU work and persists `cancelled`.
 
-3. **Broaden worker output collection**
+3. **Broaden worker output collection** — remaining
    - Current ComfyUI output collection is image-oriented.
    - Add video/audio/3D/arbitrary file collection, MIME mapping, dimensions/duration extraction, and tests.
 
@@ -250,7 +253,7 @@ The table below records ownership for the completed remediation and the next rec
 - **api-core** (`apps/api/src/ceq_api`)
   - `db/session.py`, `db/__init__.py`, `routers/synthesis.py`, `routers/jobs.py`, `routers/outputs.py`, `config.py`
   - Completed runtime contracts, callback endpoint, output persistence, and API settings.
-  - Next: user webhook delivery, stronger callback observability, and active-cancel persistence support.
+  - Next: stronger callback observability and active-cancel persistence support.
 
 - **worker** (`apps/workers/src/ceq_worker`)
   - `handler.py`, `queue.py`, `storage.py`, `config.py`

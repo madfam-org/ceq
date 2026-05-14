@@ -439,6 +439,61 @@ Internal worker callback. Requires `X-CEQ-Worker-Token` matching the API `JOB_CO
 }
 ```
 
+If the job was created with `webhook_url`, terminal reports (`completed`,
+`failed`, `cancelled`) trigger a signed user webhook delivery.
+
+**User Webhook Headers:**
+
+| Header | Description |
+|--------|-------------|
+| `X-CEQ-Event` | `job.completed`, `job.failed`, or `job.cancelled` |
+| `X-CEQ-Job-ID` | Job UUID |
+| `X-CEQ-Timestamp` | ISO-8601 send timestamp |
+| `X-CEQ-Signature` | `sha256=<hmac>` over the raw JSON body using `JOB_WEBHOOK_SECRET` |
+
+**User Webhook Payload:**
+```json
+{
+  "event": "job.completed",
+  "timestamp": "2026-05-14T12:00:00+00:00",
+  "source": "ceq",
+  "job": {
+    "id": "uuid",
+    "workflow_id": "uuid",
+    "status": "completed",
+    "progress": 1.0,
+    "error": null,
+    "input_params": {"prompt": "..."},
+    "metadata": {"worker_callback_reported_at": "..."},
+    "queued_at": "...",
+    "started_at": "...",
+    "completed_at": "...",
+    "worker_id": "ceq-worker-0",
+    "gpu_seconds": 12.4,
+    "cold_start_ms": 0
+  },
+  "outputs": [
+    {
+      "id": "uuid",
+      "filename": "output.png",
+      "storage_uri": "r2://ceq-assets/outputs/job/output.png",
+      "public_url": "https://...",
+      "file_type": "image/png",
+      "file_size_bytes": 524288,
+      "width": null,
+      "height": null,
+      "duration_seconds": null,
+      "preview_url": "https://...",
+      "metadata": {}
+    }
+  ]
+}
+```
+
+Delivery status is stored on the job under
+`output_metadata.webhook_delivery`. Retry/dead-letter infrastructure remains
+part of the P2 hardening roadmap.
+
 ### Get Output
 
 ```http

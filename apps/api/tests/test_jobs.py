@@ -1,10 +1,13 @@
 """Tests for job management endpoints."""
 
+import hashlib
+import hmac
 import json
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+import httpx
 import pytest
 from fastapi import status
 
@@ -289,6 +292,61 @@ class TestCancelJob:
 class TestJobCompletionReport:
     """Tests for POST /v1/jobs/{job_id}/outputs/report"""
 
+    class FakeWebhookClient:
+        """Capture outbound webhook delivery attempts."""
+
+        calls: list[dict] = []
+        responses: list[httpx.Response | Exception] = []
+
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def post(self, url, content, headers):
+            self.__class__.calls.append(
+                {
+                    "url": url,
+                    "content": content,
+                    "headers": headers,
+                    "timeout": self.timeout,
+                }
+            )
+            response = self.__class__.responses.pop(0)
+            if isinstance(response, Exception):
+                raise response
+            return response
+
+    @staticmethod
+    def _configure_webhook(monkeypatch, jobs_router, responses):
+        from ceq_api.services import job_webhooks
+
+        monkeypatch.setattr(jobs_router.settings, "job_webhook_secret", "webhook-secret")
+        monkeypatch.setattr(jobs_router.settings, "job_webhook_max_attempts", 3)
+        monkeypatch.setattr(jobs_router.settings, "job_webhook_retry_backoff_seconds", 0.0)
+        monkeypatch.setattr(jobs_router.settings, "job_webhook_timeout_seconds", 2.0)
+        monkeypatch.setattr(job_webhooks, "get_settings", lambda: jobs_router.settings)
+        TestJobCompletionReport.FakeWebhookClient.calls = []
+        TestJobCompletionReport.FakeWebhookClient.responses = list(responses)
+        monkeypatch.setattr(
+            job_webhooks.httpx,
+            "AsyncClient",
+            TestJobCompletionReport.FakeWebhookClient,
+        )
+
+        class FakeStorage:
+            def get_public_url(self, storage_uri: str) -> str:
+                return f"https://cdn.example.com/{storage_uri.rsplit('/', 1)[-1]}"
+
+        async def fake_get_storage():
+            return FakeStorage()
+
+        monkeypatch.setattr(jobs_router, "get_storage", fake_get_storage)
+
     @pytest.mark.asyncio
     async def test_report_job_outputs_persists_completion(
         self,
@@ -372,6 +430,335 @@ class TestJobCompletionReport:
         assert output.file_type == "image/png"
         assert output.file_size_bytes == 1024
         assert output.preview_url == "https://cdn.example.com/output.png"
+
+    @pytest.mark.asyncio
+    async def test_report_job_outputs_delivers_signed_webhook(
+        self,
+        async_client,
+        db_session,
+        mock_user,
+        monkeypatch,
+    ):
+        """Terminal worker callbacks should deliver signed user webhooks."""
+        from sqlalchemy import select
+        from ceq_api.models.workflow import Workflow
+        from ceq_api.routers import jobs as jobs_router
+
+        monkeypatch.setattr(
+            jobs_router.settings,
+            "job_completion_callback_token",
+            "test-token",
+        )
+        self._configure_webhook(monkeypatch, jobs_router, [httpx.Response(204)])
+
+        workflow = Workflow(
+            name="Test Workflow",
+            description="Test",
+            workflow_json={"test": "data"},
+            input_schema={},
+            user_id=mock_user.id,
+        )
+        db_session.add(workflow)
+        await db_session.flush()
+
+        job = Job(
+            workflow_id=workflow.id,
+            user_id=mock_user.id,
+            status=JobStatus.RUNNING.value,
+            progress=0.5,
+            input_params={"prompt": "test"},
+            queued_at=datetime.now(timezone.utc),
+            webhook_url="https://hooks.example.com/ceq",
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        response = await async_client.post(
+            f"/v1/jobs/{job.id}/outputs/report",
+            headers={"X-CEQ-Worker-Token": "test-token"},
+            json={
+                "status": "completed",
+                "outputs": [
+                    {
+                        "filename": "output.png",
+                        "storage_uri": "r2://ceq-assets/outputs/job/output.png",
+                        "file_type": "image/png",
+                        "file_size_bytes": 1024,
+                    }
+                ],
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["outputs_persisted"] == 1
+        assert len(self.FakeWebhookClient.calls) == 1
+
+        call = self.FakeWebhookClient.calls[0]
+        assert call["url"] == "https://hooks.example.com/ceq"
+        assert call["headers"]["X-CEQ-Event"] == "job.completed"
+        assert call["headers"]["X-CEQ-Job-ID"] == str(job.id)
+        expected_signature = hmac.new(
+            b"webhook-secret",
+            call["content"],
+            hashlib.sha256,
+        ).hexdigest()
+        assert call["headers"]["X-CEQ-Signature"] == f"sha256={expected_signature}"
+
+        payload = json.loads(call["content"])
+        assert payload["event"] == "job.completed"
+        assert payload["job"]["id"] == str(job.id)
+        assert payload["job"]["input_params"] == {"prompt": "test"}
+        assert payload["outputs"][0]["public_url"] == "https://cdn.example.com/output.png"
+
+        job_result = await db_session.execute(select(Job).where(Job.id == job.id))
+        updated_job = job_result.scalar_one()
+        delivery = updated_job.output_metadata["webhook_delivery"]
+        assert delivery["status"] == "delivered"
+        assert delivery["attempts"] == 1
+        assert delivery["last_status_code"] == 204
+
+    @pytest.mark.asyncio
+    async def test_report_job_outputs_retries_retryable_webhook_failure(
+        self,
+        async_client,
+        db_session,
+        mock_user,
+        monkeypatch,
+    ):
+        """5xx webhook responses should retry before recording success."""
+        from sqlalchemy import select
+        from ceq_api.models.workflow import Workflow
+        from ceq_api.routers import jobs as jobs_router
+
+        monkeypatch.setattr(
+            jobs_router.settings,
+            "job_completion_callback_token",
+            "test-token",
+        )
+        monkeypatch.setattr(jobs_router.settings, "job_webhook_max_attempts", 2)
+        self._configure_webhook(
+            monkeypatch,
+            jobs_router,
+            [httpx.Response(500, text="temporary"), httpx.Response(200)],
+        )
+        monkeypatch.setattr(jobs_router.settings, "job_webhook_max_attempts", 2)
+
+        workflow = Workflow(
+            name="Test Workflow",
+            description="Test",
+            workflow_json={"test": "data"},
+            input_schema={},
+            user_id=mock_user.id,
+        )
+        db_session.add(workflow)
+        await db_session.flush()
+
+        job = Job(
+            workflow_id=workflow.id,
+            user_id=mock_user.id,
+            status=JobStatus.RUNNING.value,
+            progress=0.5,
+            input_params={},
+            queued_at=datetime.now(timezone.utc),
+            webhook_url="https://hooks.example.com/ceq",
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        response = await async_client.post(
+            f"/v1/jobs/{job.id}/outputs/report",
+            headers={"X-CEQ-Worker-Token": "test-token"},
+            json={"status": "completed", "outputs": []},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(self.FakeWebhookClient.calls) == 2
+        job_result = await db_session.execute(select(Job).where(Job.id == job.id))
+        delivery = job_result.scalar_one().output_metadata["webhook_delivery"]
+        assert delivery["status"] == "delivered"
+        assert delivery["attempts"] == 2
+
+    @pytest.mark.asyncio
+    async def test_report_job_outputs_records_permanent_webhook_failure(
+        self,
+        async_client,
+        db_session,
+        mock_user,
+        monkeypatch,
+    ):
+        """Permanent 4xx webhook responses should not retry."""
+        from sqlalchemy import select
+        from ceq_api.models.workflow import Workflow
+        from ceq_api.routers import jobs as jobs_router
+
+        monkeypatch.setattr(
+            jobs_router.settings,
+            "job_completion_callback_token",
+            "test-token",
+        )
+        self._configure_webhook(
+            monkeypatch,
+            jobs_router,
+            [httpx.Response(410, text="gone"), httpx.Response(200)],
+        )
+
+        workflow = Workflow(
+            name="Test Workflow",
+            description="Test",
+            workflow_json={"test": "data"},
+            input_schema={},
+            user_id=mock_user.id,
+        )
+        db_session.add(workflow)
+        await db_session.flush()
+
+        job = Job(
+            workflow_id=workflow.id,
+            user_id=mock_user.id,
+            status=JobStatus.RUNNING.value,
+            progress=0.5,
+            input_params={},
+            queued_at=datetime.now(timezone.utc),
+            webhook_url="https://hooks.example.com/ceq",
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        response = await async_client.post(
+            f"/v1/jobs/{job.id}/outputs/report",
+            headers={"X-CEQ-Worker-Token": "test-token"},
+            json={"status": "failed", "error": "executor failed", "outputs": []},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(self.FakeWebhookClient.calls) == 1
+        job_result = await db_session.execute(select(Job).where(Job.id == job.id))
+        delivery = job_result.scalar_one().output_metadata["webhook_delivery"]
+        assert delivery["status"] == "failed"
+        assert delivery["attempts"] == 1
+        assert delivery["last_status_code"] == 410
+        assert delivery["last_error"] == "gone"
+
+    @pytest.mark.asyncio
+    async def test_report_job_outputs_skips_webhook_without_signing_secret(
+        self,
+        async_client,
+        db_session,
+        mock_user,
+        monkeypatch,
+    ):
+        """Webhook URLs should not be delivered unsigned."""
+        from sqlalchemy import select
+        from ceq_api.models.workflow import Workflow
+        from ceq_api.routers import jobs as jobs_router
+        from ceq_api.services import job_webhooks
+
+        monkeypatch.setattr(
+            jobs_router.settings,
+            "job_completion_callback_token",
+            "test-token",
+        )
+        monkeypatch.setattr(jobs_router.settings, "job_webhook_secret", "")
+        monkeypatch.setattr(job_webhooks, "get_settings", lambda: jobs_router.settings)
+        self.FakeWebhookClient.calls = []
+        self.FakeWebhookClient.responses = [httpx.Response(204)]
+        monkeypatch.setattr(job_webhooks.httpx, "AsyncClient", self.FakeWebhookClient)
+
+        workflow = Workflow(
+            name="Test Workflow",
+            description="Test",
+            workflow_json={"test": "data"},
+            input_schema={},
+            user_id=mock_user.id,
+        )
+        db_session.add(workflow)
+        await db_session.flush()
+
+        job = Job(
+            workflow_id=workflow.id,
+            user_id=mock_user.id,
+            status=JobStatus.RUNNING.value,
+            progress=0.5,
+            input_params={},
+            queued_at=datetime.now(timezone.utc),
+            webhook_url="https://hooks.example.com/ceq",
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        response = await async_client.post(
+            f"/v1/jobs/{job.id}/outputs/report",
+            headers={"X-CEQ-Worker-Token": "test-token"},
+            json={"status": "completed", "outputs": []},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert self.FakeWebhookClient.calls == []
+        job_result = await db_session.execute(select(Job).where(Job.id == job.id))
+        delivery = job_result.scalar_one().output_metadata["webhook_delivery"]
+        assert delivery["status"] == "skipped"
+        assert "JOB_WEBHOOK_SECRET" in delivery["last_error"]
+
+    @pytest.mark.asyncio
+    async def test_report_job_outputs_records_webhook_transport_failure(
+        self,
+        async_client,
+        db_session,
+        mock_user,
+        monkeypatch,
+    ):
+        """Webhook transport errors should retry and persist failure metadata."""
+        from sqlalchemy import select
+        from ceq_api.models.workflow import Workflow
+        from ceq_api.routers import jobs as jobs_router
+
+        monkeypatch.setattr(
+            jobs_router.settings,
+            "job_completion_callback_token",
+            "test-token",
+        )
+        self._configure_webhook(
+            monkeypatch,
+            jobs_router,
+            [httpx.ConnectTimeout("timed out"), httpx.ConnectTimeout("timed out")],
+        )
+        monkeypatch.setattr(jobs_router.settings, "job_webhook_max_attempts", 2)
+
+        workflow = Workflow(
+            name="Test Workflow",
+            description="Test",
+            workflow_json={"test": "data"},
+            input_schema={},
+            user_id=mock_user.id,
+        )
+        db_session.add(workflow)
+        await db_session.flush()
+
+        job = Job(
+            workflow_id=workflow.id,
+            user_id=mock_user.id,
+            status=JobStatus.RUNNING.value,
+            progress=0.5,
+            input_params={},
+            queued_at=datetime.now(timezone.utc),
+            webhook_url="https://hooks.example.com/ceq",
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        response = await async_client.post(
+            f"/v1/jobs/{job.id}/outputs/report",
+            headers={"X-CEQ-Worker-Token": "test-token"},
+            json={"status": "completed", "outputs": []},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(self.FakeWebhookClient.calls) == 2
+        job_result = await db_session.execute(select(Job).where(Job.id == job.id))
+        delivery = job_result.scalar_one().output_metadata["webhook_delivery"]
+        assert delivery["status"] == "failed"
+        assert delivery["attempts"] == 2
+        assert "timed out" in delivery["last_error"]
 
     @pytest.mark.asyncio
     async def test_report_job_outputs_is_idempotent(

@@ -256,15 +256,15 @@ class TestRetryWithBackoff:
         assert len(attempts) == 1
 
     @pytest.mark.asyncio
-    async def test_retry_exponential_backoff(self):
+    async def test_retry_exponential_backoff(self, monkeypatch):
         """Delays should increase exponentially."""
-        import time
-
         attempts = []
-        times = []
+        delays = []
+
+        async def fake_sleep(delay):
+            delays.append(delay)
 
         async def fails_twice():
-            times.append(time.monotonic())
             attempts.append(1)
             if len(attempts) < 3:
                 raise ConnectionError("Try again")
@@ -277,14 +277,11 @@ class TestRetryWithBackoff:
             jitter=False,  # Disable jitter for predictable timing
         )
 
+        monkeypatch.setattr("ceq_api.resilience.asyncio.sleep", fake_sleep)
+
         await retry_with_backoff(fails_twice, config)
 
-        # Check delays increased
-        delay1 = times[1] - times[0]
-        delay2 = times[2] - times[1]
-
-        # Second delay should be roughly 2x first (base_delay vs base_delay * 2)
-        assert delay2 > delay1 * 1.5  # Allow some tolerance
+        assert delays == [0.1, 0.2]
 
 
 class TestGracefulDegradation:

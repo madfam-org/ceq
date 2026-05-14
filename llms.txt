@@ -21,4 +21,5 @@ before raw infrastructure tools. Direct `kubectl`, `helm`, SSH, provider CLIs,
 - `docs/PRODUCTION_DEPLOYMENT.md` — production rollout, callback secret, and smoke verification.
 - `docs/API.md` — endpoint contracts, including worker completion callbacks.
 - `scripts/production-smoke.sh` — public/API-level production smoke runner for the main job completion path.
+- User job completion webhooks are signed with `JOB_WEBHOOK_SECRET` and recorded in `job.output_metadata.webhook_delivery`.
 - `apps/api/README.md` and `apps/workers/README.md` — local env and service-specific runtime details.

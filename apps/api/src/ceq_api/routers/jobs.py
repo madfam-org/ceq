@@ -23,6 +23,7 @@ from ceq_api.logging import audit_logger
 from ceq_api.models.job import Job
 from ceq_api.models.job import JobStatus as JobStatusEnum
 from ceq_api.models.output import Output
+from ceq_api.services.job_webhooks import deliver_job_webhook
 from ceq_api.storage import get_storage
 
 logger = logging.getLogger(__name__)
@@ -393,6 +394,7 @@ async def report_job_outputs(
     }
 
     outputs_persisted = 0
+    persisted_outputs: list[Output] = []
     for output_report in data.outputs:
         existing_result = await db.execute(
             select(Output).where(
@@ -416,20 +418,31 @@ async def report_job_outputs(
         }
 
         if output is None:
-            db.add(
-                Output(
-                    job_id=job.id,
-                    published_to=[],
-                    **output_values,
-                )
+            output = Output(
+                job_id=job.id,
+                published_to=[],
+                **output_values,
             )
+            db.add(output)
         else:
             for key, value in output_values.items():
                 setattr(output, key, value)
 
+        persisted_outputs.append(output)
         outputs_persisted += 1
 
     await db.flush()
+
+    if job.status in {
+        JobStatusEnum.COMPLETED.value,
+        JobStatusEnum.FAILED.value,
+        JobStatusEnum.CANCELLED.value,
+    }:
+        try:
+            storage = await get_storage()
+            await deliver_job_webhook(job, persisted_outputs, storage)
+        except Exception:  # noqa: BLE001 - completion persistence is source of truth
+            logger.exception("Unexpected job webhook delivery failure for job %s", job_id)
 
     try:
         redis = get_redis()

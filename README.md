@@ -122,6 +122,7 @@ R2_BUCKET=ceq-assets
 # R2_BUCKET_NAME=ceq-assets
 JANUA_URL=https://api.janua.dev
 JOB_COMPLETION_CALLBACK_TOKEN=dev-shared-worker-callback-token
+JOB_WEBHOOK_SECRET=dev-shared-user-webhook-secret
 ```
 
 #### Studio (`apps/studio/.env.local`)

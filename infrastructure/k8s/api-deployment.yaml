@@ -70,6 +70,11 @@ spec:
                 secretKeyRef:
                   name: ceq-secrets
                   key: JOB_COMPLETION_CALLBACK_TOKEN
+            - name: JOB_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: JOB_WEBHOOK_SECRET
             - name: JANUA_API_URL
               value: "http://janua-api.janua.svc.cluster.local:4100"
             - name: FURNACE_API_URL

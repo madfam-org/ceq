@@ -84,6 +84,12 @@ class Settings(BaseSettings):
     job_completion_callback_path: str = "/v1/jobs/{job_id}/outputs/report"
     job_completion_callback_timeout_seconds: float = 5.0
 
+    # User job completion webhooks
+    job_webhook_secret: str = ""
+    job_webhook_timeout_seconds: float = 5.0
+    job_webhook_max_attempts: int = 3
+    job_webhook_retry_backoff_seconds: float = 1.0
+
     # CORS
     cors_origins: list[str] = ["http://localhost:5801", "https://ceq.lol"]
 
