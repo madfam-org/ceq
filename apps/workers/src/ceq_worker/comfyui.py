@@ -6,6 +6,7 @@ Wraps ComfyUI's API for workflow execution without the web UI.
 """
 
 import asyncio
+import inspect
 import logging
 import subprocess
 import time
@@ -176,10 +177,12 @@ class ComfyUIExecutor:
                     if on_progress and running:
                         for item in running:
                             if item[1] == prompt_id:
-                                on_progress({
+                                progress_result = on_progress({
                                     "node": item[2] if len(item) > 2 else "unknown",
                                     "percent": 50,  # Approximate
                                 })
+                                if inspect.isawaitable(progress_result):
+                                    await progress_result
 
                 await asyncio.sleep(0.5)
 

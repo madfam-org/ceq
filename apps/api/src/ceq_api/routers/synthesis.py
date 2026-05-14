@@ -21,15 +21,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ceq_api.auth import JanuaUser, get_current_user
 from ceq_api.db import get_db
 from ceq_api.db.redis import enqueue_job
-from ceq_api.models import Job, Template
+from ceq_api.models import Job, Template, Workflow
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# The canonical CEQ template slug for text-to-3D synthesis.
-# Must exist in the templates table (seeded via seed_templates.py).
-_TEXT_TO_3D_TEMPLATE_SLUG = "triposr-text-to-3d"
+# Candidate template hints for text-to-3D synthesis.
+_TEXT_TO_3D_TEMPLATE_HINTS = (
+    "triposr",
+    "text to 3d",
+    "text-to-3d",
+    "text 3d",
+    "crm 3d",
+)
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────────
@@ -97,31 +102,41 @@ async def synthesize_from_query(
     """Enqueue a generative 3D synthesis job triggered by a zero-results search."""
 
     # 1. Resolve the text-to-3D template
-    result = await db.execute(
-        select(Template).where(
-            Template.slug == _TEXT_TO_3D_TEMPLATE_SLUG,
-            Template.is_deleted == False,  # noqa: E712
-        )
-    )
-    template = result.scalar_one_or_none()
+    template = await _resolve_3d_template(db)
 
     if template is None:
         logger.error(
-            "text-to-3D template '%s' not found in database. "
-            "Run seed_templates.py to populate.",
-            _TEXT_TO_3D_TEMPLATE_SLUG,
+            "No 3D templates found for synthesis. "
+            "Run seed_templates.py to populate the catalog.",
         )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
-                f"Synthesis template '{_TEXT_TO_3D_TEMPLATE_SLUG}' is not available. "
+                "No synthesis template is available. "
                 "Contact your administrator to seed the template catalogue."
             ),
         )
 
-    # 2. Create a CEQ job record
+    # 2. Create an ephemeral workflow and CEQ job record
     now = datetime.now(UTC)
+    workflow = Workflow(
+        name=f"[Synthesis] {data.source_query[:96]}",
+        description=f"Zero-results synthesis generated from: {data.source_query}",
+        workflow_json=template.workflow_json,
+        input_schema=template.input_schema,
+        tags=["ephemeral", "synthesis", "zero-results"],
+        user_id=user.id,
+        org_id=user.org_id,
+        template_id=template.id,
+        is_public=False,
+    )
+
+    db.add(workflow)
+    await db.flush()
+    await db.refresh(workflow)
+
     job = Job(
+        workflow_id=workflow.id,
         user_id=user.id,
         status="queued",
         input_params={
@@ -143,9 +158,12 @@ async def synthesize_from_query(
     # 3. Enqueue for GPU execution
     job_data: dict[str, Any] = {
         "id": str(job.id),
+        "workflow_id": str(workflow.id),
+        "template_id": str(template.id),
         "input": {
+            "workflow_json": workflow.workflow_json,
             "template": {
-                "slug": template.slug,
+                "name": template.name,
                 "workflow_json": template.workflow_json,
                 "model_requirements": template.model_requirements or [],
                 "vram_requirement_gb": template.vram_requirement_gb or 16,
@@ -180,3 +198,29 @@ async def synthesize_from_query(
             "Poll /v1/jobs/{job_id} for status or await webhook delivery."
         ),
     )
+
+
+def _template_name_or_tag_matches_hint(template: Template, hint: str) -> bool:
+    """Return true when a template name or tags match the provided hint."""
+    normalized = hint.lower()
+    if normalized in template.name.lower():
+        return True
+
+    tags = {str(tag).lower() for tag in template.tags or []}
+    return any(normalized == tag for tag in tags)
+
+
+async def _resolve_3d_template(db: AsyncSession) -> Template | None:
+    """Resolve the best available 3D template for synthesis."""
+    result = await db.execute(select(Template).where(Template.category == "3d"))
+    templates = list(result.scalars().all())
+
+    if not templates:
+        return None
+
+    for hint in _TEXT_TO_3D_TEMPLATE_HINTS:
+        for template in templates:
+            if _template_name_or_tag_matches_hint(template, hint):
+                return template
+
+    return templates[0]

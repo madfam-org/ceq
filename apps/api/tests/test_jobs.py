@@ -1,5 +1,6 @@
 """Tests for job management endpoints."""
 
+import json
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -235,6 +236,8 @@ class TestCancelJob:
         )
         db_session.add(job)
         await db_session.commit()
+        queued_payload = json.dumps({"id": str(job.id), "input": {"job_id": str(job.id)}})
+        mock_redis.lrange.return_value = [queued_payload]
 
         # Patch Redis functions at module level since they're called directly
         with patch("ceq_api.routers.jobs.get_redis", return_value=mock_redis), \
@@ -248,6 +251,7 @@ class TestCancelJob:
         result = await db_session.execute(select(Job).where(Job.id == job.id))
         updated_job = result.scalar_one()
         assert updated_job.status == JobStatus.CANCELLED.value
+        mock_redis.lrem.assert_any_call("ceq:jobs:pending", 0, queued_payload)
 
     @pytest.mark.asyncio
     async def test_cancel_job_already_completed(self, async_client, db_session, mock_user):
@@ -280,6 +284,207 @@ class TestCancelJob:
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "Cannot cancel" in response.json()["detail"]
+
+
+class TestJobCompletionReport:
+    """Tests for POST /v1/jobs/{job_id}/outputs/report"""
+
+    @pytest.mark.asyncio
+    async def test_report_job_outputs_persists_completion(
+        self,
+        async_client,
+        db_session,
+        mock_user,
+        monkeypatch,
+    ):
+        """Worker callback should persist final job status and outputs."""
+        from sqlalchemy import select
+        from ceq_api.models.output import Output
+        from ceq_api.models.workflow import Workflow
+        from ceq_api.routers import jobs as jobs_router
+
+        monkeypatch.setattr(
+            jobs_router.settings,
+            "job_completion_callback_token",
+            "test-token",
+        )
+
+        workflow = Workflow(
+            name="Test Workflow",
+            description="Test",
+            workflow_json={"test": "data"},
+            input_schema={},
+            user_id=mock_user.id,
+        )
+        db_session.add(workflow)
+        await db_session.flush()
+
+        job = Job(
+            workflow_id=workflow.id,
+            user_id=mock_user.id,
+            status=JobStatus.RUNNING.value,
+            progress=0.5,
+            input_params={},
+            queued_at=datetime.now(timezone.utc),
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        payload = {
+            "status": "completed",
+            "outputs": [
+                {
+                    "filename": "output.png",
+                    "storage_uri": "r2://ceq-assets/outputs/job/output.png",
+                    "file_type": "image/png",
+                    "file_size_bytes": 1024,
+                    "width": 512,
+                    "height": 512,
+                    "preview_url": "https://cdn.example.com/output.png",
+                    "metadata": {"seed": 42},
+                }
+            ],
+            "metadata": {"vram_peak_gb": 12.5},
+            "worker_id": "worker-a",
+            "gpu_seconds": 4.2,
+        }
+
+        response = await async_client.post(
+            f"/v1/jobs/{job.id}/outputs/report",
+            headers={"X-CEQ-Worker-Token": "test-token"},
+            json=payload,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["outputs_persisted"] == 1
+
+        job_result = await db_session.execute(select(Job).where(Job.id == job.id))
+        updated_job = job_result.scalar_one()
+        assert updated_job.status == JobStatus.COMPLETED.value
+        assert updated_job.progress == 1.0
+        assert updated_job.worker_id == "worker-a"
+
+        output_result = await db_session.execute(
+            select(Output).where(Output.job_id == job.id)
+        )
+        output = output_result.scalar_one()
+        assert output.filename == "output.png"
+        assert output.file_type == "image/png"
+        assert output.file_size_bytes == 1024
+        assert output.preview_url == "https://cdn.example.com/output.png"
+
+    @pytest.mark.asyncio
+    async def test_report_job_outputs_is_idempotent(
+        self,
+        async_client,
+        db_session,
+        mock_user,
+        monkeypatch,
+    ):
+        """Repeated callback for the same storage URI should update, not duplicate."""
+        from sqlalchemy import select
+        from ceq_api.models.output import Output
+        from ceq_api.models.workflow import Workflow
+        from ceq_api.routers import jobs as jobs_router
+
+        monkeypatch.setattr(
+            jobs_router.settings,
+            "job_completion_callback_token",
+            "test-token",
+        )
+
+        workflow = Workflow(
+            name="Test Workflow",
+            description="Test",
+            workflow_json={"test": "data"},
+            input_schema={},
+            user_id=mock_user.id,
+        )
+        db_session.add(workflow)
+        await db_session.flush()
+
+        job = Job(
+            workflow_id=workflow.id,
+            user_id=mock_user.id,
+            status=JobStatus.RUNNING.value,
+            progress=0.5,
+            input_params={},
+            queued_at=datetime.now(timezone.utc),
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        payload = {
+            "status": "completed",
+            "outputs": [
+                {
+                    "filename": "output.png",
+                    "storage_uri": "r2://ceq-assets/outputs/job/output.png",
+                    "file_type": "image/png",
+                    "file_size_bytes": 1024,
+                }
+            ],
+        }
+
+        for _ in range(2):
+            response = await async_client.post(
+                f"/v1/jobs/{job.id}/outputs/report",
+                headers={"X-CEQ-Worker-Token": "test-token"},
+                json=payload,
+            )
+            assert response.status_code == status.HTTP_200_OK
+
+        output_result = await db_session.execute(
+            select(Output).where(Output.job_id == job.id)
+        )
+        assert len(output_result.scalars().all()) == 1
+
+    @pytest.mark.asyncio
+    async def test_report_job_outputs_rejects_invalid_token(
+        self,
+        async_client,
+        db_session,
+        mock_user,
+        monkeypatch,
+    ):
+        """Worker callback should require the shared token."""
+        from ceq_api.models.workflow import Workflow
+        from ceq_api.routers import jobs as jobs_router
+
+        monkeypatch.setattr(
+            jobs_router.settings,
+            "job_completion_callback_token",
+            "test-token",
+        )
+
+        workflow = Workflow(
+            name="Test Workflow",
+            description="Test",
+            workflow_json={"test": "data"},
+            input_schema={},
+            user_id=mock_user.id,
+        )
+        db_session.add(workflow)
+        await db_session.flush()
+
+        job = Job(
+            workflow_id=workflow.id,
+            user_id=mock_user.id,
+            status=JobStatus.RUNNING.value,
+            progress=0.5,
+            input_params={},
+            queued_at=datetime.now(timezone.utc),
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        response = await async_client.post(
+            f"/v1/jobs/{job.id}/outputs/report",
+            headers={"X-CEQ-Worker-Token": "wrong-token"},
+            json={"status": "completed", "outputs": []},
+        )
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 class TestListJobOutputs:

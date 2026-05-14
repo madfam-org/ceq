@@ -118,7 +118,10 @@ R2_ENDPOINT=https://xxx.r2.cloudflarestorage.com
 R2_ACCESS_KEY=your-access-key
 R2_SECRET_KEY=your-secret-key
 R2_BUCKET=ceq-assets
+# Kubernetes secrets use R2_BUCKET_NAME; local config accepts either name.
+# R2_BUCKET_NAME=ceq-assets
 JANUA_URL=https://api.janua.dev
+JOB_COMPLETION_CALLBACK_TOKEN=dev-shared-worker-callback-token
 ```
 
 #### Studio (`apps/studio/.env.local`)
@@ -127,6 +130,17 @@ NEXT_PUBLIC_API_URL=http://localhost:5800
 NEXT_PUBLIC_WS_URL=ws://localhost:5800
 NEXT_PUBLIC_JANUA_DOMAIN=auth.madfam.io
 NEXT_PUBLIC_JANUA_CLIENT_ID=jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk
+```
+
+#### Workers
+```bash
+REDIS_URL=redis://:password@host:6379/14
+API_URL=http://localhost:5800
+API_JOB_COMPLETION_TOKEN=dev-shared-worker-callback-token
+R2_ENDPOINT=https://xxx.r2.cloudflarestorage.com
+R2_ACCESS_KEY=your-access-key
+R2_SECRET_KEY=your-secret-key
+R2_BUCKET=ceq-assets
 ```
 
 ---

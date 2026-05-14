@@ -232,13 +232,19 @@ class Orchestrator:
                     spec = InstanceSpec(
                         gpu_type=gpu["gpu_type"],
                         gpu_count=1,
-                        image=os.getenv("CEQ_WORKER_IMAGE", "ceq/worker:latest"),
+                        image=os.getenv(
+                            "CEQ_WORKER_IMAGE",
+                            "ghcr.io/madfam-org/ceq-worker:latest",
+                        ),
                         env_vars={
                             "REDIS_URL": str(settings.redis_url),
                             "R2_ENDPOINT": settings.r2_endpoint,
                             "R2_ACCESS_KEY": settings.r2_access_key,
                             "R2_SECRET_KEY": settings.r2_secret_key,
                             "R2_BUCKET": settings.r2_bucket,
+                            "API_URL": settings.api_url,
+                            "API_JOB_COMPLETION_PATH": settings.api_job_completion_path,
+                            "API_JOB_COMPLETION_TOKEN": settings.api_job_completion_token,
                         },
                         labels={
                             "app": "ceq-worker",

@@ -50,11 +50,16 @@ export VAST_API_KEY="your-api-key"
 # Required for job queue
 export REDIS_URL="redis://localhost:6379/14"
 
+# Required for durable completion persistence
+export API_URL="http://localhost:5800"
+export API_JOB_COMPLETION_TOKEN="dev-shared-worker-callback-token"
+
 # Optional: R2 storage for outputs
 export R2_ENDPOINT="https://12f1353f7819865c56161ce00297668e.r2.cloudflarestorage.com"
 export R2_ACCESS_KEY="51844af3c4cbda516895116372ec3b38"
 export R2_SECRET_KEY="your-secret-key"
 export R2_BUCKET="ceq-assets"
+# R2_BUCKET_NAME is also accepted.
 ```
 
 ### 2. Deploy a Worker to Vast.ai
@@ -142,6 +147,10 @@ docker build -f Dockerfile.slim -t ceq-worker:slim .
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `REDIS_URL` | `redis://localhost:6379/14` | Redis connection (DB 14) |
+| `API_URL` | `http://localhost:5800` | CEQ API base URL for worker completion callbacks |
+| `API_JOB_COMPLETION_TOKEN` | | Shared token mapped from API `JOB_COMPLETION_CALLBACK_TOKEN` |
+| `API_JOB_COMPLETION_PATH` | `/v1/jobs/{job_id}/outputs/report` | API callback path |
+| `API_JOB_COMPLETION_TIMEOUT_SECONDS` | `5.0` | Callback HTTP timeout |
 | `GPU_PROVIDER` | `vast` | Provider: vast, furnace |
 | `VAST_API_KEY` | | Vast.ai API key |
 | `VAST_MAX_PRICE` | `1.0` | Max $/hour per instance |
@@ -152,7 +161,7 @@ docker build -f Dockerfile.slim -t ceq-worker:slim .
 | `R2_ENDPOINT` | | Cloudflare R2 endpoint |
 | `R2_ACCESS_KEY` | | R2 access key ID |
 | `R2_SECRET_KEY` | | R2 secret access key |
-| `R2_BUCKET` | `ceq-assets` | R2 bucket name |
+| `R2_BUCKET` / `R2_BUCKET_NAME` | `ceq-assets` | R2 bucket name |
 
 ## Model Requirements
 

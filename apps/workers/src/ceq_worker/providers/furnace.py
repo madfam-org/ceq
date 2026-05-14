@@ -49,7 +49,10 @@ class FurnaceProvider(GPUProvider):
             api_url=os.getenv("FURNACE_API_URL", "http://furnace-gateway:4210"),
             region=os.getenv("FURNACE_REGION", "hetzner-fsn1"),
             ssh_key_path=os.getenv("FURNACE_SSH_KEY", os.path.expanduser("~/.ssh/id_rsa")),
-            default_image=os.getenv("FURNACE_DEFAULT_IMAGE", "ghcr.io/madfam/ceq-worker:latest"),
+            default_image=os.getenv(
+                "FURNACE_DEFAULT_IMAGE",
+                "ghcr.io/madfam-org/ceq-worker:latest",
+            ),
             max_price_per_hour=float(os.getenv("FURNACE_MAX_PRICE", "0.50")),
             max_instances=int(os.getenv("FURNACE_MAX_INSTANCES", "10")),
             scale_to_zero=os.getenv("FURNACE_SCALE_TO_ZERO", "true").lower() == "true",

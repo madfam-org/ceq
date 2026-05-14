@@ -43,10 +43,12 @@ export function OutputCard({ output, className }: OutputCardProps) {
 
   const isImage = output.file_type.startsWith("image/");
   const isVideo = output.file_type.startsWith("video/");
+  const outputUrl = output.public_url || output.storage_uri;
+  const previewUrl = output.preview_url || (isImage ? outputUrl : null);
 
   const handleDownload = async () => {
     try {
-      const response = await fetch(output.storage_uri);
+      const response = await fetch(outputUrl);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -72,7 +74,7 @@ export function OutputCard({ output, className }: OutputCardProps) {
 
   const handleCopyLink = async () => {
     try {
-      await navigator.clipboard.writeText(output.storage_uri);
+      await navigator.clipboard.writeText(outputUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
 
@@ -94,7 +96,7 @@ export function OutputCard({ output, className }: OutputCardProps) {
       try {
         await navigator.share({
           title: output.filename,
-          url: output.storage_uri,
+          url: outputUrl,
         });
       } catch {
         // User cancelled
@@ -114,9 +116,9 @@ export function OutputCard({ output, className }: OutputCardProps) {
     <Card className={cn("group overflow-hidden", className)}>
       {/* Preview */}
       <div className="relative aspect-square bg-muted overflow-hidden">
-        {isImage && output.preview_url ? (
+        {isImage && previewUrl ? (
           <Image
-            src={output.preview_url}
+            src={previewUrl}
             alt={output.filename}
             fill
             className="object-cover transition-transform group-hover:scale-105"
@@ -212,7 +214,7 @@ export function OutputCard({ output, className }: OutputCardProps) {
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <a
-                href={output.storage_uri}
+                href={outputUrl}
                 target="_blank"
                 rel="noopener noreferrer"
               >

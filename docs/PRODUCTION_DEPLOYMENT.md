@@ -118,6 +118,13 @@ Required values:
 - `redis-url`: Redis Sentinel URL (DB 14)
 - `r2-*`: Cloudflare R2 credentials (already filled)
 - `janua-client-secret`: From Janua admin (already filled)
+- `JOB_COMPLETION_CALLBACK_TOKEN`: Shared API/worker token for `POST /v1/jobs/{job_id}/outputs/report`
+
+Callback token rules:
+- Generate a high-entropy secret and store the exact same value for API and workers.
+- The API refuses worker completion callbacks in production when this value is missing.
+- The worker deployment maps this secret into `API_JOB_COMPLETION_TOKEN`.
+- Rotate by updating the secret and rolling API + worker pods together.
 
 ### 7. Create CEQ Namespace
 
@@ -194,6 +201,17 @@ curl https://api.ceq.lol/health
 curl https://ceq.lol/
 ```
 
+Stability smoke after the 2026-05 output-contract remediation:
+
+1. Submit a real workflow or template run from Studio.
+2. Confirm the job enters Redis DB 14 and is claimed by a worker.
+3. Confirm the worker uploads output descriptors with `filename`, `storage_uri`, `file_type`, `file_size_bytes`, and optional `preview_url`.
+4. Confirm `POST /v1/jobs/{job_id}/outputs/report` persists final job status and output rows.
+5. Confirm `/v1/jobs/{job_id}` and `/v1/outputs` show the same output metadata.
+6. Confirm the Studio gallery opens `public_url`/preview URLs in the browser.
+
+The release is not considered stable until the full Studio -> API -> Redis -> worker -> R2 -> callback -> PostgreSQL -> gallery loop has passed once in the target environment.
+
 ---
 
 ## Troubleshooting
@@ -215,8 +233,18 @@ kubectl logs -n ceq deployment/ceq-api
 
 Common issues:
 - Missing environment variables
+- Missing `JOB_COMPLETION_CALLBACK_TOKEN`
 - Database connection failed
 - Redis connection failed
+
+### Worker completions not persisting
+
+1. Verify `JOB_COMPLETION_CALLBACK_TOKEN` exists in `ceq-secrets`.
+2. Verify API and worker pods both received the same token value.
+3. Verify workers can reach `http://ceq-api.ceq.svc.cluster.local`.
+4. Check worker logs for callback HTTP errors.
+5. Check Redis hash `ceq:job:{job_id}` for `callback_error`.
+6. Confirm NetworkPolicies allow intra-namespace traffic and egress to R2/Redis.
 
 ### Database connection issues
 

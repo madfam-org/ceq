@@ -50,7 +50,7 @@ export function OutputGallery({ outputs, className }: OutputGalleryProps) {
   };
 
   const goToNext = () => {
-    if (lightboxIndex !== null && lightboxIndex < outputs.length - 1) {
+    if (lightboxIndex !== null && lightboxIndex < imageOutputs.length - 1) {
       setLightboxIndex(lightboxIndex + 1);
       setZoom(1);
     }
@@ -62,10 +62,11 @@ export function OutputGallery({ outputs, className }: OutputGalleryProps) {
     if (e.key === "ArrowRight") goToNext();
   };
 
-  const currentOutput = lightboxIndex !== null ? outputs[lightboxIndex] : null;
-
   // Filter to only show image outputs in lightbox-able grid
   const imageOutputs = outputs.filter((o) => o.file_type.startsWith("image/"));
+  const currentOutput = lightboxIndex !== null ? imageOutputs[lightboxIndex] : null;
+  const currentOutputUrl = currentOutput?.public_url || currentOutput?.storage_uri;
+  const currentPreviewUrl = currentOutput?.preview_url || currentOutputUrl;
 
   return (
     <>
@@ -144,12 +145,12 @@ export function OutputGallery({ outputs, className }: OutputGalleryProps) {
             className="relative max-w-[90vw] max-h-[90vh] overflow-hidden"
             style={{ transform: `scale(${zoom})` }}
           >
-            {imageOutputs[lightboxIndex].preview_url && (
+            {currentPreviewUrl && currentOutput && (
               <Image
-                src={imageOutputs[lightboxIndex].storage_uri}
-                alt={imageOutputs[lightboxIndex].filename}
-                width={imageOutputs[lightboxIndex].width || 1024}
-                height={imageOutputs[lightboxIndex].height || 1024}
+                src={currentPreviewUrl}
+                alt={currentOutput.filename}
+                width={currentOutput.width || 1024}
+                height={currentOutput.height || 1024}
                 className="max-w-full max-h-[90vh] object-contain"
                 priority
               />
@@ -184,7 +185,8 @@ export function OutputGallery({ outputs, className }: OutputGalleryProps) {
               className="text-white hover:bg-white/10"
               onClick={async () => {
                 const output = imageOutputs[lightboxIndex];
-                const response = await fetch(output.storage_uri);
+                const outputUrl = output.public_url || output.storage_uri;
+                const response = await fetch(outputUrl);
                 const blob = await response.blob();
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement("a");
@@ -205,10 +207,12 @@ export function OutputGallery({ outputs, className }: OutputGalleryProps) {
                 if (navigator.share) {
                   await navigator.share({
                     title: output.filename,
-                    url: output.storage_uri,
+                    url: output.public_url || output.storage_uri,
                   });
                 } else {
-                  await navigator.clipboard.writeText(output.storage_uri);
+                  await navigator.clipboard.writeText(
+                    output.public_url || output.storage_uri
+                  );
                 }
               }}
             >

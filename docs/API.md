@@ -394,11 +394,44 @@ Returns generated outputs.
     {
       "id": "uuid",
       "job_id": "uuid",
-      "output_type": "image",
-      "storage_uri": "https://...",
-      "thumbnail_uri": "https://...",
-      "metadata": { "width": 1024, "height": 1024 },
+      "filename": "output.png",
+      "storage_uri": "r2://ceq-assets/outputs/job/output.png",
+      "public_url": "https://...",
+      "file_type": "image/png",
+      "file_size_bytes": 524288,
+      "width": 1024,
+      "height": 1024,
+      "duration_seconds": null,
+      "preview_url": "https://...",
+      "metadata": { "seed": 42 },
       "created_at": "2025-12-10T12:00:00Z"
+    }
+  ]
+}
+```
+
+### Worker Completion Report
+
+```http
+POST /v1/jobs/{id}/outputs/report
+```
+
+Internal worker callback. Requires `X-CEQ-Worker-Token` matching the API `JOB_COMPLETION_CALLBACK_TOKEN`; workers send the same value from `API_JOB_COMPLETION_TOKEN`.
+
+**Request Body:**
+```json
+{
+  "status": "completed",
+  "progress": 1.0,
+  "worker_id": "ceq-worker-0",
+  "gpu_seconds": 12.4,
+  "outputs": [
+    {
+      "filename": "output.png",
+      "storage_uri": "r2://ceq-assets/outputs/job/output.png",
+      "file_type": "image/png",
+      "file_size_bytes": 524288,
+      "preview_url": "https://..."
     }
   ]
 }

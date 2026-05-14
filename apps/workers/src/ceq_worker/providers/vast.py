@@ -46,7 +46,10 @@ class VastAIProvider(GPUProvider):
             api_url=self.API_BASE,
             region=os.getenv("VAST_REGION", "any"),
             ssh_key_path=os.getenv("VAST_SSH_KEY", os.path.expanduser("~/.ssh/id_rsa")),
-            default_image=os.getenv("VAST_DEFAULT_IMAGE", "ceq/worker:latest"),
+            default_image=os.getenv(
+                "VAST_DEFAULT_IMAGE",
+                "ghcr.io/madfam-org/ceq-worker:latest",
+            ),
             max_price_per_hour=float(os.getenv("VAST_MAX_PRICE", "1.0")),
             max_instances=int(os.getenv("VAST_MAX_INSTANCES", "5")),
             scale_to_zero=os.getenv("VAST_SCALE_TO_ZERO", "true").lower() == "true",

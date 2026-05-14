@@ -83,7 +83,7 @@ class WorkflowHandler:
 
         Returns:
             Dict containing:
-                - output_urls: List of generated asset URLs
+                - outputs: List of generated asset descriptors
                 - metadata: Execution metadata
                 - execution_time: Time taken in seconds
         """
@@ -93,7 +93,9 @@ class WorkflowHandler:
 
         try:
             # Extract workflow and parameters
-            workflow_json = input_data.get("workflow_json", {})
+            template = input_data.get("template", {})
+            template = template if isinstance(template, dict) else {}
+            workflow_json = input_data.get("workflow_json") or template.get("workflow_json") or {}
             params = input_data.get("params", {})
 
             if not workflow_json:
@@ -119,23 +121,36 @@ class WorkflowHandler:
                 on_progress=progress_callback,
             )
 
+            if not result.success:
+                return {
+                    "error": result.error or "Chaos won this round: execution failed",
+                    "success": False,
+                    "execution_time": time.time() - start_time,
+                    "metadata": {
+                        "node_timings": result.node_timings,
+                        "vram_peak_gb": result.vram_peak_gb,
+                        "model_hash": result.model_hash,
+                    },
+                }
+
             # Upload outputs to R2
-            output_urls = []
+            outputs = []
             for output_path in result.output_paths:
-                url = await self.storage.upload_output(
+                output = await self.storage.upload_output(
                     local_path=output_path,
                     job_id=job_id,
                 )
-                output_urls.append(url)
+                outputs.append(output)
 
             execution_time = time.time() - start_time
 
             print(f"✅ Job {job_id} completed in {execution_time:.2f}s")
-            print(f"   Outputs: {len(output_urls)}")
+            print(f"   Outputs: {len(outputs)}")
 
             return {
                 "success": True,
-                "output_urls": output_urls,
+                "outputs": outputs,
+                "output_urls": [output.get("public_url") for output in outputs],
                 "metadata": {
                     "node_timings": result.node_timings,
                     "vram_peak_gb": result.vram_peak_gb,

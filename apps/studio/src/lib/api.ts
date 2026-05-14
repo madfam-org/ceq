@@ -51,6 +51,7 @@ export interface Output {
   id: string;
   filename: string;
   storage_uri: string;
+  public_url?: string | null;
   file_type: string;
   file_size_bytes: number;
   width: number | null;

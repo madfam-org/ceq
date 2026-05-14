@@ -65,6 +65,11 @@ spec:
                 secretKeyRef:
                   name: ceq-secrets
                   key: R2_BUCKET_NAME
+            - name: JOB_COMPLETION_CALLBACK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: JOB_COMPLETION_CALLBACK_TOKEN
             - name: JANUA_API_URL
               value: "http://janua-api.janua.svc.cluster.local:4100"
             - name: FURNACE_API_URL

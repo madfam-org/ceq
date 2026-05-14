@@ -2,7 +2,7 @@
 
 import json
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 class TestJobQueue:
@@ -90,3 +90,75 @@ class TestJobStatusTracking:
         await mock_redis.publish(f"ceq:job:{job_id}:status", update)
 
         mock_redis.publish.assert_called_once()
+
+
+class TestCompletionCallback:
+    """Test worker -> API completion callback."""
+
+    @pytest.mark.asyncio
+    async def test_report_completion_posts_output_descriptors(self, monkeypatch):
+        """Completion callback should POST durable output metadata to ceq-api."""
+        from ceq_worker import queue as queue_module
+        from ceq_worker.queue import QueueConsumer
+
+        monkeypatch.setattr(queue_module.settings, "api_url", "http://api")
+        monkeypatch.setattr(
+            queue_module.settings,
+            "api_job_completion_path",
+            "/v1/jobs/{job_id}/outputs/report",
+        )
+        monkeypatch.setattr(
+            queue_module.settings,
+            "api_job_completion_token",
+            "test-token",
+        )
+
+        consumer = QueueConsumer()
+        consumer._redis = AsyncMock()
+
+        response = MagicMock()
+        response.raise_for_status.return_value = None
+
+        client = AsyncMock()
+        client.__aenter__.return_value = client
+        client.post.return_value = response
+
+        result = {
+            "success": True,
+            "execution_time": 1.5,
+            "outputs": [
+                {
+                    "filename": "output.png",
+                    "storage_uri": "r2://ceq-assets/outputs/job/output.png",
+                    "public_url": "https://cdn.example.com/output.png",
+                    "file_type": "image/png",
+                    "file_size_bytes": 1024,
+                    "preview_url": "https://cdn.example.com/output.png",
+                }
+            ],
+            "metadata": {"vram_peak_gb": 10},
+        }
+
+        with patch("ceq_worker.queue.httpx.AsyncClient", return_value=client):
+            sent = await consumer._report_completion("job-1", result)
+
+        assert sent is True
+        client.post.assert_called_once()
+        call = client.post.call_args
+        assert call.args[0] == "http://api/v1/jobs/job-1/outputs/report"
+        assert call.kwargs["headers"]["X-CEQ-Worker-Token"] == "test-token"
+        assert call.kwargs["json"]["outputs"][0]["file_type"] == "image/png"
+
+    @pytest.mark.asyncio
+    async def test_report_completion_skips_without_token(self, monkeypatch):
+        """Callback should be explicitly disabled when no token is configured."""
+        from ceq_worker import queue as queue_module
+        from ceq_worker.queue import QueueConsumer
+
+        monkeypatch.setattr(queue_module.settings, "api_job_completion_token", "")
+
+        consumer = QueueConsumer()
+
+        sent = await consumer._report_completion("job-1", {"success": True})
+
+        assert sent is False

@@ -3,26 +3,30 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ceq_api.auth.janua import JanuaUser, get_current_user, validate_token
+from ceq_api.config import get_settings
 from ceq_api.db.redis import get_redis, publish_job_update
 from ceq_api.db.session import get_db
 from ceq_api.logging import audit_logger
 from ceq_api.models.job import Job
 from ceq_api.models.job import JobStatus as JobStatusEnum
 from ceq_api.models.output import Output
+from ceq_api.storage import get_storage
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 router = APIRouter()
 
@@ -36,6 +40,7 @@ class OutputResponse(BaseModel):
     id: UUID
     filename: str
     storage_uri: str
+    public_url: str | None = None
     file_type: str
     file_size_bytes: int
     width: int | None = None
@@ -100,6 +105,42 @@ class JobListResponse(BaseModel):
     limit: int
 
 
+class JobOutputReport(BaseModel):
+    """Single output reported by a worker after execution."""
+
+    filename: str = Field(min_length=1, max_length=255)
+    storage_uri: str = Field(min_length=1, max_length=2048)
+    file_type: str = Field(min_length=1, max_length=100)
+    file_size_bytes: int = Field(ge=0)
+    width: int | None = Field(default=None, ge=1)
+    height: int | None = Field(default=None, ge=1)
+    duration_seconds: float | None = Field(default=None, ge=0)
+    preview_url: str | None = Field(default=None, max_length=2048)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class JobCompletionReport(BaseModel):
+    """Worker completion payload for durable job/output persistence."""
+
+    status: str = Field(description="running | completed | failed | cancelled")
+    progress: float | None = Field(default=None, ge=0.0, le=1.0)
+    current_node: str | None = None
+    error: str | None = None
+    outputs: list[JobOutputReport] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    worker_id: str | None = None
+    gpu_seconds: float | None = Field(default=None, ge=0.0)
+    cold_start_ms: int | None = Field(default=None, ge=0)
+
+
+class JobCompletionReportResponse(BaseModel):
+    """Response after accepting a worker completion report."""
+
+    job_id: UUID
+    status: str
+    outputs_persisted: int
+
+
 # === Brand Messages ===
 
 STATUS_MESSAGES = {
@@ -109,6 +150,55 @@ STATUS_MESSAGES = {
     "failed": "Chaos won this round.",
     "cancelled": "Entropy released.",
 }
+
+
+def _validate_worker_callback_token(token: str | None) -> None:
+    """Reject worker callbacks unless the shared token matches."""
+    expected = settings.job_completion_callback_token
+    if not expected or token is None or not hmac.compare_digest(token, expected):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid worker callback token.",
+        )
+
+
+async def _remove_pending_job(redis: Any, job_id: UUID) -> int:
+    """Remove queued job payloads by matching both current and legacy shapes."""
+    job_id_str = str(job_id)
+    removed = 0
+
+    for payload in (
+        json.dumps({"id": job_id_str}),
+        json.dumps({"job_id": job_id_str}),
+    ):
+        removed += int(await redis.lrem("ceq:jobs:pending", 0, payload) or 0)
+
+    try:
+        queue_items = await redis.lrange("ceq:jobs:pending", 0, -1)
+    except Exception as exc:  # noqa: BLE001 - Redis mocks/clients differ by context
+        logger.debug("Unable to scan pending queue for cancellation: %s", exc)
+        return removed
+
+    if not isinstance(queue_items, (list, tuple)):
+        return removed
+
+    for raw_payload in queue_items:
+        try:
+            payload = json.loads(raw_payload)
+        except (TypeError, json.JSONDecodeError):
+            continue
+
+        input_payload = payload.get("input") if isinstance(payload, dict) else None
+        input_payload = input_payload if isinstance(input_payload, dict) else {}
+        candidate = (
+            payload.get("id")
+            or payload.get("job_id")
+            or input_payload.get("job_id")
+        )
+        if candidate == job_id_str:
+            removed += int(await redis.lrem("ceq:jobs:pending", 0, raw_payload) or 0)
+
+    return removed
 
 
 # === Endpoints ===
@@ -236,6 +326,143 @@ async def poll_job_status(
     return await get_job(job_id, db, user)
 
 
+@router.post("/{job_id}/outputs/report", response_model=JobCompletionReportResponse)
+async def report_job_outputs(
+    job_id: UUID,
+    data: JobCompletionReport,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    x_ceq_worker_token: Annotated[
+        str | None,
+        Header(alias="X-CEQ-Worker-Token"),
+    ] = None,
+) -> JobCompletionReportResponse:
+    """
+    Persist a worker completion report.
+
+    This endpoint is internal to CEQ workers. It makes job completion durable in
+    PostgreSQL while Redis remains the real-time status transport.
+    """
+    _validate_worker_callback_token(x_ceq_worker_token)
+
+    allowed_statuses = {status_value.value for status_value in JobStatusEnum}
+    if data.status not in allowed_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid status. Must be one of: {', '.join(sorted(allowed_statuses))}",
+        )
+
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found.",
+        )
+
+    now = datetime.now(UTC)
+    job.status = data.status
+    if data.progress is not None:
+        job.progress = data.progress
+    elif data.status == JobStatusEnum.COMPLETED.value:
+        job.progress = 1.0
+    job.current_node = data.current_node
+    job.error = data.error
+    if data.worker_id:
+        job.worker_id = data.worker_id
+    if data.gpu_seconds is not None:
+        job.gpu_seconds = data.gpu_seconds
+    if data.cold_start_ms is not None:
+        job.cold_start_ms = data.cold_start_ms
+    if job.started_at is None and data.status in {
+        JobStatusEnum.RUNNING.value,
+        JobStatusEnum.COMPLETED.value,
+        JobStatusEnum.FAILED.value,
+    }:
+        job.started_at = now
+    if data.status in {
+        JobStatusEnum.COMPLETED.value,
+        JobStatusEnum.FAILED.value,
+        JobStatusEnum.CANCELLED.value,
+    }:
+        job.completed_at = now
+
+    job.output_metadata = {
+        **(job.output_metadata or {}),
+        **data.metadata,
+        "worker_callback_reported_at": now.isoformat(),
+    }
+
+    outputs_persisted = 0
+    for output_report in data.outputs:
+        existing_result = await db.execute(
+            select(Output).where(
+                Output.job_id == job.id,
+                Output.storage_uri == output_report.storage_uri,
+            )
+        )
+        output = existing_result.scalar_one_or_none()
+
+        output_values = {
+            "user_id": job.user_id,
+            "filename": output_report.filename,
+            "storage_uri": output_report.storage_uri,
+            "file_type": output_report.file_type,
+            "file_size_bytes": output_report.file_size_bytes,
+            "width": output_report.width,
+            "height": output_report.height,
+            "duration_seconds": output_report.duration_seconds,
+            "preview_url": output_report.preview_url,
+            "output_metadata": output_report.metadata,
+        }
+
+        if output is None:
+            db.add(
+                Output(
+                    job_id=job.id,
+                    published_to=[],
+                    **output_values,
+                )
+            )
+        else:
+            for key, value in output_values.items():
+                setattr(output, key, value)
+
+        outputs_persisted += 1
+
+    await db.flush()
+
+    try:
+        redis = get_redis()
+        await redis.hset(
+            f"ceq:job:{job_id}",
+            mapping={
+                "status": job.status,
+                "progress": str(job.progress),
+                "worker_id": job.worker_id or "",
+            },
+        )
+        await publish_job_update(
+            str(job_id),
+            {
+                "type": "complete" if job.status == JobStatusEnum.COMPLETED.value else job.status,
+                "data": {
+                    "status": job.status,
+                    "progress": job.progress,
+                    "outputs": outputs_persisted,
+                    "message": STATUS_MESSAGES.get(job.status, "Processing..."),
+                },
+            },
+        )
+    except Exception as exc:  # noqa: BLE001 - DB persistence is the source of truth
+        logger.debug("Unable to publish completion report to Redis: %s", exc)
+
+    return JobCompletionReportResponse(
+        job_id=job.id,
+        status=job.status,
+        outputs_persisted=outputs_persisted,
+    )
+
+
 @router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def cancel_job(
     job_id: UUID,
@@ -273,7 +500,7 @@ async def cancel_job(
 
     # Update job status
     job.status = JobStatusEnum.CANCELLED.value
-    job.completed_at = datetime.utcnow()
+    job.completed_at = datetime.now(UTC)
 
     # Audit log the cancellation
     audit_logger.log_job_operation(
@@ -287,8 +514,8 @@ async def cancel_job(
     redis = get_redis()
     await redis.publish(f"ceq:job:{job_id}:control", json.dumps({"action": "cancel"}))
 
-    # Remove from queue if still queued
-    await redis.lrem("ceq:jobs:pending", 0, json.dumps({"job_id": str(job_id)}))
+    # Remove from queue if still queued.
+    await _remove_pending_job(redis, job_id)
 
     # Publish status update for WebSocket listeners
     await publish_job_update(
@@ -473,5 +700,20 @@ async def list_job_outputs(
     output_query = select(Output).where(Output.job_id == job_id)
     output_result = await db.execute(output_query)
     outputs = output_result.scalars().all()
+    storage = await get_storage()
 
-    return [OutputResponse.from_orm(o) for o in outputs]
+    return [
+        OutputResponse(
+            id=output.id,
+            filename=output.filename,
+            storage_uri=output.storage_uri,
+            public_url=storage.get_public_url(output.storage_uri),
+            file_type=output.file_type,
+            file_size_bytes=output.file_size_bytes,
+            width=output.width,
+            height=output.height,
+            duration_seconds=output.duration_seconds,
+            preview_url=output.preview_url,
+        )
+        for output in outputs
+    ]

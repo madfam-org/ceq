@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, RedisDsn
+from pydantic import AliasChoices, Field, RedisDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +15,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        populate_by_name=True,
     )
 
     # Worker identity
@@ -35,12 +36,18 @@ class Settings(BaseSettings):
 
     # API
     api_url: str = "http://localhost:5800"
+    api_job_completion_path: str = "/v1/jobs/{job_id}/outputs/report"
+    api_job_completion_token: str = ""
+    api_job_completion_timeout_seconds: float = 5.0
 
     # R2 Storage
     r2_endpoint: str = ""
     r2_access_key: str = ""
     r2_secret_key: str = ""
-    r2_bucket: str = "ceq-assets"
+    r2_bucket: str = Field(
+        default="ceq-assets",
+        validation_alias=AliasChoices("R2_BUCKET", "R2_BUCKET_NAME"),
+    )
     r2_public_url: str = ""
 
     # GPU

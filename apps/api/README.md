@@ -132,7 +132,8 @@ Clients should prefer the `@ceq/sdk` package (`packages/sdk`) over raw HTTP.
 | `R2_ENDPOINT` | Yes | | Cloudflare R2 endpoint |
 | `R2_ACCESS_KEY` | Yes | | R2 access key ID |
 | `R2_SECRET_KEY` | Yes | | R2 secret access key |
-| `R2_BUCKET` | Yes | `ceq-assets` | R2 bucket name |
+| `R2_BUCKET` / `R2_BUCKET_NAME` | Yes | `ceq-assets` | R2 bucket name |
+| `JOB_COMPLETION_CALLBACK_TOKEN` | Production / workers | | Shared token required for worker completion callbacks |
 
 ### Example .env
 
@@ -152,6 +153,10 @@ R2_ENDPOINT=https://12f1353f7819865c56161ce00297668e.r2.cloudflarestorage.com
 R2_ACCESS_KEY=51844af3c4cbda516895116372ec3b38
 R2_SECRET_KEY=your-secret-key
 R2_BUCKET=ceq-assets
+# R2_BUCKET_NAME=ceq-assets also works and is used by k8s secrets.
+
+# Worker completion callback
+JOB_COMPLETION_CALLBACK_TOKEN=dev-shared-worker-callback-token
 ```
 
 ## Database Migrations

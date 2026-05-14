@@ -108,7 +108,11 @@ class TestStorageClientUpload:
 
         result = await client.upload_output(test_file, "test-job")
 
-        assert result == str(test_file)
+        assert result["storage_uri"] == str(test_file)
+        assert result["public_url"] == str(test_file)
+        assert result["filename"] == "output.png"
+        assert result["file_type"] == "image/png"
+        assert result["file_size_bytes"] == len(b"fake image data")
 
     @pytest.mark.asyncio
     async def test_upload_output_success(self, tmp_path):
@@ -126,8 +130,10 @@ class TestStorageClientUpload:
 
             result = await client.upload_output(test_file, "test-job-123")
 
-            assert result.startswith("https://cdn.example.com/outputs/test-job-123/")
-            assert result.endswith(".png")
+            assert result["public_url"].startswith("https://cdn.example.com/outputs/test-job-123/")
+            assert result["public_url"].endswith(".png")
+            assert result["storage_uri"].startswith("r2://test-bucket/outputs/test-job-123/")
+            assert result["file_type"] == "image/png"
 
     @pytest.mark.asyncio
     async def test_upload_output_no_public_url(self, tmp_path):
@@ -146,7 +152,9 @@ class TestStorageClientUpload:
 
             result = await client.upload_output(test_file, "test-job")
 
-            assert result.startswith("https://r2.cloudflarestorage.com/test-bucket/outputs/")
+            assert result["public_url"].startswith(
+                "https://r2.cloudflarestorage.com/test-bucket/outputs/"
+            )
 
     @pytest.mark.asyncio
     async def test_upload_output_custom_content_type(self, tmp_path):
@@ -323,7 +331,7 @@ class TestStorageClientEdgeCases:
             results = []
             for _ in range(3):
                 result = await client.upload_output(test_file, "test-job")
-                results.append(result)
+                results.append(result["storage_uri"])
 
             # All URLs should be unique
             assert len(set(results)) == 3

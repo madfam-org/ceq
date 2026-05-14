@@ -193,6 +193,104 @@ class TestOutputRetrieval:
         data = response.json()
         assert data[0]["preview_url"] == "https://example.com/preview.jpg"
 
+    @pytest.mark.asyncio
+    async def test_list_outputs_filters_by_file_type(self, async_client, db_session, mock_user):
+        """Gallery output list should use the modern file_type contract."""
+        workflow = Workflow(
+            name="Test Workflow",
+            description="Test",
+            workflow_json={"test": "data"},
+            input_schema={},
+            user_id=mock_user.id,
+        )
+        db_session.add(workflow)
+        await db_session.flush()
+
+        job = Job(
+            workflow_id=workflow.id,
+            user_id=mock_user.id,
+            status=JobStatus.COMPLETED.value,
+            progress=1.0,
+            input_params={},
+            queued_at=datetime.now(timezone.utc),
+        )
+        db_session.add(job)
+        await db_session.flush()
+
+        db_session.add_all(
+            [
+                Output(
+                    job_id=job.id,
+                    user_id=mock_user.id,
+                    filename="image.png",
+                    storage_uri="r2://ceq-assets/outputs/image.png",
+                    file_type="image/png",
+                    file_size_bytes=1024,
+                ),
+                Output(
+                    job_id=job.id,
+                    user_id=mock_user.id,
+                    filename="model.glb",
+                    storage_uri="r2://ceq-assets/outputs/model.glb",
+                    file_type="model/gltf-binary",
+                    file_size_bytes=2048,
+                ),
+            ]
+        )
+        await db_session.commit()
+
+        response = await async_client.get("/v1/outputs/?file_type=image/png")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["total"] == 1
+        assert data["outputs"][0]["filename"] == "image.png"
+        assert data["outputs"][0]["file_type"] == "image/png"
+
+    @pytest.mark.asyncio
+    async def test_register_output_modern_contract(self, async_client, db_session, mock_user):
+        """Manual output registration should write current Output model fields."""
+        workflow = Workflow(
+            name="Test Workflow",
+            description="Test",
+            workflow_json={"test": "data"},
+            input_schema={},
+            user_id=mock_user.id,
+        )
+        db_session.add(workflow)
+        await db_session.flush()
+
+        job = Job(
+            workflow_id=workflow.id,
+            user_id=mock_user.id,
+            status=JobStatus.COMPLETED.value,
+            progress=1.0,
+            input_params={},
+            queued_at=datetime.now(timezone.utc),
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        response = await async_client.post(
+            "/v1/outputs/register",
+            json={
+                "job_id": str(job.id),
+                "filename": "output.png",
+                "storage_uri": "r2://ceq-assets/outputs/output.png",
+                "file_type": "image/png",
+                "file_size_bytes": 4096,
+                "preview_url": "https://cdn.example.com/output.png",
+                "metadata": {"seed": 7},
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["filename"] == "output.png"
+        assert data["file_type"] == "image/png"
+        assert data["file_size_bytes"] == 4096
+        assert data["preview_url"] == "https://cdn.example.com/output.png"
+
 
 class TestOutputAccessControl:
     """Tests for output access control."""

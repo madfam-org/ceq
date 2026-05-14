@@ -4,7 +4,7 @@ import logging
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, RedisDsn, model_validator
+from pydantic import AliasChoices, Field, RedisDsn, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -17,6 +17,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        populate_by_name=True,
     )
 
     # Application
@@ -57,7 +58,10 @@ class Settings(BaseSettings):
     r2_endpoint: str = ""
     r2_access_key: str = ""
     r2_secret_key: str = ""
-    r2_bucket: str = "ceq-assets"
+    r2_bucket: str = Field(
+        default="ceq-assets",
+        validation_alias=AliasChoices("R2_BUCKET", "R2_BUCKET_NAME"),
+    )
     r2_public_url: str = ""
 
     # ComfyUI
@@ -74,6 +78,11 @@ class Settings(BaseSettings):
     max_request_size_mb: int = 1  # Default max request size
     max_upload_size_mb: int = 100  # Max upload size for assets
     presigned_url_expiry_seconds: int = 3600  # 1 hour
+
+    # Worker callback channel
+    job_completion_callback_token: str = ""
+    job_completion_callback_path: str = "/v1/jobs/{job_id}/outputs/report"
+    job_completion_callback_timeout_seconds: float = 5.0
 
     # CORS
     cors_origins: list[str] = ["http://localhost:5801", "https://ceq.lol"]
@@ -109,6 +118,11 @@ class Settings(BaseSettings):
             # Janua validation
             if self.janua_enabled and "localhost" in self.janua_api_url:
                 errors.append("JANUA_API_URL cannot be localhost in production")
+
+            if not self.job_completion_callback_token:
+                errors.append(
+                    "JOB_COMPLETION_CALLBACK_TOKEN is required in production"
+                )
 
             # Database validation
             db_url = str(self.database_url)

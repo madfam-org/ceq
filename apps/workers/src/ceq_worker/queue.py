@@ -9,6 +9,7 @@ import json
 import signal
 from typing import Any
 
+import httpx
 import redis.asyncio as redis
 
 from ceq_worker.config import get_settings
@@ -91,6 +92,10 @@ class QueueConsumer:
             # Store result
             await self._store_result(job_id, result)
 
+            callback_sent = await self._report_completion(job_id, result)
+            if not callback_sent:
+                print(f"⚠️ Job {job_id} completion callback was not persisted")
+
             # Update status based on result
             if result.get("success"):
                 await self._update_status(job_id, "completed")
@@ -157,6 +162,71 @@ class QueueConsumer:
             settings.job_results_key,
             json.dumps({"job_id": job_id, **result}),
         )
+
+    async def _report_completion(self, job_id: str, result: dict[str, Any]) -> bool:
+        """Post final job status and output descriptors back to ceq-api."""
+        token = settings.api_job_completion_token
+        if not token:
+            return False
+
+        status = "completed" if result.get("success") else "failed"
+        path = settings.api_job_completion_path.format(job_id=job_id)
+        url = f"{settings.api_url.rstrip('/')}/{path.lstrip('/')}"
+        payload = {
+            "status": status,
+            "progress": 1.0 if result.get("success") else 0.0,
+            "error": result.get("error"),
+            "outputs": [
+                {
+                    "filename": output["filename"],
+                    "storage_uri": output["storage_uri"],
+                    "file_type": output["file_type"],
+                    "file_size_bytes": output["file_size_bytes"],
+                    "width": output.get("width"),
+                    "height": output.get("height"),
+                    "duration_seconds": output.get("duration_seconds"),
+                    "preview_url": output.get("preview_url"),
+                    "metadata": {
+                        key: value
+                        for key, value in output.items()
+                        if key not in {
+                            "filename",
+                            "storage_uri",
+                            "file_type",
+                            "file_size_bytes",
+                            "width",
+                            "height",
+                            "duration_seconds",
+                            "preview_url",
+                        }
+                    },
+                }
+                for output in result.get("outputs", [])
+            ],
+            "metadata": result.get("metadata", {}),
+            "worker_id": settings.worker_id,
+            "gpu_seconds": result.get("execution_time", 0.0),
+        }
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=settings.api_job_completion_timeout_seconds,
+            ) as client:
+                response = await client.post(
+                    url,
+                    headers={"X-CEQ-Worker-Token": token},
+                    json=payload,
+                )
+                response.raise_for_status()
+            return True
+        except httpx.HTTPError as exc:
+            if self._redis is not None:
+                await self._redis.hset(
+                    f"ceq:job:{job_id}",
+                    mapping={"callback_error": str(exc)},
+                )
+            print(f"⚠️ Completion callback failed for {job_id}: {exc}")
+            return False
 
     async def stop(self) -> None:
         """Stop the consumer gracefully."""

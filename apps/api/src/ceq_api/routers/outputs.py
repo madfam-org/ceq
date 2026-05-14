@@ -1,6 +1,7 @@
 """Output management endpoints with R2 storage integration."""
 
 import logging
+import re
 from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
@@ -28,13 +29,17 @@ class OutputResponse(BaseModel):
 
     id: UUID
     job_id: UUID
-    output_type: str = Field(description="image | video | model")
+    filename: str
     storage_uri: str
     public_url: str = Field(description="Direct public URL for the output")
-    thumbnail_uri: str | None
-    thumbnail_url: str | None = Field(description="Direct public URL for thumbnail")
+    file_type: str = Field(description="MIME type for the output")
+    file_size_bytes: int
+    width: int | None = None
+    height: int | None = None
+    duration_seconds: float | None = None
+    preview_url: str | None = None
     metadata: dict[str, Any]
-    published_to: list[dict[str, str]]
+    published_to: list[dict[str, Any]]
     created_at: datetime
     updated_at: datetime
 
@@ -68,7 +73,10 @@ class UploadUrlRequest(BaseModel):
         description="MIME type of the file",
     )
     job_id: UUID = Field(description="Job this output belongs to")
-    output_type: str = Field(description="image | video | model")
+    output_type: str | None = Field(
+        default=None,
+        description="Deprecated category field retained for older clients",
+    )
 
 
 class UploadUrlResponse(BaseModel):
@@ -84,9 +92,22 @@ class RegisterOutputRequest(BaseModel):
 
     job_id: UUID
     storage_uri: str
-    output_type: str = Field(description="image | video | model")
-    thumbnail_uri: str | None = None
+    filename: str | None = Field(default=None, min_length=1, max_length=255)
+    file_type: str | None = Field(default=None, description="MIME type for the file")
+    file_size_bytes: int = Field(default=0, ge=0)
+    width: int | None = Field(default=None, ge=1)
+    height: int | None = Field(default=None, ge=1)
+    duration_seconds: float | None = Field(default=None, ge=0)
+    preview_url: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    output_type: str | None = Field(
+        default=None,
+        description="Deprecated category field retained for older clients",
+    )
+    thumbnail_uri: str | None = Field(
+        default=None,
+        description="Deprecated preview storage URI retained for older clients",
+    )
 
 
 class PublishRequest(BaseModel):
@@ -148,10 +169,42 @@ PUBLISH_CHANNELS = {
     },
 }
 
-OUTPUT_TYPES = {"image", "video", "model"}
+LEGACY_OUTPUT_TYPES = {"image", "video", "model"}
 
 
 # === Helper Functions ===
+
+
+def _safe_filename(filename: str) -> str:
+    """Constrain user-provided filenames to object-key safe text."""
+    normalized = filename.replace("/", "_").replace("\\", "_").replace("\x00", "")
+    normalized = re.sub(r"[^a-zA-Z0-9_.-]", "_", normalized).lstrip(".")
+    return normalized[:255] or "output"
+
+
+def _filename_from_uri(storage_uri: str) -> str:
+    filename = storage_uri.rstrip("/").rsplit("/", 1)[-1]
+    return _safe_filename(filename or "output")
+
+
+def _legacy_output_type_to_mime(output_type: str | None) -> str:
+    if output_type == "image":
+        return "image/png"
+    if output_type == "video":
+        return "video/mp4"
+    if output_type == "model":
+        return "model/gltf-binary"
+    return "application/octet-stream"
+
+
+def _output_category(file_type: str) -> str:
+    if file_type.startswith("image/"):
+        return "image"
+    if file_type.startswith("video/"):
+        return "video"
+    if file_type.startswith("model/"):
+        return "model"
+    return "file"
 
 
 def _enrich_output_response(
@@ -162,15 +215,15 @@ def _enrich_output_response(
     return {
         "id": output.id,
         "job_id": output.job_id,
-        "output_type": output.output_type,
+        "filename": output.filename,
         "storage_uri": output.storage_uri,
         "public_url": storage.get_public_url(output.storage_uri),
-        "thumbnail_uri": output.thumbnail_uri,
-        "thumbnail_url": (
-            storage.get_public_url(output.thumbnail_uri)
-            if output.thumbnail_uri
-            else None
-        ),
+        "file_type": output.file_type,
+        "file_size_bytes": output.file_size_bytes,
+        "width": output.width,
+        "height": output.height,
+        "duration_seconds": output.duration_seconds,
+        "preview_url": output.preview_url,
         "metadata": output.output_metadata,
         "published_to": output.published_to,
         "created_at": output.created_at,
@@ -186,7 +239,8 @@ async def list_outputs(
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[JanuaUser, Depends(get_current_user)],
     job_id: UUID | None = Query(None, description="Filter by job ID"),  # noqa: B008
-    output_type: str | None = Query(None, description="Filter by type: image | video | model"),
+    file_type: str | None = Query(None, description="Filter by MIME type or type prefix"),
+    output_type: str | None = Query(None, description="Deprecated filter: image | video | model"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
 ) -> OutputListResponse:
@@ -208,14 +262,22 @@ async def list_outputs(
     if job_id:
         query = query.where(Output.job_id == job_id)
 
-    # Filter by type
+    # Filter by type. `output_type` is retained as a category alias for older clients.
     if output_type:
-        if output_type not in OUTPUT_TYPES:
+        if output_type not in LEGACY_OUTPUT_TYPES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid output_type. Must be one of: {', '.join(OUTPUT_TYPES)}",
+                detail=f"Invalid output_type. Must be one of: {', '.join(LEGACY_OUTPUT_TYPES)}",
             )
-        query = query.where(Output.output_type == output_type)
+        file_type = f"{output_type}/"
+
+    if file_type:
+        file_type_filter = (
+            Output.file_type.startswith(file_type)
+            if file_type.endswith("/")
+            else Output.file_type == file_type
+        )
+        query = query.where(file_type_filter)
 
     # Count total
     count_query = select(func.count()).select_from(query.subquery())
@@ -269,11 +331,10 @@ async def get_upload_url(
             detail="Storage not configured. The crucible is offline.",
         )
 
-    # Validate output type
-    if data.output_type not in OUTPUT_TYPES:
+    if data.output_type and data.output_type not in LEGACY_OUTPUT_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid output_type. Must be one of: {', '.join(OUTPUT_TYPES)}",
+            detail=f"Invalid output_type. Must be one of: {', '.join(LEGACY_OUTPUT_TYPES)}",
         )
 
     # Verify job belongs to user
@@ -290,7 +351,7 @@ async def get_upload_url(
     # Generate key with timestamp for uniqueness
     from uuid import uuid4
     unique_id = uuid4().hex[:8]
-    key = f"outputs/{data.job_id}/{unique_id}_{data.filename}"
+    key = f"outputs/{data.job_id}/{unique_id}_{_safe_filename(data.filename)}"
 
     expires_in = 3600  # 1 hour
 
@@ -320,11 +381,10 @@ async def register_output(
     """
     storage = await get_storage()
 
-    # Validate output type
-    if data.output_type not in OUTPUT_TYPES:
+    if data.output_type and data.output_type not in LEGACY_OUTPUT_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid output_type. Must be one of: {', '.join(OUTPUT_TYPES)}",
+            detail=f"Invalid output_type. Must be one of: {', '.join(LEGACY_OUTPUT_TYPES)}",
         )
 
     # Verify job belongs to user
@@ -338,13 +398,24 @@ async def register_output(
             detail="Job not found or access denied.",
         )
 
+    filename = _safe_filename(data.filename) if data.filename else _filename_from_uri(data.storage_uri)
+    file_type = data.file_type or _legacy_output_type_to_mime(data.output_type)
+    preview_url = data.preview_url
+    if preview_url is None and data.thumbnail_uri:
+        preview_url = storage.get_public_url(data.thumbnail_uri)
+
     # Create output record
     output = Output(
         job_id=data.job_id,
         user_id=user.id,
-        output_type=data.output_type,
+        filename=filename,
         storage_uri=data.storage_uri,
-        thumbnail_uri=data.thumbnail_uri,
+        file_type=file_type,
+        file_size_bytes=data.file_size_bytes,
+        width=data.width,
+        height=data.height,
+        duration_seconds=data.duration_seconds,
+        preview_url=preview_url,
         output_metadata=data.metadata,
         published_to=[],
     )
@@ -416,19 +487,16 @@ async def get_download_url(
             detail="Output not found or access denied.",
         )
 
-    # Extract filename from storage URI
-    filename = output.storage_uri.split("/")[-1]
-
     download_url = await storage.generate_download_url(
         storage_uri=output.storage_uri,
         expires_in=expires_in,
-        filename=filename,
+        filename=output.filename,
     )
 
     return DownloadUrlResponse(
         download_url=download_url,
         expires_in=expires_in,
-        filename=filename,
+        filename=output.filename,
     )
 
 
@@ -477,11 +545,13 @@ async def publish_output(
             detail="Output not found or access denied.",
         )
 
+    output_category = _output_category(output.file_type)
+
     # Check if output type is supported by channel
-    if output.output_type not in channel_info["supported_types"]:
+    if output_category not in channel_info["supported_types"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"{channel_info['name']} does not support {output.output_type} outputs.",
+            detail=f"{channel_info['name']} does not support {output.file_type} outputs.",
         )
 
     # Handle webhook publishing
@@ -502,7 +572,9 @@ async def publish_output(
                     json={
                         "output_id": str(output.id),
                         "job_id": str(output.job_id),
-                        "output_type": output.output_type,
+                        "filename": output.filename,
+                        "file_type": output.file_type,
+                        "storage_uri": output.storage_uri,
                         "url": storage.get_public_url(output.storage_uri),
                         "metadata": output.output_metadata,
                     },
@@ -570,8 +642,6 @@ async def delete_output(
     # Delete from R2
     try:
         await storage.delete_object(output.storage_uri)
-        if output.thumbnail_uri:
-            await storage.delete_object(output.thumbnail_uri)
     except Exception as e:
         # Log but continue - orphaned files can be cleaned up later
         logger.warning(f"Failed to delete output from R2: {output.storage_uri} - {e}")

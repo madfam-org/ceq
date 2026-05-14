@@ -63,7 +63,7 @@ class StorageClient:
         local_path: Path,
         job_id: str,
         content_type: str | None = None,
-    ) -> str:
+    ) -> dict[str, Any]:
         """
         Upload an output file to R2.
 
@@ -73,19 +73,26 @@ class StorageClient:
             content_type: Optional MIME type override
 
         Returns:
-            Public URL for the uploaded file
+            Descriptor for the uploaded file, suitable for the API callback.
         """
-        if self._client is None:
-            # Return local path if R2 not configured
-            return str(local_path)
-
-        # Determine content type
         if content_type is None:
             content_type = self._guess_content_type(local_path)
+
+        if self._client is None:
+            local_url = str(local_path)
+            return {
+                "filename": local_path.name,
+                "storage_uri": local_url,
+                "public_url": local_url,
+                "file_type": content_type,
+                "file_size_bytes": local_path.stat().st_size,
+                "preview_url": local_url if content_type.startswith("image/") else None,
+            }
 
         # Generate unique key
         unique_id = uuid4().hex[:8]
         key = f"outputs/{job_id}/{local_path.stem}_{unique_id}{local_path.suffix}"
+        storage_uri = f"r2://{settings.r2_bucket}/{key}"
 
         # Upload in executor (boto3 is sync)
         loop = asyncio.get_event_loop()
@@ -102,11 +109,20 @@ class StorageClient:
             ),
         )
 
-        # Return public URL
+        public_url: str
         if settings.r2_public_url:
-            return f"{settings.r2_public_url}/{key}"
+            public_url = f"{settings.r2_public_url}/{key}"
         else:
-            return f"{settings.r2_endpoint}/{settings.r2_bucket}/{key}"
+            public_url = f"{settings.r2_endpoint}/{settings.r2_bucket}/{key}"
+
+        return {
+            "filename": local_path.name,
+            "storage_uri": storage_uri,
+            "public_url": public_url,
+            "file_type": content_type,
+            "file_size_bytes": local_path.stat().st_size,
+            "preview_url": public_url if content_type.startswith("image/") else None,
+        }
 
     async def upload_asset(
         self,

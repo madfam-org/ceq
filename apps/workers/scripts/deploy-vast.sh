@@ -21,7 +21,7 @@ set -e
 # Configuration
 GPU_TYPE="${1:-}"
 MAX_PRICE="${2:-1.0}"
-WORKER_IMAGE="${CEQ_WORKER_IMAGE:-ghcr.io/madfam/ceq-worker:latest}"
+WORKER_IMAGE="${CEQ_WORKER_IMAGE:-ghcr.io/madfam-org/ceq-worker:latest}"
 DISK_GB="${CEQ_DISK_GB:-100}"
 
 # Colors

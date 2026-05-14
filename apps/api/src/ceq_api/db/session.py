@@ -63,6 +63,20 @@ async def close_db() -> None:
         print("   Database connection closed")
 
 
+def async_session_maker() -> AsyncSession:
+    """Backward-compatible compatibility alias for session factory.
+
+    Historically, this repository imported :func:`async_session_maker` directly
+    from ``ceq_api.db.session``. Several scripts and router helpers still rely on
+    that symbol, so we keep an explicit compatibility wrapper that returns a new
+    session from the initialized factory.
+    """
+    if _session_factory is None:
+        raise RuntimeError("Database not initialized. Call init_db() first.")
+
+    return _session_factory()
+
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Get a database session.

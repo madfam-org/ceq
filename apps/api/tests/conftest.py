@@ -90,6 +90,7 @@ def mock_redis():
     redis.hset.return_value = None
     redis.lpush.return_value = None
     redis.lrem.return_value = None
+    redis.lrange.return_value = []
     redis.publish.return_value = None
     redis.close.return_value = None
     return redis

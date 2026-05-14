@@ -174,10 +174,10 @@ vastai search offers 'verified=true gpu_ram>=16000' --order dph_total
 
 # Create instance (use offer ID from above)
 vastai create instance 12345678 \
-  --image ghcr.io/madfam/ceq-worker:latest \
+  --image ghcr.io/madfam-org/ceq-worker:latest \
   --disk 100 \
   --label "ceq-worker-1" \
-  --onstart-cmd "docker pull ghcr.io/madfam/ceq-worker:latest && docker run -d --gpus all -p 8188:8188 ghcr.io/madfam/ceq-worker:latest"
+  --onstart-cmd "docker pull ghcr.io/madfam-org/ceq-worker:latest && docker run -d --gpus all -p 8188:8188 ghcr.io/madfam-org/ceq-worker:latest"
 ```
 
 ### 5.3 API Creation
@@ -188,7 +188,7 @@ curl --request PUT \
   --header "Authorization: Bearer ${VAST_API_KEY}" \
   --header "Content-Type: application/json" \
   --data '{
-    "image": "ghcr.io/madfam/ceq-worker:latest",
+    "image": "ghcr.io/madfam-org/ceq-worker:latest",
     "disk": 100,
     "label": "ceq-worker",
     "env": {
@@ -250,10 +250,10 @@ Vast.ai offers pre-built ComfyUI templates:
 For CEQ workers, use the custom image:
 ```bash
 # Image with ComfyUI + custom nodes + queue consumer
-ghcr.io/madfam/ceq-worker:latest
+ghcr.io/madfam-org/ceq-worker:latest
 
 # Slim image (faster startup)
-ghcr.io/madfam/ceq-worker:slim
+ghcr.io/madfam-org/ceq-worker:slim
 ```
 
 ---
@@ -322,13 +322,16 @@ export VAST_API_KEY="your-api-key"
 
 # CEQ Worker Configuration
 export REDIS_URL="redis://your-redis:6379/14"
-export CEQ_WORKER_IMAGE="ghcr.io/madfam/ceq-worker:latest"
+export API_URL="https://api.ceq.lol"
+export API_JOB_COMPLETION_TOKEN="<same-value-as-JOB_COMPLETION_CALLBACK_TOKEN>"
+export CEQ_WORKER_IMAGE="ghcr.io/madfam-org/ceq-worker:latest"
 
 # Optional: R2 Storage
 export R2_ENDPOINT="https://xxx.r2.cloudflarestorage.com"
 export R2_ACCESS_KEY="your-access-key"
 export R2_SECRET_KEY="your-secret-key"
 export R2_BUCKET="ceq-assets"
+# R2_BUCKET_NAME is also accepted.
 
 # Cost Controls
 export VAST_MAX_PRICE=1.0

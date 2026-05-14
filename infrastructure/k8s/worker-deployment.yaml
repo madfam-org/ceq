@@ -45,6 +45,33 @@ spec:
                 secretKeyRef:
                   name: ceq-secrets
                   key: REDIS_URL
+            - name: API_URL
+              value: "http://ceq-api.ceq.svc.cluster.local"
+            - name: API_JOB_COMPLETION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: JOB_COMPLETION_CALLBACK_TOKEN
+            - name: R2_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: R2_ENDPOINT
+            - name: R2_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: R2_ACCESS_KEY
+            - name: R2_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: R2_SECRET_KEY
+            - name: R2_BUCKET_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: R2_BUCKET_NAME
             - name: COMFYUI_PATH
               value: /opt/comfyui
             - name: MODELS_PATH

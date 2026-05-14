@@ -177,6 +177,38 @@ class TestHandlerEvent:
             prepared_workflow = call_args[1]["workflow"] if "workflow" in call_args[1] else call_args[0][0]
             assert prepared_workflow["3"]["inputs"]["text"] == "world"
 
+    @pytest.mark.asyncio
+    async def test_handler_respects_executor_failure(self):
+        """Handler should not report success when executor returns a failed result."""
+        with patch("ceq_worker.handler.ComfyUIExecutor") as mock_executor_class, \
+             patch("ceq_worker.handler.StorageClient"), \
+             patch("ceq_worker.handler.redis"):
+            from ceq_worker.handler import WorkflowHandler
+            from ceq_worker.comfyui import ExecutionResult
+
+            mock_executor = MagicMock()
+            mock_executor.execute = AsyncMock(return_value=ExecutionResult(
+                success=False,
+                error="Execution failed",
+                output_paths=[],
+            ))
+            mock_executor_class.return_value = mock_executor
+
+            handler = WorkflowHandler()
+            handler._initialized = True
+            handler._redis = AsyncMock()
+
+            result = await handler.handler({
+                "id": "test-job-123",
+                "input": {
+                    "workflow_json": {"3": {"inputs": {"text": "hello"}}},
+                    "params": {},
+                },
+            })
+
+            assert result["success"] is False
+            assert result["error"] == "Execution failed"
+
 
 class TestProgressReporting:
     """Test progress reporting."""

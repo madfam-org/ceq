@@ -71,6 +71,7 @@ class TestConfigValidation:
             r2_endpoint="https://r2.example.com",
             r2_access_key="test-key",
             r2_secret_key="test-secret",
+            job_completion_callback_token="test-callback-token",
             janua_api_url="https://api.janua.dev",
         )
         assert settings.environment == "production"
