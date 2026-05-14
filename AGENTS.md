@@ -75,7 +75,7 @@ Regenerate or repair these files with
 | Component | Status | Notes |
 |-----------|--------|-------|
 | ceq.lol (landing/demo) | Live | 2 pods Running in `ceq` namespace |
-| app.ceq.lol (studio) | Live route | Janua client registration/rotation required |
+| app.ceq.lol (studio) | Live + auth-gated | No-cookie gate verified; Janua client registration/rotation required |
 | api.ceq.lol (api) | Live | 2 pods Running |
 | `/v1/render/*` pipeline | Shipped | Card renderer + R2 cache + @ceq/sdk (62fcfe9) |
 | Janua OAuth Client | Action required | `invalid_client` for `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`; register/rotate |

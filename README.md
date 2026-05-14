@@ -214,7 +214,7 @@ See [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md) for detaile
 | Cloudflare R2 Bucket | Live (`ceq-assets`; render cache under `render/{template}/{hash}.{ext}`) |
 | Cloudflare Tunnel Routes | Configured |
 | `/v1/render/*` pipeline | Shipped — card renderer + R2 cache + `@ceq/sdk` |
-| Studio auth gate | Implemented locally; deploy pending |
+| Studio auth gate | Deployed; public no-cookie app gate verified |
 | K8s Secrets | Applied |
 | Infrastructure | Live on Enclii k3s |
 

@@ -172,7 +172,7 @@ control and artifact-contract hardening.
 This wave addresses the landing-vs-Studio split and the missing hard auth
 boundary on `app.ceq.lol`.
 
-### Delivered Locally
+### Delivered And Deployed
 
 1. **Server-gated Studio routes**
    - `app.ceq.lol` Studio routes now require a CEQ session cookie before the
@@ -220,18 +220,29 @@ boundary on `app.ceq.lol`.
   - `Host: app.ceq.lol /` without CEQ session cookies redirects to
     `/login?returnTo=%2F`.
   - `Host: app.ceq.lol /` with a refresh cookie reaches the Studio shell.
-- Current production public smoke remains compatible before this wave is
-  deployed with
-  `CEQ_PUBLIC_ONLY=true CEQ_EXPECT_APP_AUTH_REDIRECT=false scripts/production-smoke.sh`.
+- Before this wave was deployed, production public smoke remained compatible
+  with `CEQ_EXPECT_APP_AUTH_REDIRECT=false`. After deploy, the default public
+  smoke must keep the unauthenticated app-gate assertion enabled.
 - Live Janua check still returns `invalid_client: Unknown client_id` for
   `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`.
+
+### Production Acceptance
+
+- GitOps deploy for `d2ca8b8 harden studio auth gate` completed successfully.
+- Deploy-bot digest commit `1eaf6a6` was fast-forwarded locally.
+- Public production smoke passed after deploy:
+  `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`
+  - `https://api.ceq.lol/health`: `ok`
+  - `https://ceq.lol`: HTTP `200`
+  - `ceq.lol/login`: `307` to `https://app.ceq.lol/login`
+  - `app.ceq.lol/landing`: `307` to `https://ceq.lol/`
+  - no-cookie `app.ceq.lol/`: `307` to
+    `https://app.ceq.lol/login?returnTo=%2F`
 
 ### Remaining Acceptance
 
 - Register or rotate the Janua OAuth client so
   `https://app.ceq.lol/auth/callback` is accepted.
-- Deploy the auth-gate wave through GitOps and run
-  `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`.
 - Complete a browser login with real credentials and verify session bootstrap,
   refresh, logout, Studio API calls, and job WebSocket token use.
 - Follow up with a deeper session migration that proxies CEQ API calls through
@@ -249,6 +260,141 @@ CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh
 If that fails on the `Unauthenticated app gate` check, verify ArgoCD has rolled
 the new Studio image and that `app.ceq.lol` is reaching the current pod. Do not
 disable the assertion after rollout except for a documented rollback.
+
+## Next Implementation Wave Plan — Production Auth Acceptance + Full Runtime Proof
+
+This is the active remediation and implementation plan across the relevant CEQ
+services. The work should run in parallel where ownership is independent, but
+acceptance must stay ordered so CEQ does not declare stability before the user
+journey and GPU runtime are proven end to end.
+
+### Lane 1 — Identity And Studio Session
+
+Owner surface: Janua operator config, `apps/studio`, `api.ceq.lol` auth usage.
+
+1. **Register or rotate the Janua OAuth client**
+   - Required redirect URI: `https://app.ceq.lol/auth/callback`.
+   - Keep `http://localhost:5801/auth/callback` for development.
+   - Update `NEXT_PUBLIC_JANUA_CLIENT_ID` and `JANUA_CLIENT_SECRET` if the
+     client ID rotates.
+   - Acceptance: Janua no longer returns `invalid_client` for the CEQ client.
+
+2. **Browser-prove the deployed session flow**
+   - Visit no-cookie `https://app.ceq.lol/`.
+   - Confirm redirect to `app.ceq.lol/login`, then Janua.
+   - Complete credential login.
+   - Confirm `/auth/callback` sets CEQ session cookies.
+   - Confirm `/api/auth/session` bootstraps the Studio browser state.
+   - Confirm refresh and logout clear/rotate cookies correctly.
+
+3. **Migrate Studio API access behind a BFF/proxy**
+   - Add same-origin Studio server routes for CEQ API calls.
+   - Server reads httpOnly CEQ session cookies and attaches Janua bearer tokens
+     to `api.ceq.lol`.
+   - Remove or sharply reduce browser `localStorage` token dependency.
+   - Acceptance: reloads and protected route navigation work without readable
+     browser bearer-token storage.
+
+4. **Add browser E2E auth tests**
+   - Cover unauthenticated app redirect, marketing/app host split, callback
+     success/failure, refresh, logout, and authenticated Studio shell.
+   - Acceptance: Playwright suite runs locally and in CI for auth-critical
+     routes with deterministic mocked Janua responses, plus a documented manual
+     live-auth smoke for production.
+
+### Lane 2 — API, Worker, And Data Runtime Proof
+
+Owner surface: `apps/api`, `apps/workers`, Redis DB 14, PostgreSQL, R2.
+
+1. **Provision and verify runtime secrets**
+   - `JOB_COMPLETION_CALLBACK_TOKEN`
+   - `JOB_WEBHOOK_SECRET`
+   - Acceptance: admin `GET /v1/operations/status` reports callback/webhook
+     readiness without raw pod or secret access.
+
+2. **Verify migration and data contract in production**
+   - Confirm Alembic head includes `20260514_outputs_unique`.
+   - Confirm `outputs(job_id, storage_uri)` uniqueness exists.
+   - Confirm current output rows expose `filename`, `file_type`,
+     `file_size_bytes`, `preview_url`, and `output_metadata`.
+   - Acceptance: operations status plus authenticated output API reads prove the
+     active runtime contract.
+
+3. **Run authenticated GPU smoke**
+   - `scripts/production-smoke.sh` with `CEQ_AUTH_TOKEN`, `CEQ_TEMPLATE_ID`,
+     `CEQ_RUN_OPERATIONS_STATUS=true`, and `CEQ_ADMIN_AUTH_TOKEN`.
+   - Acceptance: Studio/API submission reaches Redis, worker executes, R2
+     upload succeeds, callback persists PostgreSQL rows, and Studio gallery can
+     open the output URLs.
+
+4. **Run active cancellation smoke**
+   - Use `CEQ_RUN_CANCEL_SMOKE=true` and a long-running template.
+   - Acceptance: worker interrupts ComfyUI, API remains `cancelled`, and late
+     success reports cannot overwrite the terminal state.
+
+5. **Run multi-modal artifact smoke**
+   - Use `CEQ_TEMPLATE_SMOKES_JSON` for image, video, audio, and 3D/model
+     templates.
+   - Acceptance: each artifact persists with correct MIME/metadata and renders
+     or opens from Studio gallery.
+
+### Lane 3 — Operations, Observability, And CI/CD
+
+Owner surface: `.github/workflows`, `scripts/`, Enclii observability,
+Prometheus/alerts.
+
+1. **Wire alerts and dashboards**
+   - Queue depth, stuck running jobs, callback dead letters, R2 upload failures,
+     worker health, migration failures, and OAuth error rate.
+   - Acceptance: each critical failure mode has a dashboard panel and alert
+     threshold.
+
+2. **Harden production smoke automation**
+   - Keep public smoke as the unauthenticated edge gate.
+   - Add a browser smoke entrypoint for auth/session behavior.
+   - Keep authenticated GPU/cancel/multi-modal smokes API-first and
+     Enclii-first.
+   - Acceptance: CI/manual runbooks tell operators which smoke to run for each
+     deployment or incident.
+
+3. **Clean CI/CD debt**
+   - Fix the existing Next `outputFileTracingRoot` warning.
+   - Update GitHub Actions away from Node 20 before the June 2026 forced
+     Node 24 change.
+   - Investigate deploy/notify queue delays.
+   - Acceptance: Studio build has no config warnings and deploy workflows do
+     not rely on deprecated action runtimes.
+
+### Lane 4 — Landing, Demo, And Conversion
+
+Owner surface: `ceq.lol` landing/demo, `apps/studio/src/components/landing`,
+PMF/InterestGate telemetry.
+
+1. **Make the landing host conversion-complete**
+   - `ceq.lol` remains public landing/demo only.
+   - Add a self-contained demo that shows CEQ value without entering Studio.
+   - Route all product-use CTAs to `https://app.ceq.lol/login`.
+   - Acceptance: no Studio shell leaks onto `ceq.lol`, and CTAs preserve the
+     intended return path.
+
+2. **Instrument funnel events**
+   - Landing view, demo interaction, login click, auth success, first render,
+     gallery view, and InterestGate capture.
+   - Acceptance: PMF/funnel data can be inspected without raw production access.
+
+### Cross-Lane Execution Order
+
+1. Janua client registration/rotation.
+2. Browser login/session acceptance.
+3. Production secret and migration readiness.
+4. Authenticated GPU + cancellation + multi-modal smokes.
+5. BFF/session migration and browser E2E tests.
+6. Observability/CI cleanup.
+7. Landing/demo conversion instrumentation.
+
+Janua remains the critical path blocker. All other lanes can begin in parallel,
+but CEQ cannot be marked fully functional for users until Janua accepts the CEQ
+client and a real browser session reaches the Studio shell.
 
 ## Remaining Roadmap To Full Stability
 

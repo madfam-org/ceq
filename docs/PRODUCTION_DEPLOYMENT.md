@@ -19,7 +19,7 @@
 - GitHub repo write access for secrets
 - Terraform installed (`brew install terraform`)
 
-## Deployment Status (2026-04-30)
+## Deployment Status (2026-05-14)
 
 | Step | Status | Notes |
 |------|--------|-------|
@@ -31,7 +31,8 @@
 | Ubicloud Database | Done | ceq_production database created |
 | Redis Password | Done | Redis configured |
 | GitHub Actions Secret | Done | KUBECONFIG_BASE64 applied |
-| Deploy + Verify | Done | Pushed to main branch and verified |
+| Studio Auth Gate | Done | `app.ceq.lol` no-cookie gate verified with public smoke |
+| Deploy + Verify | Done | GitOps deploy `25853708026` succeeded; digest commit `1eaf6a6` |
 
 
 
@@ -307,8 +308,18 @@ The public-only smoke checks the landing/app host split as well as API health:
 - `ceq.lol` serves the public landing/demo surface.
 - `ceq.lol/login` redirects to `app.ceq.lol/login`.
 - `app.ceq.lol/landing` redirects back to `ceq.lol`.
-- `app.ceq.lol/` redirects no-cookie users to `app.ceq.lol/login` unless
-  `CEQ_EXPECT_APP_AUTH_REDIRECT=false` is set for a pre-auth-gate rollout.
+- `app.ceq.lol/` redirects no-cookie users to `app.ceq.lol/login`. Keep the
+  default auth-gate assertion enabled except during a documented rollback.
+
+Last verified after the auth-gate deploy on 2026-05-14:
+
+```bash
+CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh
+```
+
+Result: API health `ok`, `ceq.lol` HTTP `200`, marketing login handoff `307`,
+app landing handoff `307`, and unauthenticated app gate `307` to
+`https://app.ceq.lol/login?returnTo=%2F`.
 
 ---
 
