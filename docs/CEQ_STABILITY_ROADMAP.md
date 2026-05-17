@@ -751,3 +751,46 @@ The table below records ownership for the completed remediation and the next rec
   - queue cancel payload
   - callback persistence idempotency
   - modern output response fields
+
+## 2026-05-17 Remediation Wrap-Up
+
+### Audit Summary
+
+- **Purpose:** Operate a production-grade ComfyUI execution platform for composable creative content generation across social, video, and 3D workflows.
+- **Mission:** Keep generation execution reliable end-to-end (submit → queue → worker → callback → persistent state → UI visibility) with deterministic behavior and clear operator controls.
+- **Vision:** Reach a stable, observable, auditable system where jobs are contractually deterministic, failure modes are explicit, and production health gates are enforced before declaring feature completion.
+- **Current status:** Runtime contract and security hardening are complete for the local test matrix and deployment wiring. The platform is functionally credible but not fully “full stability” pending production acceptance gates.
+
+### Remediation closure (items 4 and 5)
+
+- **4) Observability and operational alerting:** implemented and wired into deployable manifests.
+  - `infrastructure/k8s/observability.yaml` now ships `ServiceMonitor`, `PrometheusRule`, and Grafana dashboard assets.
+  - `ceq-api` includes runtime gauge registration and startup readiness gating in `/v1/operations/status`.
+  - Remaining: confirm alert routing and on-call ownership in Enclii tenant.
+
+- **5) Browser auth/session hardening:** implemented with a server-attached API boundary for REST workflows.
+  - Studio now proxies core API calls through `/api/proxy` using CEQ session state from `GET /api/auth/session`.
+  - Authorization now comes from server-side session bootstrap where possible; legacy token path is retained as compatibility fallback only.
+  - Remaining: complete production browser login verification after Janua client registration and finalize socket auth fixture migration.
+
+### What is explicitly still blocking “full stability”
+
+1. **Janua OAuth production readiness** (`invalid_client` still observed against the documented CEQ client).
+2. **Production runtime secret enforcement** (`JOB_COMPLETION_CALLBACK_TOKEN`, `JOB_WEBHOOK_SECRET`).
+3. **Authenticated production runbook proof** (end-to-end GPU smoke, cancellation smoke, multi-modal smoke with real worker pods).
+4. **Network-policy/ingress validation** of worker/API data paths under production load.
+
+### Full stability acceptance (next checkpoint)
+
+- Public smoke remains green for `CEQ_PUBLIC_ONLY` unauthenticated checks.
+- Janua Studio login works with real credentials and returns CEQ session state.
+- `GET /v1/operations/status` reports callback + webhook readiness in green.
+- One authenticated GPU smoke in prod completes and surfaces outputs in gallery.
+- Cancellation and multi-modal smokes are completed with no late status regression.
+- Alerts are firing to the intended owner channels with runbooks linked.
+
+### Roadmap update status
+
+- The roadmap sections above were updated to reflect the current checkpoint:
+  - Closed: legacy output contract bugs, callback durability gaps, image tracing deprecation warning, CI modernization, worker digest pinning, observability primitives, browser proxy auth hardening.
+  - Open: production authentication unblock, secret provisioning, and production-grade end-to-end acceptance proof.
