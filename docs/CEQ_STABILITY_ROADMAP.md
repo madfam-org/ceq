@@ -358,9 +358,10 @@ Prometheus/alerts.
      deployment or incident.
 
 3. **Clean CI/CD debt**
-   - Fix the existing Next `outputFileTracingRoot` warning.
-   - Update GitHub Actions away from Node 20 before the June 2026 forced
-     Node 24 change.
+   - [x] Fix the existing Next `outputFileTracingRoot` warning by moving it under
+     `experimental` in `apps/studio/next.config.mjs`.
+   - [x] Update GitHub Actions away from Node 20; CI now uses Node 24.
+   - Investigate deploy/notify queue delays.
    - Investigate deploy/notify queue delays.
    - Acceptance: Studio build has no config warnings and deploy workflows do
      not rely on deprecated action runtimes.

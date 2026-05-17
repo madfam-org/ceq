@@ -8,12 +8,12 @@ const nextConfig = {
   reactStrictMode: true,
   // Enable standalone output for Docker deployment
   output: "standalone",
-  // Trace from monorepo root to include workspace deps in standalone
-  outputFileTracingRoot: path.join(__dirname, '../../'),
   // Skip build-time type errors (stubs for slider/switch have type mismatches)
   typescript: { ignoreBuildErrors: true },
   eslint: { ignoreDuringBuilds: true },
   experimental: {
+    // Trace from monorepo root to include workspace deps in standalone.
+    outputFileTracingRoot: path.join(__dirname, "../../"),
     // Enable React Server Components
     serverActions: {
       bodySizeLimit: "10mb",
