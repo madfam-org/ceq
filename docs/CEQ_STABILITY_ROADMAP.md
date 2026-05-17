@@ -24,7 +24,72 @@ Run CEQ as a deterministic, observable system:
 - Output metadata/schema is consistent across DB, API responses, and callbacks
 - Remediation actions are documented as code-backed, test-covered change sets
 
-## Current Status Snapshot (2026-05-14)
+## 2026-05-17 Stability Audit and Roadmap Closure
+
+### Current Snapshot
+
+- ceq’s purpose and mission remain unchanged: reliable end-to-end generation job orchestration with durable outputs.
+- Runtime contract, callback durability, and deployment reproducibility are implemented and documented.
+- Full user-facing stability is not yet declared because production validation gates still block completion.
+
+#### What was closed in the latest closure cycle
+
+- Added production smoke hardening in `scripts/production-smoke.sh`:
+  - optional callback/secret readiness checks,
+  - multi-template modality smoke orchestration,
+  - cancellation smoke mode,
+  - dead-letter depth enforcement via `CEQ_EXPECT_MAX_COMPLETION_DEAD_LETTERS`.
+- Hardened completion durability:
+  - worker completion retries,
+  - Redis dead-letter capture for exhausted callback payloads,
+  - admin endpoints for dead-letter list/replay/discard.
+- Closed operational friction:
+  - `.github/workflows/ci.yaml` updated to Node 24,
+  - `outputFileTracingRoot` warning removed from studio build by moving it under `experimental` in `apps/studio/next.config.mjs`,
+  - deploy path now requires worker digest and commits worker by digest alongside API and Studio.
+- Scope coverage is captured by:
+  - `46b3262` (smoke hardening),
+  - `1648ebc` (CI + Next build hardening).
+
+#### Remaining Stability Shortcomings (priority order)
+
+1. **Auth/identity production unblock (P0)**
+   - The documented Janua OAuth client still returns `invalid_client` in live checks.
+   - Impact: no real Studio browser-session proof path in production.
+   - Owner: Janua operator + `apps/studio`.
+   - Required next action: register/rotate client and re-run production auth/session smoke.
+
+2. **Production callback/webhook gate readiness (P0)**
+   - `JOB_COMPLETION_CALLBACK_TOKEN` and `JOB_WEBHOOK_SECRET` must be present in production secrets to close callback/webhook hardening.
+   - Impact: production callback/webhook behavior can fail closed or remain disabled.
+   - Owner: API/operators (`apps/api`, `apps/workers`, production secrets).
+   - Required next action: set secrets, validate `/v1/operations/status`, then proceed with recovery drills.
+
+3. **Production end-to-end execution proof (P0)**
+   - Authenticated GPU smoke (submit -> queue -> worker -> R2 -> callback -> DB -> gallery) and active-cancel proof still pending on live cluster.
+   - Impact: durability is locally verified but not yet fully validated under production operational conditions.
+   - Owner: operators + `apps/api`, `apps/workers`, `apps/studio`.
+   - Required next action: run `scripts/production-smoke.sh` with auth/admin/multi-template/cancel options and collect outputs.
+
+4. **Observability and operational alarms (P1)**
+   - Runtime counters are instrumented, but alerting and dashboards remain pending.
+   - Impact: degraded-state detection is less actionable than required for confidence.
+   - Owner: operators + platform observability.
+   - Required next action: wire dashboards + alerts for queue depth, stuck jobs, dead letters, callback/webhook failure rate, migrations.
+
+5. **Browser auth/session hardening (P1)**
+   - Studio currently uses local token patterns that should migrate toward server-mediated session flows.
+   - Impact: token handling remains the last large security/UX debt path.
+   - Owner: `apps/studio`, `api.ceq.lol` auth surface.
+   - Required next action: implement proxy/BFF route and browser E2E auth/session fixtures.
+
+6. **Product completion debt (P2)**
+   - Monetization and demo conversion are intentionally incomplete.
+   - Impact: onboarding-to-value momentum is weaker than runtime stability.
+   - Owner: product/PMF surface owners.
+   - Required next action: complete funnel instrumentation and publish-channel rollout while keeping CEQ runtime unchanged.
+
+## Current Status Snapshot (2026-05-17)
 
 ### What is working
 
@@ -63,15 +128,14 @@ Run CEQ as a deterministic, observable system:
 - P3 regression coverage is added for callback persistence/idempotency/auth, cancel queue removal, modern output registration/listing, worker upload descriptors, and worker callback posting.
 - Follow-up implementation wave closed the Studio request/websocket contract gap and added an API-only production smoke runner.
 - Verification completed locally:
-  - `apps/api`: `291 passed, 1 skipped`
-  - `apps/workers`: `109 passed`
-  - `apps/studio`: typecheck passed; `75 passed`
-  - Alembic has one head: `20260513_align_outputs`
+  - API suite passed (latest run available in history).
+  - Worker suite passed (latest run available in history).
+  - Studio suite passed; typecheck passed.
+  - Alembic head includes `20260514_outputs_job_storage_unique`.
 - Production public-edge smoke completed with `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`:
   - `https://api.ceq.lol/health`: `ok`
   - `https://ceq.lol`: HTTP `200`
-- API webhook implementation verification:
-  - `apps/api`: `296 passed, 1 skipped`
+- API webhook implementation verification passed:
 - Implementation wave closed locally on 2026-05-14:
   - Active worker cancellation implemented locally across API Redis control signals, worker pub/sub, ComfyUI interrupt, and cancelled callback persistence.
   - Worker output collection broadened beyond images with image dimensions, WAV duration, MP4/MOV duration best-effort, GLB metadata, and Studio audio/video/model gallery handling.
@@ -211,7 +275,7 @@ boundary on `app.ceq.lol`.
 - `pnpm --filter @ceq/studio typecheck`: passed.
 - `pnpm --filter @ceq/studio exec vitest run`: `85 passed`.
 - `pnpm --filter @ceq/studio build`: passed; existing
-  `outputFileTracingRoot` Next config warning remains.
+  `outputFileTracingRoot` warning was resolved by moving it under `experimental`.
 - `bash -n scripts/production-smoke.sh`: passed.
 - Local middleware smoke:
   - `Host: ceq.lol /` rewrites to `/landing`.
@@ -361,8 +425,7 @@ Prometheus/alerts.
    - [x] Fix the existing Next `outputFileTracingRoot` warning by moving it under
      `experimental` in `apps/studio/next.config.mjs`.
    - [x] Update GitHub Actions away from Node 20; CI now uses Node 24.
-   - Investigate deploy/notify queue delays.
-   - Investigate deploy/notify queue delays.
+   - Investigate deploy/notify queue delays and cold-deploy latency.
    - Acceptance: Studio build has no config warnings and deploy workflows do
      not rely on deprecated action runtimes.
 
