@@ -55,6 +55,7 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
+show_docs = not settings.is_production
 
 
 @asynccontextmanager
@@ -85,8 +86,9 @@ app = FastAPI(
     description="Creative Entropy Quantized - Workflow Orchestration API",
     version=settings.app_version,
     lifespan=lifespan,
-    docs_url="/docs" if settings.debug else None,
-    redoc_url="/redoc" if settings.debug else None,
+    docs_url="/docs" if show_docs else None,
+    redoc_url="/redoc" if show_docs else None,
+    openapi_url="/openapi.json" if show_docs else None,
 )
 
 # CORS (must be added before other middleware)

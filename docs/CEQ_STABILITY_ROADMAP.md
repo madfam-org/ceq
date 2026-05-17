@@ -92,7 +92,7 @@ Run CEQ as a deterministic, observable system:
   - `apps/workers`: `119 passed`
   - `apps/studio`: typecheck passed; `75 passed`
   - `bash -n scripts/production-smoke.sh`: passed
-  - Alembic has one head: `20260514_outputs_unique`
+  - Alembic has one head: `20260514_outputs_job_storage_unique`
   - `kubectl kustomize infrastructure/k8s` rendered successfully
   - Public production smoke passed: `https://api.ceq.lol/health` ok and `https://ceq.lol` HTTP 200
 
@@ -119,7 +119,7 @@ control and artifact-contract hardening.
    - Job Redis hashes are marked with callback failure metadata for operator inspection.
 
 4. **Durable idempotency**
-   - Added migration `20260514_outputs_unique`.
+   - Added migration `20260514_outputs_job_storage_unique`.
    - Migration removes duplicate `(job_id, storage_uri)` rows before adding `uq_outputs_job_storage_uri`.
    - The app-level idempotency behavior remains in place.
 
@@ -154,14 +154,14 @@ control and artifact-contract hardening.
 - Studio suite: `75 passed`
 - Studio typecheck: passed
 - Smoke script syntax: passed
-- Alembic heads: one head, `20260514_outputs_unique`
+- Alembic heads: one head, `20260514_outputs_job_storage_unique`
 - Kustomize render: passed
 - Public production smoke: API health `ok`, Studio HTTP `200`
 
 ### Production Acceptance Still Required
 
 - Provision/verify `JOB_COMPLETION_CALLBACK_TOKEN` and `JOB_WEBHOOK_SECRET` in production `ceq-secrets`.
-- Let ArgoCD run the PreSync migration job and confirm `20260514_outputs_unique` is applied.
+- Let ArgoCD run the PreSync migration job and confirm `20260514_outputs_job_storage_unique` is applied.
 - Run authenticated end-to-end GPU smoke through Studio/API -> Redis -> worker -> R2 -> callback -> PostgreSQL -> gallery.
 - Run active-cancel smoke on a real running GPU job.
 - Run video/audio/3D template smoke to prove multi-modal output handling in production.
@@ -313,7 +313,7 @@ Owner surface: `apps/api`, `apps/workers`, Redis DB 14, PostgreSQL, R2.
      readiness without raw pod or secret access.
 
 2. **Verify migration and data contract in production**
-   - Confirm Alembic head includes `20260514_outputs_unique`.
+   - Confirm Alembic head includes `20260514_outputs_job_storage_unique`.
    - Confirm `outputs(job_id, storage_uri)` uniqueness exists.
    - Confirm current output rows expose `filename`, `file_type`,
      `file_size_bytes`, `preview_url`, and `output_metadata`.
@@ -411,7 +411,7 @@ The items below are what remains after the current stabilization patch. They are
 2. **Run and verify migrations**
    - Apply Alembic head through the GitOps migration job.
    - Confirm existing `outputs` rows have non-null `filename`, `file_type`, and `file_size_bytes`.
-   - Confirm `uq_outputs_job_storage_uri` exists after `20260514_outputs_unique`.
+   - Confirm `uq_outputs_job_storage_uri` exists after `20260514_outputs_job_storage_unique`.
    - Acceptance can now use `GET /v1/operations/status` for the visible Alembic revision, with DB-level constraint proof handled by the optional PostgreSQL migration test harness.
 
 3. **Run a real end-to-end GPU smoke**
@@ -469,7 +469,7 @@ The items below are what remains after the current stabilization patch. They are
    - Admin operations endpoints now list, replay, and discard those dead letters.
 
 2. **Add DB-level idempotency** — completed locally
-   - Added Alembic revision `20260514_outputs_unique`.
+   - Added Alembic revision `20260514_outputs_job_storage_unique`.
    - Migration removes duplicate `(job_id, storage_uri)` rows before adding `uq_outputs_job_storage_uri`.
    - Keep the app-level idempotency already added.
 

@@ -212,7 +212,7 @@ DATABASE_URL=postgresql+asyncpg://ceq:PASSWORD@HOST:5432/ceq_production
 REDIS_URL=redis://:PASSWORD@redis-0.redis-headless.enclii-production.svc.cluster.local:6379/14
 R2_ENDPOINT=https://12f1353f7819865c56161ce00297668e.r2.cloudflarestorage.com
 R2_ACCESS_KEY=51844af3c4cbda516895116372ec3b38
-R2_SECRET_KEY=<from-secrets.prod.yaml>
+R2_SECRET_KEY=<from-secrets.local.yaml>
 R2_BUCKET=ceq-assets
 JANUA_URL=https://api.janua.dev
 ```
@@ -232,7 +232,7 @@ NEXT_PUBLIC_JANUA_CLIENT_ID=jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk
 | `apps/api/src/ceq_api/main.py` | FastAPI entrypoint |
 | `apps/studio/app/layout.tsx` | Root layout with providers |
 | `apps/workers/src/ceq_worker/handler.py` | GPU job handler |
-| `infrastructure/k8s/secrets.prod.yaml` | Production secrets template |
+| `infrastructure/k8s/secrets.yaml` | Production secrets template |
 | `infrastructure/k8s/kustomization.yaml` | K8s deployment manifest |
 
 ## Code Conventions

@@ -39,39 +39,71 @@ export interface User {
   avatar?: string;
 }
 
-// Token storage keys
-const TOKEN_KEY = "janua_token";
-const REFRESH_TOKEN_KEY = "janua_refresh_token";
-const USER_KEY = "janua_user";
+interface AuthSession {
+  accessToken: string | null;
+  user: User | null;
+}
 
-/**
- * Get the current access token
- */
-export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(TOKEN_KEY);
+const authSession: AuthSession = {
+  accessToken: null,
+  user: null,
+};
+
+const SAFE_AUTH_BASE = (() => {
+  if (typeof window === "undefined") {
+    return "https://app.ceq.lol";
+  }
+
+  return window.location.origin;
+})();
+
+export function sanitizeReturnPath(returnTo?: string | null): string {
+  if (typeof returnTo !== "string") {
+    return "/";
+  }
+
+  const trimmed = returnTo.trim();
+  if (!trimmed) {
+    return "/";
+  }
+
+  try {
+    const candidate = new URL(trimmed, SAFE_AUTH_BASE);
+    if (candidate.origin !== SAFE_AUTH_BASE) {
+      return "/";
+    }
+
+    if (candidate.protocol !== "http:" && candidate.protocol !== "https:") {
+      return "/";
+    }
+
+    const path = candidate.pathname || "/";
+    const allowedPath = path.startsWith("/") ? path : `/${path}`;
+    return `${allowedPath}${candidate.search}`;
+  } catch {
+    return "/";
+  }
 }
 
 /**
- * Get the refresh token
+ * Get the current access token from the in-memory session.
+ */
+export function getToken(): string | null {
+  return authSession.accessToken;
+}
+
+/**
+ * Refresh tokens are stored only in httpOnly cookies.
  */
 export function getRefreshToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(REFRESH_TOKEN_KEY);
+  return null;
 }
 
 /**
  * Get the current user from storage
  */
 export function getStoredUser(): User | null {
-  if (typeof window === "undefined") return null;
-  const stored = localStorage.getItem(USER_KEY);
-  if (!stored) return null;
-  try {
-    return JSON.parse(stored);
-  } catch {
-    return null;
-  }
+  return authSession.user;
 }
 
 /**
@@ -82,22 +114,17 @@ export function setAuth(
   refreshToken: string | null,
   user: User
 ): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(TOKEN_KEY, accessToken);
-  if (refreshToken) {
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-  }
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  authSession.accessToken = accessToken;
+  authSession.user = user;
+  void refreshToken;
 }
 
 /**
- * Clear all auth data
+ * Clear in-memory auth session state.
  */
 export function clearAuth(): void {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
+  authSession.accessToken = null;
+  authSession.user = null;
 }
 
 /**
@@ -123,7 +150,7 @@ export function getLoginUrl(returnTo?: string): string {
     redirect_uri: AUTH_CONFIG.redirectUri,
     response_type: "code",
     scope: "openid profile email",
-    state: returnTo || "/",
+    state: sanitizeReturnPath(returnTo),
   });
 
   return `${AUTH_CONFIG.authorizationEndpoint}?${params}`;
@@ -184,15 +211,11 @@ export async function exchangeCodeForTokens(
  * Refresh the access token
  */
 export async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = getRefreshToken();
-
   try {
     const response = await fetch("/api/auth/refresh", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: refreshToken
-        ? JSON.stringify({ refresh_token: refreshToken })
-        : undefined,
+      body: undefined,
     });
 
     if (!response.ok) {
@@ -204,7 +227,7 @@ export async function refreshAccessToken(): Promise<string | null> {
     const user = parseJwt(data.access_token);
 
     if (user) {
-      setAuth(data.access_token, data.refresh_token || refreshToken, user);
+      setAuth(data.access_token, data.refresh_token || null, user);
     }
 
     return data.access_token;

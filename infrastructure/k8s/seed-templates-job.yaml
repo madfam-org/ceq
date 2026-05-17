@@ -26,11 +26,16 @@ spec:
       restartPolicy: Never
       securityContext:
         runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       imagePullSecrets:
         - name: ghcr-credentials
       containers:
         - name: seed
           image: ghcr.io/madfam-org/ceq-api:latest
+          ports: []
           command:
             - /bin/sh
             - -c
@@ -50,6 +55,11 @@ spec:
                 secretKeyRef:
                   name: ceq-secrets
                   key: REDIS_URL
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
           resources:
             requests:
               memory: "128Mi"

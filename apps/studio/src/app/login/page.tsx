@@ -10,11 +10,12 @@ import { useEffect } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { useSearchParams } from "next/navigation";
 import { Terminal, Loader2 } from "lucide-react";
+import { sanitizeReturnPath } from "@/lib/auth";
 
 export default function LoginPage() {
   const { isAuthenticated, isLoading, login } = useAuth();
   const searchParams = useSearchParams();
-  const returnTo = searchParams.get("returnTo") || "/";
+  const returnTo = sanitizeReturnPath(searchParams.get("returnTo"));
 
   useEffect(() => {
     // If already authenticated, redirect to return destination

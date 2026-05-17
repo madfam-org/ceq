@@ -115,6 +115,15 @@ async def _llen(redis: Any, key: str) -> int | None:
         return None
 
 
+async def _redis_reachable(redis: Any) -> bool:
+    """Probe Redis reachability as a best-effort status check."""
+    try:
+        return bool(await redis.ping())
+    except Exception as exc:  # noqa: BLE001 - status endpoint should degrade
+        logger.debug("Redis ping failed: %s", exc)
+        return False
+
+
 async def _dead_letter_at(redis: Any, index: int) -> Any:
     rows = await redis.lrange(settings.job_completion_dead_letter_key, index, index)
     if not rows:
@@ -151,7 +160,7 @@ async def get_operations_status(
         webhook_secret_configured=bool(settings.job_webhook_secret),
         alembic_revision=await _alembic_revision(db),
         redis={
-            "reachable": True,
+            "reachable": await _redis_reachable(redis),
             "pending_jobs": await _llen(redis, "ceq:jobs:pending"),
             "processing_jobs": await _llen(redis, "ceq:jobs:processing"),
             "completion_dead_letters": await _llen(

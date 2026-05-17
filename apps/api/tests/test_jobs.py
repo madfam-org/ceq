@@ -12,6 +12,7 @@ import pytest
 from fastapi import status
 
 from ceq_api.models.job import Job, JobStatus
+from ceq_api.models.output import Output
 
 
 class TestListJobs:
@@ -125,6 +126,22 @@ class TestGetJob:
             queued_at=datetime.now(timezone.utc),
         )
         db_session.add(job)
+        await db_session.flush()
+
+        db_session.add(
+            Output(
+                job_id=job.id,
+                user_id=mock_user.id,
+                filename="output.png",
+                storage_uri="r2://ceq-assets/outputs/output.png",
+                file_type="image/png",
+                file_size_bytes=1024,
+                width=512,
+                height=512,
+                output_metadata={"seed": 42},
+                published_to=[{"channel": "webhook", "url": "https://hooks.example.com", "published_at": "2026-05-14T00:00:01+00:00"}],
+            )
+        )
         await db_session.commit()
 
         response = await async_client.get(f"/v1/jobs/{job.id}")
@@ -135,6 +152,8 @@ class TestGetJob:
         assert data["progress"] == 0.5
         assert data["current_node"] == "KSampler"
         assert data["output_metadata"]["cancel_requested_at"] == "2026-05-14T00:00:00+00:00"
+        assert data["outputs"][0]["metadata"]["seed"] == 42
+        assert data["outputs"][0]["published_to"][0]["channel"] == "webhook"
         assert "brand_message" in data
 
     @pytest.mark.asyncio
@@ -274,6 +293,56 @@ class TestCancelJob:
         control_payload = json.loads(control_calls[0].args[1])
         assert control_payload["action"] == "cancel"
         assert control_payload["job_id"] == str(job.id)
+
+    @pytest.mark.asyncio
+    async def test_cancel_running_job_does_not_reset_progress(self, async_client, db_session, mock_user, mock_redis):
+        """Canceling running jobs should preserve observed progress."""
+        from ceq_api.models.workflow import Workflow
+
+        workflow = Workflow(
+            name="Test Workflow",
+            description="Test",
+            workflow_json={"test": "data"},
+            input_schema={},
+            user_id=mock_user.id,
+        )
+        db_session.add(workflow)
+        await db_session.flush()
+
+        job = Job(
+            workflow_id=workflow.id,
+            user_id=mock_user.id,
+            status=JobStatus.RUNNING.value,
+            progress=0.72,
+            input_params={},
+            queued_at=datetime.now(timezone.utc),
+            started_at=datetime.now(timezone.utc),
+        )
+        db_session.add(job)
+        await db_session.commit()
+        mock_redis.lrange.return_value = []
+
+        with patch("ceq_api.routers.jobs.get_redis", return_value=mock_redis), \
+             patch("ceq_api.routers.jobs.publish_job_update", new_callable=AsyncMock):
+            response = await async_client.delete(f"/v1/jobs/{job.id}")
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+
+        from sqlalchemy import select
+        result = await db_session.execute(select(Job).where(Job.id == job.id))
+        updated_job = result.scalar_one()
+        assert updated_job.status == JobStatus.CANCELLED.value
+        assert updated_job.progress == 0.72
+        assert updated_job.completed_at is None
+        assert updated_job.output_metadata["cancel_requested_from_status"] == JobStatus.RUNNING.value
+        mock_redis.hset.assert_any_call(
+            f"ceq:job:{job.id}",
+            mapping={
+                "status": JobStatus.CANCELLED.value,
+                "progress": "0.72",
+                "cancel_requested": "true",
+            },
+        )
 
     @pytest.mark.asyncio
     async def test_cancel_job_already_completed(self, async_client, db_session, mock_user):
@@ -1040,6 +1109,8 @@ class TestListJobOutputs:
             file_size_bytes=1024,
             width=512,
             height=512,
+            output_metadata={"seed": 99},
+            published_to=[{"channel": "webhook", "url": "https://hooks.example.com", "published_at": "2026-05-14T00:00:02+00:00"}],
         )
         db_session.add(output)
         await db_session.commit()
@@ -1050,6 +1121,8 @@ class TestListJobOutputs:
         data = response.json()
         assert len(data) == 1
         assert data[0]["filename"] == "output.png"
+        assert data[0]["metadata"]["seed"] == 99
+        assert data[0]["published_to"][0]["channel"] == "webhook"
 
 
 class TestJobBrandMessages:

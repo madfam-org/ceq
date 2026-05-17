@@ -1,309 +1,263 @@
-/**
- * Tests for CEQ Auth utilities
- */
-
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-
-// Mock localStorage
-const localStorageMock = (() => {
-  let store: Record<string, string> = {}
-  return {
-    getItem: vi.fn((key: string) => store[key] || null),
-    setItem: vi.fn((key: string, value: string) => {
-      store[key] = value
-    }),
-    removeItem: vi.fn((key: string) => {
-      delete store[key]
-    }),
-    clear: () => {
-      store = {}
-    },
-  }
-})()
-
-Object.defineProperty(window, 'localStorage', {
-  value: localStorageMock,
-})
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 import {
-  getToken,
-  getRefreshToken,
-  getStoredUser,
-  setAuth,
-  clearAuth,
-  parseJwt,
-  isTokenExpired,
-  getLoginUrl,
-  getLogoutUrl,
-  getSessionAuth,
   AUTH_CONFIG,
-} from '@/lib/auth'
+  clearAuth,
+  getRefreshToken,
+  getSessionAuth,
+  getStoredUser,
+  getToken,
+  getLoginUrl,
+  sanitizeReturnPath,
+  getLogoutUrl,
+  isTokenExpired,
+  parseJwt,
+  setAuth,
+} from "@/lib/auth";
 
-describe('Auth Configuration', () => {
-  it('has Janua URL configured', () => {
-    expect(AUTH_CONFIG.januaUrl).toContain('auth.madfam.io')
-  })
+describe("Auth Configuration", () => {
+  it("has Janua URL configured", () => {
+    expect(AUTH_CONFIG.januaUrl).toContain("auth.madfam.io");
+  });
 
-  it('has client ID configured', () => {
-    expect(AUTH_CONFIG.clientId).toBeDefined()
-  })
+  it("has client ID configured", () => {
+    expect(AUTH_CONFIG.clientId).toBeDefined();
+  });
 
-  it('has redirect URI based on window origin', () => {
-    expect(AUTH_CONFIG.redirectUri).toContain('/auth/callback')
-  })
+  it("has redirect URI based on window origin", () => {
+    expect(AUTH_CONFIG.redirectUri).toContain("/auth/callback");
+  });
 
-  it('has post logout URI based on window origin', () => {
-    expect(AUTH_CONFIG.postLogoutUri).toBeDefined()
-  })
-})
+  it("has post logout URI based on window origin", () => {
+    expect(AUTH_CONFIG.postLogoutUri).toBeDefined();
+  });
+});
 
-describe('Token Storage', () => {
+describe("Session state", () => {
   beforeEach(() => {
-    localStorageMock.clear()
-    vi.clearAllMocks()
-    // Reset mock return values
-    localStorageMock.getItem.mockReturnValue(null)
-  })
+    clearAuth();
+  });
 
-  it('getToken returns null when no token', () => {
-    const token = getToken()
-    expect(token).toBeNull()
-  })
+  it("getToken returns null when no token is set", () => {
+    expect(getToken()).toBeNull();
+  });
 
-  it('getToken returns stored token', () => {
-    localStorageMock.getItem.mockReturnValue('test-token')
+  it("setAuth updates in-memory auth state", () => {
+    const user = { id: "user-123", email: "test@example.com", name: "Test User" };
+    setAuth("access-token", "refresh-token", user);
 
-    const token = getToken()
-    expect(token).toBe('test-token')
-  })
+    expect(getToken()).toBe("access-token");
+    expect(getStoredUser()).toEqual(user);
+    expect(getRefreshToken()).toBeNull();
+  });
 
-  it('getRefreshToken returns null when no token', () => {
-    localStorageMock.getItem.mockReturnValue(null)
-    const token = getRefreshToken()
-    expect(token).toBeNull()
-  })
+  it("clearAuth clears in-memory auth state", () => {
+    const user = { id: "user-123", email: "test@example.com" };
+    setAuth("access-token", "refresh-token", user);
 
-  it('getRefreshToken returns stored token', () => {
-    localStorageMock.getItem.mockReturnValue('refresh-token')
+    clearAuth();
 
-    const token = getRefreshToken()
-    expect(token).toBe('refresh-token')
-  })
+    expect(getToken()).toBeNull();
+    expect(getStoredUser()).toBeNull();
+    expect(getRefreshToken()).toBeNull();
+  });
+});
 
-  it('getStoredUser returns null when no user', () => {
-    const user = getStoredUser()
-    expect(user).toBeNull()
-  })
-
-  it('getStoredUser returns parsed user', () => {
-    const mockUser = { id: 'user-123', email: 'test@example.com' }
-    localStorageMock.getItem.mockReturnValue(JSON.stringify(mockUser))
-
-    const user = getStoredUser()
-    expect(user).toEqual(mockUser)
-  })
-
-  it('getStoredUser handles invalid JSON', () => {
-    localStorageMock.getItem.mockReturnValue('invalid-json')
-
-    const user = getStoredUser()
-    expect(user).toBeNull()
-  })
-
-  it('setAuth stores all auth data', () => {
-    const user = { id: 'user-123', email: 'test@example.com' }
-    setAuth('access-token', 'refresh-token', user)
-
-    expect(localStorageMock.setItem).toHaveBeenCalledWith('janua_token', 'access-token')
-    expect(localStorageMock.setItem).toHaveBeenCalledWith('janua_refresh_token', 'refresh-token')
-    expect(localStorageMock.setItem).toHaveBeenCalledWith('janua_user', JSON.stringify(user))
-  })
-
-  it('setAuth handles null refresh token', () => {
-    const user = { id: 'user-123', email: 'test@example.com' }
-    setAuth('access-token', null, user)
-
-    expect(localStorageMock.setItem).toHaveBeenCalledWith('janua_token', 'access-token')
-    expect(localStorageMock.setItem).not.toHaveBeenCalledWith('janua_refresh_token', expect.anything())
-  })
-
-  it('clearAuth removes all auth data', () => {
-    clearAuth()
-
-    expect(localStorageMock.removeItem).toHaveBeenCalledWith('janua_token')
-    expect(localStorageMock.removeItem).toHaveBeenCalledWith('janua_refresh_token')
-    expect(localStorageMock.removeItem).toHaveBeenCalledWith('janua_user')
-  })
-})
-
-describe('JWT Parsing', () => {
-  // Create a test JWT with base64url encoding
+describe("JWT Parsing", () => {
   function createTestJwt(payload: object): string {
-    const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
-    const body = btoa(JSON.stringify(payload))
-    const signature = 'test-signature'
-    return `${header}.${body}.${signature}`
+    const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+    const body = btoa(JSON.stringify(payload));
+    const signature = "test-signature";
+    return `${header}.${body}.${signature}`;
   }
 
-  it('parseJwt extracts user from valid token', () => {
+  it("parseJwt extracts user from valid token", () => {
     const token = createTestJwt({
-      sub: 'user-123',
-      email: 'test@example.com',
-      name: 'Test User',
-      avatar: 'https://example.com/avatar.jpg',
-    })
+      sub: "user-123",
+      email: "test@example.com",
+      name: "Test User",
+      avatar: "https://example.com/avatar.jpg",
+    });
 
-    const user = parseJwt(token)
+    expect(parseJwt(token)).toEqual({
+      id: "user-123",
+      email: "test@example.com",
+      name: "Test User",
+      avatar: "https://example.com/avatar.jpg",
+    });
+  });
 
-    expect(user).toEqual({
-      id: 'user-123',
-      email: 'test@example.com',
-      name: 'Test User',
-      avatar: 'https://example.com/avatar.jpg',
-    })
-  })
-
-  it('parseJwt uses email prefix when no name', () => {
+  it("parseJwt uses email prefix when no name", () => {
     const token = createTestJwt({
-      sub: 'user-123',
-      email: 'test@example.com',
-    })
+      sub: "user-123",
+      email: "test@example.com",
+    });
 
-    const user = parseJwt(token)
+    expect(parseJwt(token)?.name).toBe("test");
+  });
 
-    expect(user?.name).toBe('test')
-  })
+  it("parseJwt returns null for invalid token", () => {
+    expect(parseJwt("invalid-token")).toBeNull();
+  });
 
-  it('parseJwt returns null for invalid token', () => {
-    const user = parseJwt('invalid-token')
-    expect(user).toBeNull()
-  })
+  it("parseJwt returns null for malformed JWT", () => {
+    expect(parseJwt("not.a.valid.jwt")).toBeNull();
+  });
+});
 
-  it('parseJwt returns null for malformed JWT', () => {
-    const user = parseJwt('not.a.valid.jwt')
-    expect(user).toBeNull()
-  })
-})
-
-describe('Token Expiration', () => {
+describe("Token Expiration", () => {
   function createTestJwt(payload: object): string {
-    const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
-    const body = btoa(JSON.stringify(payload))
-    const signature = 'test-signature'
-    return `${header}.${body}.${signature}`
+    const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+    const body = btoa(JSON.stringify(payload));
+    const signature = "test-signature";
+    return `${header}.${body}.${signature}`;
   }
 
-  it('isTokenExpired returns true for expired token', () => {
+  it("isTokenExpired returns true for expired token", () => {
     const expiredToken = createTestJwt({
-      sub: 'user-123',
+      sub: "user-123",
       exp: Math.floor(Date.now() / 1000) - 3600, // 1 hour ago
-    })
+    });
 
-    expect(isTokenExpired(expiredToken)).toBe(true)
-  })
+    expect(isTokenExpired(expiredToken)).toBe(true);
+  });
 
-  it('isTokenExpired returns true for token expiring soon', () => {
+  it("isTokenExpired returns true for token expiring soon", () => {
     const expiringToken = createTestJwt({
-      sub: 'user-123',
+      sub: "user-123",
       exp: Math.floor(Date.now() / 1000) + 30, // 30 seconds from now
-    })
+    });
 
-    expect(isTokenExpired(expiringToken)).toBe(true)
-  })
+    expect(isTokenExpired(expiringToken)).toBe(true);
+  });
 
-  it('isTokenExpired returns false for valid token', () => {
+  it("isTokenExpired returns false for valid token", () => {
     const validToken = createTestJwt({
-      sub: 'user-123',
+      sub: "user-123",
       exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
-    })
+    });
 
-    expect(isTokenExpired(validToken)).toBe(false)
-  })
+    expect(isTokenExpired(validToken)).toBe(false);
+  });
 
-  it('isTokenExpired returns true for invalid token', () => {
-    expect(isTokenExpired('invalid-token')).toBe(true)
-  })
-})
+  it("isTokenExpired returns true for invalid token", () => {
+    expect(isTokenExpired("invalid-token")).toBe(true);
+  });
+});
 
-describe('URL Generation', () => {
-  it('getLoginUrl generates authorization URL', () => {
-    const url = getLoginUrl()
+describe("URL Generation", () => {
+  it("getLoginUrl generates authorization URL", () => {
+    const url = getLoginUrl();
 
-    expect(url).toContain(AUTH_CONFIG.januaUrl)
-    expect(url).toContain('/api/v1/oauth/authorize')
-    expect(url).toContain('client_id=')
-    expect(url).toContain('redirect_uri=')
-    expect(url).toContain('response_type=code')
-    expect(url).toContain('scope=openid+profile+email')
-  })
+    expect(url).toContain(AUTH_CONFIG.januaUrl);
+    expect(url).toContain("/api/v1/oauth/authorize");
+    expect(url).toContain("client_id=");
+    expect(url).toContain("redirect_uri=");
+    expect(url).toContain("response_type=code");
+    expect(url).toContain("scope=openid+profile+email");
+  });
 
-  it('getLoginUrl includes returnTo in state', () => {
-    const url = getLoginUrl('/dashboard')
+  it("getLoginUrl includes returnTo in state", () => {
+    const url = getLoginUrl("/dashboard");
 
-    expect(url).toContain('state=%2Fdashboard')
-  })
+    expect(url).toContain("state=%2Fdashboard");
+  });
 
-  it('getLogoutUrl generates logout URL', () => {
-    const url = getLogoutUrl()
+  it("getLoginUrl sanitizes absolute returnTo paths for state", () => {
+    const url = getLoginUrl("https://evil.com/phishing");
 
-    expect(url).toContain(AUTH_CONFIG.januaUrl)
-    expect(url).toContain('/logout')
-    expect(url).toContain('client_id=')
-    expect(url).toContain('post_logout_redirect_uri=')
-  })
-})
+    expect(url).toContain("state=%2F");
+    expect(url).not.toContain("https%3A%2F%2Fevil.com");
+  });
 
-describe('Session bootstrap', () => {
-  const originalFetch = global.fetch
+  it("getLogoutUrl generates logout URL", () => {
+    const url = getLogoutUrl();
+
+    expect(url).toContain(AUTH_CONFIG.januaUrl);
+    expect(url).toContain("/logout");
+    expect(url).toContain("client_id=");
+    expect(url).toContain("post_logout_redirect_uri=");
+  });
+});
+
+describe("Return path sanitization", () => {
+  it("defaults missing returnTo to root", () => {
+    expect(sanitizeReturnPath(undefined)).toBe("/");
+  });
+
+  it("keeps internal relative paths", () => {
+    expect(sanitizeReturnPath("/templates?category=social")).toBe(
+      "/templates?category=social"
+    );
+  });
+
+  it("rejects absolute URLs and returns root", () => {
+    expect(sanitizeReturnPath("https://evil.com/")).toBe("/");
+  });
+
+  it("rejects javascript protocol urls and returns root", () => {
+    expect(sanitizeReturnPath("javascript:alert(1)")).toBe("/");
+  });
+});
+
+describe("Session bootstrap", () => {
+  const originalFetch = global.fetch;
 
   afterEach(() => {
-    global.fetch = originalFetch
-  })
+    global.fetch = originalFetch;
+  });
 
   function createTestJwt(payload: object): string {
-    const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
-    const body = btoa(JSON.stringify(payload))
-    const signature = 'test-signature'
-    return `${header}.${body}.${signature}`
+    const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+    const body = btoa(JSON.stringify(payload));
+    const signature = "test-signature";
+    return `${header}.${body}.${signature}`;
   }
 
-  it('returns null when the server session is absent', async () => {
+  it("returns null when the server session is absent", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,
-    })
+    });
 
-    await expect(getSessionAuth()).resolves.toBeNull()
-    expect(global.fetch).toHaveBeenCalledWith('/api/auth/session', {
-      method: 'GET',
-      credentials: 'same-origin',
-      cache: 'no-store',
-    })
-  })
+    await expect(getSessionAuth()).resolves.toBeNull();
+    expect(global.fetch).toHaveBeenCalledWith("/api/auth/session", {
+      method: "GET",
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+  });
 
-  it('returns the server session user and access token', async () => {
+  it("returns the server session user and access token", async () => {
     const accessToken = createTestJwt({
-      sub: 'user-123',
-      email: 'test@example.com',
-    })
+      sub: "user-123",
+      email: "test@example.com",
+    });
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         access_token: accessToken,
         user: {
-          id: 'user-123',
-          email: 'test@example.com',
-          name: 'test',
+          id: "user-123",
+          email: "test@example.com",
+          name: "test",
         },
       }),
-    })
+    });
 
     await expect(getSessionAuth()).resolves.toEqual({
       accessToken,
       user: {
-        id: 'user-123',
-        email: 'test@example.com',
-        name: 'test',
+        id: "user-123",
+        email: "test@example.com",
+        name: "test",
       },
-    })
-  })
-})
+    });
+  });
+});

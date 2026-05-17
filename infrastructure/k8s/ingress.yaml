@@ -25,7 +25,7 @@ spec:
               service:
                 name: ceq-studio
                 port:
-                  number: 5801
+                  number: 80
     # API
     - host: api.ceq.lol
       http:
@@ -36,7 +36,7 @@ spec:
               service:
                 name: ceq-api
                 port:
-                  number: 5800
+                  number: 80
     # WebSocket
     - host: ws.ceq.lol
       http:
@@ -47,4 +47,4 @@ spec:
               service:
                 name: ceq-api
                 port:
-                  number: 5800
+                  number: 80

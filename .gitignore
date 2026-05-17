@@ -70,6 +70,7 @@ cache/
 # Vercel
 .vercel/
 secrets.prod.yaml
+infrastructure/k8s/secrets.local.yaml
 *.pem
 *.key
 *.p12

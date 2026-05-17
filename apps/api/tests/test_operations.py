@@ -80,11 +80,37 @@ class TestOperationsStatus:
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
+        assert data["redis"]["reachable"] is True
         assert data["callback_token_configured"] is True
         assert data["webhook_secret_configured"] is True
         assert data["redis"]["pending_jobs"] == 2
         assert data["redis"]["processing_jobs"] == 1
         assert data["redis"]["completion_dead_letters"] == 3
+
+    @pytest.mark.asyncio
+    async def test_status_marks_redis_unreachable_on_ping_failure(
+        self,
+        app,
+        async_client,
+        mock_admin_user,
+        mock_redis,
+        monkeypatch,
+    ):
+        from ceq_api.routers import operations
+
+        async def admin_user():
+            return await _override_admin(mock_admin_user)
+
+        app.dependency_overrides[get_current_user] = admin_user
+        monkeypatch.setattr(operations.settings, "job_completion_callback_token", "token")
+        monkeypatch.setattr(operations.settings, "job_webhook_secret", "webhook-secret")
+        mock_redis.ping.side_effect = RuntimeError("redis unavailable")
+
+        response = await async_client.get("/v1/operations/status")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["redis"]["reachable"] is False
 
 
 class TestCompletionDeadLetters:

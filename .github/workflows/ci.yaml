@@ -79,7 +79,7 @@ jobs:
           pip install ruff pytest pytest-asyncio pytest-cov httpx 'pydantic[email]'
 
       - name: Ruff (lint)
-        run: ruff check . || true  # non-blocking on first rollout; tighten later
+        run: ruff check .
 
       - name: Pytest
         env:
@@ -120,7 +120,7 @@ jobs:
           pip install -e . --no-deps
 
       - name: Ruff (lint)
-        run: ruff check . || true
+        run: ruff check .
 
       - name: Pytest
         env:
@@ -154,8 +154,8 @@ jobs:
       - name: Typecheck (studio)
         run: pnpm --filter @ceq/studio typecheck
 
-      - name: Lint (studio, non-blocking on first rollout)
-        run: pnpm --filter @ceq/studio lint || true
+      - name: Lint (studio)
+        run: pnpm --filter @ceq/studio lint
 
       - name: Tests (studio)
         run: pnpm --filter @ceq/studio test -- --run

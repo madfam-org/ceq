@@ -7,7 +7,7 @@
 #
 # Prerequisites:
 #   - kubectl configured for production cluster
-#   - Secrets configured in infrastructure/k8s/secrets.prod.yaml
+#   - Secrets configured in infrastructure/k8s/secrets.local.yaml
 #   - Cloudflare tunnel routes configured
 #
 # Usage: ./scripts/deploy.sh [command]
@@ -59,8 +59,8 @@ check_prereqs() {
 
     # Check secrets
     if ! kubectl get secret ceq-secrets -n ceq &> /dev/null 2>&1; then
-        log_warn "CEQ secrets not found. Apply secrets.prod.yaml first:"
-        echo "  kubectl apply -f $K8S_DIR/secrets.prod.yaml"
+        log_warn "CEQ secrets not found. Apply infrastructure/k8s/secrets.local.yaml first:"
+        echo "  kubectl apply -f $K8S_DIR/secrets.local.yaml"
     else
         log_success "CEQ secrets configured"
     fi
@@ -95,11 +95,15 @@ deploy() {
         exit 1
     }
 
-    kubectl rollout status deployment/cloudflared -n ceq --timeout=120s || {
-        log_error "Cloudflared deployment failed"
-        kubectl logs deployment/cloudflared -n ceq --tail=50
-        exit 1
-    }
+    if kubectl get deployment cloudflared -n ceq &> /dev/null 2>&1; then
+        kubectl rollout status deployment/cloudflared -n ceq --timeout=120s || {
+            log_error "Cloudflared deployment failed"
+            kubectl logs deployment/cloudflared -n ceq --tail=50
+            exit 1
+        }
+    else
+        log_warn "Cloudflared deployment is not present; skipping tunnel readiness check."
+    fi
 
     log_success "All deployments complete!"
 
@@ -135,7 +139,7 @@ seed() {
     kubectl delete job ceq-seed-templates -n ceq --ignore-not-found=true
 
     # Apply seed job
-    kubectl apply -f "$K8S_DIR/db-migrate-job.yaml"
+    kubectl apply -f "$K8S_DIR/seed-templates-job.yaml"
 
     # Wait for completion
     kubectl wait --for=condition=complete job/ceq-seed-templates -n ceq --timeout=120s || {
@@ -198,7 +202,12 @@ logs() {
             kubectl logs deployment/ceq-studio -n ceq -f
             ;;
         tunnel|cloudflared)
-            kubectl logs deployment/cloudflared -n ceq -f
+            if kubectl get deployment cloudflared -n ceq &> /dev/null 2>&1; then
+                kubectl logs deployment/cloudflared -n ceq -f
+            else
+                log_error "Cloudflared deployment is not present."
+                exit 1
+            fi
             ;;
         *)
             log_error "Unknown component: $component"
@@ -243,8 +252,8 @@ main() {
             echo "  logs    - Show logs (api|studio|tunnel)"
             echo ""
             echo "Typical workflow:"
-            echo "  1. Configure secrets: cp infrastructure/k8s/secrets.prod.yaml secrets.local.yaml && vim secrets.local.yaml"
-            echo "  2. Apply secrets: kubectl apply -f secrets.local.yaml"
+            echo "  1. Configure secrets: cp infrastructure/k8s/secrets.yaml infrastructure/k8s/secrets.local.yaml && vim infrastructure/k8s/secrets.local.yaml"
+            echo "  2. Apply secrets: kubectl apply -f infrastructure/k8s/secrets.local.yaml"
             echo "  3. Deploy: $0 deploy"
             echo "  4. Migrate: $0 migrate"
             echo "  5. Check: $0 status"

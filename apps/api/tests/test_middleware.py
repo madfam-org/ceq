@@ -1,20 +1,14 @@
 """Tests for security and observability middleware."""
 
+import logging
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-import pytest
-from fastapi import FastAPI, status
-from fastapi.testclient import TestClient
+from fastapi import Request, status
 
-from ceq_api.middleware import (
-    RequestIdMiddleware,
-    RequestLoggingMiddleware,
-    SecurityHeadersMiddleware,
-    RequestSizeLimitMiddleware,
-    get_client_identifier,
-)
-from ceq_api.logging import set_request_id, get_request_id
+from ceq_api.logging import get_request_id, set_request_id
+from ceq_api.middleware import get_client_identifier, rate_limit_exceeded_handler
 
 
 class TestRequestIdMiddleware:
@@ -121,15 +115,13 @@ class TestClientIdentifier:
         """Should extract IP address from request."""
         mock_request = MagicMock()
         mock_request.headers = {}
+        mock_request.state = SimpleNamespace()
         mock_request.client = MagicMock()
         mock_request.client.host = "192.168.1.1"
 
-        # Remove user_id from state
-        del mock_request.state.user_id
+        identifier = get_client_identifier(mock_request)
 
-        # Should fall back to IP
-        # This tests the fallback path
-
+        assert identifier == "192.168.1.1"
     def test_get_client_identifier_with_user(self):
         """Should use user ID when authenticated."""
         mock_request = MagicMock()
@@ -185,20 +177,53 @@ class TestLoggingFunctions:
 class TestRateLimiting:
     """Tests for rate limiting configuration."""
 
-    def test_rate_limiter_disabled_in_dev(self):
+    def test_rate_limiter_disabled_in_dev(self, client):
         """Rate limiter should be disabled in development."""
-        with patch("ceq_api.middleware.settings") as mock_settings:
-            mock_settings.is_production = False
+        # Middleware should not enforce limit for the endpoint even if called repeatedly
+        # because the limiter is disabled by default outside production.
+        with patch("ceq_api.middleware.limiter.enabled", False):
+            for _ in range(25):
+                response = self._post_interest(client)
+
+            assert response.status_code != status.HTTP_429_TOO_MANY_REQUESTS
 
             # Rate limiter should not reject requests in dev mode
+            response = self._post_interest(client)
+            assert response.status_code != status.HTTP_429_TOO_MANY_REQUESTS
+
+    def _post_interest(self, client):
+        """Post to rate-limited endpoint with valid payload."""
+        return client.post(
+            "/v1/interest/",
+            json={
+                "email": "test@example.com",
+                "feature_key": "early_access",
+            },
+        )
 
     def test_rate_limit_exceeded_response(self):
         """Rate limit exceeded should return 429 with retry header."""
-        # When rate limit is exceeded:
-        # - Status code should be 429
-        # - Response should include Retry-After header
-        # - Response should include brand message
-        pass
+        mock_request = MagicMock(spec=Request)
+        mock_request.url.path = "/v1/interest/"
+        mock_request.state = SimpleNamespace()
+        mock_request.state.user_id = None
+        mock_request.state.user = None
+        mock_request.headers = {}
+        mock_request.client = SimpleNamespace(host="127.0.0.1")
+        mock_request.client.host = "127.0.0.1"
+
+        mock_exc = MagicMock()
+        mock_exc.detail = "test window exceeded"
+
+        response = rate_limit_exceeded_handler(mock_request, mock_exc)
+
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+        assert response.headers["Retry-After"] == "60"
+        import json as _json
+
+        payload = _json.loads(response.body)
+        assert payload["detail"] == "Latent space overloaded. Too many requests. Please slow down."
+        assert payload["retry_after"] == mock_exc.detail
 
 
 class TestCORS:
@@ -219,6 +244,21 @@ class TestCORS:
             "*",
         ]
 
+    def test_cors_allows_app_host_origin(self, client):
+        """Should allow requests from app.ceq.lol."""
+        response = client.options(
+            "/v1/workflows/",
+            headers={
+                "Origin": "https://app.ceq.lol",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+
+        assert response.headers.get("Access-Control-Allow-Origin") in [
+            "https://app.ceq.lol",
+            "*",
+        ]
+
     def test_cors_exposes_request_id(self, client):
         """Should include X-Request-ID in response headers."""
         # Make a regular request instead of OPTIONS preflight
@@ -235,9 +275,19 @@ class TestHealthCheckBypass:
     def test_health_endpoint_not_logged(self, client, caplog):
         """Health endpoint should not be logged excessively."""
         response = client.get("/health")
-
         assert response.status_code == status.HTTP_200_OK
-        # Health checks should complete without excessive logging
+
+        with caplog.at_level(logging.INFO):
+            client.get("/health")
+
+        messages = [
+            record.getMessage()
+            for record in caplog.records
+            if "Request started: GET /health" in record.getMessage()
+            or "Request completed: GET /health" in record.getMessage()
+        ]
+
+        assert len(messages) == 0
 
     def test_ready_endpoint_not_logged(self, client):
         """Ready endpoint should not be logged excessively."""

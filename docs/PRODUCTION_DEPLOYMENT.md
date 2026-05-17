@@ -26,7 +26,7 @@
 | Janua OAuth Client | Action required | Active client currently rejected by Janua; register/rotate for `app.ceq.lol` |
 | Cloudflare Tunnel Routes | Done | ceq.lol, app.ceq.lol, api.ceq.lol, ws.ceq.lol |
 | R2 Bucket + Token | Done | `ceq-assets` with Object Read & Write |
-| secrets.prod.yaml | Done | R2 + OAuth done, DB/Redis configured |
+| secrets.local.yaml | Done | R2 + OAuth done, DB/Redis configured |
 | Enclii Infrastructure | Done | Terraform applied |
 | Ubicloud Database | Done | ceq_production database created |
 | Redis Password | Done | Redis configured |
@@ -93,7 +93,7 @@ The Studio route is now server-gated with CEQ session cookies:
 |-------|-------|
 | **Name** | CEQ Studio |
 | **Client ID** | `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk` |
-| **Client Secret** | Stored in `secrets.prod.yaml` |
+| **Client Secret** | Stored in `infrastructure/k8s/secrets.local.yaml` |
 | **Grant Types** | `authorization_code`, `refresh_token` |
 | **Redirect URIs** | `https://app.ceq.lol/auth/callback`, `http://localhost:5801/auth/callback` |
 | **Scopes** | `openid`, `profile`, `email` |
@@ -106,8 +106,8 @@ The Studio route is now server-gated with CEQ session cookies:
 |----------|-------|
 | **Bucket** | `ceq-assets` (Western North America) |
 | **Token** | `CEQ R2 Token` (Object Read & Write) |
-| **Access Key** | Stored in `secrets.prod.yaml` |
-| **Secret Key** | Stored in `secrets.prod.yaml` |
+| **Access Key** | Stored in `infrastructure/k8s/secrets.local.yaml` |
+| **Secret Key** | Stored in `infrastructure/k8s/secrets.local.yaml` |
 | **Endpoint** | `https://12f1353f7819865c56161ce00297668e.r2.cloudflarestorage.com` |
 
 ### 5. Configure Tunnel Routes (Done)
@@ -128,7 +128,7 @@ Studio surface. WebSocket support is enabled for `ws.ceq.lol`.
 
 ```bash
 # Copy the template
-cp infrastructure/k8s/secrets.prod.yaml infrastructure/k8s/secrets.local.yaml
+cp infrastructure/k8s/secrets.yaml infrastructure/k8s/secrets.local.yaml
 
 # Edit with real values
 vim infrastructure/k8s/secrets.local.yaml
@@ -244,7 +244,7 @@ Stability smoke after the 2026-05 output-contract remediation:
 5. Confirm `/v1/jobs/{job_id}` and `/v1/outputs` show the same output metadata.
 6. Confirm the Studio gallery opens `public_url`/preview URLs in the browser.
 7. Cancel one running GPU job and confirm the worker reports durable `cancelled`.
-8. Confirm the migration chain includes `20260514_outputs_unique` and the
+8. Confirm the migration chain includes `20260514_outputs_job_storage_unique` and the
    `outputs(job_id, storage_uri)` uniqueness guard is present.
 
 The release is not considered stable until the full Studio -> API -> Redis -> worker -> R2 -> callback -> PostgreSQL -> gallery loop has passed once in the target environment.
@@ -252,7 +252,7 @@ The release is not considered stable until the full Studio -> API -> Redis -> wo
 Additional 2026-05-14 wave gates:
 
 1. Confirm `JOB_COMPLETION_CALLBACK_TOKEN` and `JOB_WEBHOOK_SECRET` are present through `GET /v1/operations/status`.
-2. Confirm the PreSync migration job applied `20260514_outputs_unique` through the same operations status response.
+2. Confirm the PreSync migration job applied `20260514_outputs_job_storage_unique` through the same operations status response.
 3. Confirm exhausted worker callback payloads are inspectable through `GET /v1/operations/completion-dead-letters`.
 4. Replay or discard any exhausted callback payloads through `/v1/operations/completion-dead-letters/{index}`.
 5. Cancel one actively running GPU job and verify the API remains `cancelled`.
@@ -275,6 +275,8 @@ Admin acceptance status can be included in the same run:
 CEQ_AUTH_TOKEN="<janua-jwt>" \
 CEQ_ADMIN_AUTH_TOKEN="<admin-janua-jwt>" \
 CEQ_RUN_OPERATIONS_STATUS=true \
+CEQ_REQUIRE_WEBHOOK_SECRET=true \
+CEQ_EXPECT_ALEMBIC_REVISION="20260514_outputs_job_storage_unique" \
 CEQ_TEMPLATE_ID="<template-uuid>" \
 scripts/production-smoke.sh
 ```
@@ -425,11 +427,12 @@ Per [PORT_ALLOCATION.md](https://github.com/madfam-io/solarpunk-foundry/blob/mai
 
 The GitHub Actions workflow (`.github/workflows/deploy.yaml`) handles:
 
-1. **Build API Image**: Push to ghcr.io/madfam/ceq-api
-2. **Build Studio Image**: Push to ghcr.io/madfam/ceq-studio
-3. **Deploy to K8s**: Apply kustomize manifests
-4. **Run Migrations**: Execute alembic upgrade
-5. **Health Check**: Verify endpoints respond
+1. **Build API Image**: Push to ghcr.io/madfam-org/ceq-api
+2. **Build Studio Image**: Push to ghcr.io/madfam-org/ceq-studio
+3. **Build Worker Image**: Push to ghcr.io/madfam-org/ceq-worker
+4. **Deploy to K8s**: Commit image digests into kustomization and let ArgoCD reconcile
+5. **Run Migrations**: Execute Alembic as ArgoCD PreSync migration job
+6. **Health Check**: Verify endpoints respond
 
 Triggered by:
 - Push to `main` branch (paths: `apps/**`, `infrastructure/**`)
@@ -439,7 +442,7 @@ Triggered by:
 
 ## Secrets Reference
 
-### secrets.prod.yaml Structure
+### secrets.local.yaml Structure
 
 ```yaml
 apiVersion: v1
@@ -449,21 +452,27 @@ metadata:
   namespace: ceq
 stringData:
   # Database (Ubicloud PostgreSQL)
-  database-url: "postgresql+asyncpg://ceq:PASSWORD@HOST:5432/ceq_production"
+  DATABASE_URL: "postgresql+asyncpg://ceq:PASSWORD@HOST:5432/ceq_production"
 
   # Redis (Shared MADFAM Redis Sentinel, DB 14)
-  redis-url: "redis://:PASSWORD@redis-0.redis-headless.enclii-production.svc.cluster.local:6379/14"
+  REDIS_URL: "redis://:PASSWORD@redis-0.redis-headless.enclii-production.svc.cluster.local:6379/14"
 
   # Cloudflare R2 (ceq-assets bucket)
-  r2-endpoint: "https://12f1353f7819865c56161ce00297668e.r2.cloudflarestorage.com"
-  r2-access-key: "51844af3c4cbda516895116372ec3b38"
-  r2-secret-key: "..."
-  r2-bucket: "ceq-assets"
+  R2_ENDPOINT: "https://12f1353f7819865c56161ce00297668e.r2.cloudflarestorage.com"
+  R2_ACCESS_KEY: "..."
+  R2_SECRET_KEY: "..."
+  R2_BUCKET_NAME: "ceq-assets"
+  # Optional alias if your process expects it:
+  # R2_BUCKET: "ceq-assets"
+
+  # Worker callback + user webhook signing
+  JOB_COMPLETION_CALLBACK_TOKEN: "..."
+  JOB_WEBHOOK_SECRET: "..."
 
   # Janua OAuth
-  janua-client-id: "jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk"
-  janua-client-secret: "..."
-```
+  JANUA_CLIENT_ID: "jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk"
+  JANUA_CLIENT_SECRET: "..."
+``` 
 
 ---
 

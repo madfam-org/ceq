@@ -10,6 +10,7 @@
 #   CEQ_TEMPLATE_SMOKES_JSON='[{"label":"image","template_id":"...","params":{}}]'
 #   CEQ_RUN_CANCEL_SMOKE=true CEQ_CANCEL_TEMPLATE_ID=<long-running template UUID>
 #   CEQ_PUBLIC_ONLY=true
+#   CEQ_STRICT_SMOKE=true
 
 set -euo pipefail
 
@@ -22,16 +23,28 @@ TEMPLATE_ID="${CEQ_TEMPLATE_ID:-}"
 TEMPLATE_PARAMS_JSON="${CEQ_TEMPLATE_PARAMS_JSON:-{}}"
 TEMPLATE_SMOKES_JSON="${CEQ_TEMPLATE_SMOKES_JSON:-}"
 PUBLIC_ONLY="${CEQ_PUBLIC_ONLY:-false}"
+STRICT_SMOKE="${CEQ_STRICT_SMOKE:-false}"
 POLL_TIMEOUT_SECONDS="${CEQ_POLL_TIMEOUT_SECONDS:-600}"
 POLL_INTERVAL_SECONDS="${CEQ_POLL_INTERVAL_SECONDS:-5}"
 EXPECT_OUTPUTS="${CEQ_EXPECT_OUTPUTS:-true}"
 RUN_OPERATIONS_STATUS="${CEQ_RUN_OPERATIONS_STATUS:-false}"
 REQUIRE_OPERATIONS_STATUS="${CEQ_REQUIRE_OPERATIONS_STATUS:-false}"
+REQUIRE_WEBHOOK_SECRET="${CEQ_REQUIRE_WEBHOOK_SECRET:-false}"
+EXPECT_ALEMBIC_REVISION="${CEQ_EXPECT_ALEMBIC_REVISION:-}"
 RUN_CANCEL_SMOKE="${CEQ_RUN_CANCEL_SMOKE:-false}"
+REQUIRE_CANCEL_SMOKE="${CEQ_REQUIRE_CANCEL_SMOKE:-false}"
 EXPECT_APP_AUTH_REDIRECT="${CEQ_EXPECT_APP_AUTH_REDIRECT:-true}"
 CANCEL_TEMPLATE_ID="${CEQ_CANCEL_TEMPLATE_ID:-$TEMPLATE_ID}"
 CANCEL_TEMPLATE_PARAMS_JSON="${CEQ_CANCEL_TEMPLATE_PARAMS_JSON:-$TEMPLATE_PARAMS_JSON}"
 CANCEL_AFTER_SECONDS="${CEQ_CANCEL_AFTER_SECONDS:-10}"
+
+if [[ "$STRICT_SMOKE" == "true" ]]; then
+  log "Strict smoke enabled via CEQ_STRICT_SMOKE=true"
+  RUN_OPERATIONS_STATUS="true"
+  REQUIRE_OPERATIONS_STATUS="true"
+  RUN_CANCEL_SMOKE="true"
+  REQUIRE_CANCEL_SMOKE="true"
+fi
 
 log() {
   printf '[ceq-smoke] %s\n' "$*" >&2
@@ -123,16 +136,27 @@ run_operations_status() {
   local redis_reachable
   local revision
   local dead_letters
+  local webhook_configured
   operations_json="$(curl_json_with_token "$ADMIN_AUTH_TOKEN" GET "${API_URL}/v1/operations/status")"
   callback_configured="$(jq -r '.callback_token_configured' <<<"$operations_json")"
   redis_reachable="$(jq -r '.redis.reachable' <<<"$operations_json")"
   revision="$(jq -r '.alembic_revision // "unknown"' <<<"$operations_json")"
   dead_letters="$(jq -r '.redis.completion_dead_letters // "unknown"' <<<"$operations_json")"
+  webhook_configured="$(jq -r '.webhook_secret_configured' <<<"$operations_json")"
 
   [[ "$callback_configured" == "true" ]] || fail "Worker callback token is not configured in operations status."
   [[ "$redis_reachable" == "true" ]] || fail "Redis is not reachable in operations status."
+  if [[ "$REQUIRE_WEBHOOK_SECRET" == "true" ]]; then
+    [[ "$webhook_configured" == "true" ]] || fail "JOB_WEBHOOK_SECRET is not configured in operations status."
+  fi
+  if [[ -n "$EXPECT_ALEMBIC_REVISION" && "$revision" != "$EXPECT_ALEMBIC_REVISION" ]]; then
+    fail "Alembic revision '${revision}' does not match expected '${EXPECT_ALEMBIC_REVISION}'."
+  fi
+  if [[ "$revision" == "unknown" || "$revision" == "null" ]]; then
+    fail "Alembic revision is not available from operations status."
+  fi
 
-  log "Operations status ok: alembic=${revision} completion_dead_letters=${dead_letters}"
+  log "Operations status ok: alembic=${revision} completion_dead_letters=${dead_letters} webhook_secret=${webhook_configured}"
 }
 
 submit_template_job() {
@@ -260,6 +284,10 @@ run_template_smokes() {
 }
 
 run_cancel_smoke() {
+  if [[ "$REQUIRE_CANCEL_SMOKE" == "true" && "$RUN_CANCEL_SMOKE" != "true" ]]; then
+    fail "CEQ_REQUIRE_CANCEL_SMOKE=true requires CEQ_RUN_CANCEL_SMOKE=true"
+  fi
+
   if [[ "$RUN_CANCEL_SMOKE" != "true" ]]; then
     return
   fi

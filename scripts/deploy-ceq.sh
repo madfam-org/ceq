@@ -33,7 +33,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 NAMESPACE="ceq"
 TUNNEL_NAME="ceq-prod"
-REGISTRY="ghcr.io/madfam"
+REGISTRY="ghcr.io/madfam-org"
 DOMAINS=("ceq.lol" "api.ceq.lol" "ws.ceq.lol")
 
 # Colors
@@ -259,9 +259,9 @@ cmd_deploy() {
 
     # Check if secrets exist
     if ! kubectl get secret ceq-secrets -n "$NAMESPACE" &> /dev/null; then
-        log_warn "ceq-secrets not found. Creating from template..."
-        log_error "Please edit infrastructure/k8s/secrets.yaml with real values first!"
-        log_info "Then run: kubectl apply -f infrastructure/k8s/secrets.yaml"
+        log_warn "ceq-secrets not found. Apply secrets.local.yaml first."
+        log_error "Please edit infrastructure/k8s/secrets.local.yaml with real values first!"
+        log_info "Then run: kubectl apply -f infrastructure/k8s/secrets.local.yaml"
         return 1
     fi
 

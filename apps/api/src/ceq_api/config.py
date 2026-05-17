@@ -48,11 +48,23 @@ class Settings(BaseSettings):
     furnace_api_key: str = ""
 
     # Janua (authentication)
-    janua_api_url: str = "http://localhost:4100"
+    janua_api_url: str = Field(
+        default="http://localhost:4100",
+        validation_alias=AliasChoices("JANUA_API_URL", "JANUA_URL"),
+    )
     janua_enabled: bool = True
-    janua_jwks_url: str = ""  # e.g. https://auth.madfam.io/.well-known/jwks.json
-    janua_issuer: str = ""  # e.g. https://auth.madfam.io
-    janua_audience: str = ""  # e.g. ceq-api
+    janua_jwks_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("JANUA_JWKS_URL", "JANUA_PUBLIC_JWKS_URL"),
+    )  # e.g. https://auth.madfam.io/.well-known/jwks.json
+    janua_issuer: str = Field(
+        default="",
+        validation_alias=AliasChoices("JANUA_ISSUER", "JANUA_ISSUER_URL"),
+    )  # e.g. https://auth.madfam.io
+    janua_audience: str = Field(
+        default="",
+        validation_alias=AliasChoices("JANUA_AUDIENCE", "JANUA_AUDIENCE_ID"),
+    )  # e.g. ceq-api
 
     # R2 Storage (Cloudflare)
     r2_endpoint: str = ""
@@ -92,7 +104,12 @@ class Settings(BaseSettings):
     job_webhook_retry_backoff_seconds: float = 1.0
 
     # CORS
-    cors_origins: list[str] = ["http://localhost:5801", "https://ceq.lol"]
+    cors_origins: list[str] = [
+        "http://localhost:5800",
+        "http://localhost:5801",
+        "https://ceq.lol",
+        "https://app.ceq.lol",
+    ]
 
     # InterestGate / pre-monetization feature-interest capture
     # When `interest_enabled=True` (default), the public POST /v1/interest/

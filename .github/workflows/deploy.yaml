@@ -174,10 +174,10 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            NEXT_PUBLIC_API_URL=https://api.ceq.lol
-            NEXT_PUBLIC_WS_URL=wss://ws.ceq.lol
-            NEXT_PUBLIC_JANUA_DOMAIN=auth.madfam.io
-            NEXT_PUBLIC_JANUA_CLIENT_ID=jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk
+            NEXT_PUBLIC_API_URL=${{ vars.CEQ_PUBLIC_API_URL || 'https://api.ceq.lol' }}
+            NEXT_PUBLIC_WS_URL=${{ vars.CEQ_PUBLIC_WS_URL || 'wss://ws.ceq.lol' }}
+            NEXT_PUBLIC_JANUA_URL=${{ vars.CEQ_PUBLIC_JANUA_URL || 'https://auth.madfam.io' }}
+            NEXT_PUBLIC_JANUA_CLIENT_ID=${{ vars.CEQ_PUBLIC_JANUA_CLIENT_ID || 'jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

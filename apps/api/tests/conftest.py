@@ -3,21 +3,19 @@
 import asyncio
 from collections.abc import AsyncGenerator, Generator
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import UUID, uuid4
+from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy import StaticPool, create_engine
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import StaticPool
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import Session
 
-from ceq_api.models import Base
 from ceq_api.auth.janua import JanuaUser
-
+from ceq_api.models import Base
 
 # Test database URL (in-memory SQLite for tests)
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -93,6 +91,7 @@ def mock_redis():
     redis.lrange.return_value = []
     redis.llen.return_value = 0
     redis.publish.return_value = None
+    redis.ping.return_value = True
     redis.close.return_value = None
     return redis
 
@@ -115,10 +114,10 @@ def mock_storage():
 @pytest.fixture
 def app(db_session, mock_user, mock_redis, mock_storage) -> FastAPI:
     """Create test FastAPI application with mocked dependencies."""
-    from ceq_api.main import app as main_app
-    from ceq_api.db import get_db
     from ceq_api.auth import get_current_user
+    from ceq_api.db import get_db
     from ceq_api.db.redis import get_redis
+    from ceq_api.main import app as main_app
     from ceq_api.storage import get_storage
 
     async def override_get_db():

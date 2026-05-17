@@ -17,7 +17,6 @@ import {
 import {
   type User,
   getToken,
-  getStoredUser,
   setAuth,
   clearAuth,
   isTokenExpired,
@@ -26,6 +25,7 @@ import {
   getLogoutUrl,
   parseJwt,
   getSessionAuth,
+  sanitizeReturnPath,
 } from "@/lib/auth";
 
 interface AuthContextType {
@@ -49,35 +49,38 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initialize auth state from storage
+  // Initialize auth state from HTTP-only cookie session.
   useEffect(() => {
     const initAuth = async () => {
-      const storedToken = getToken();
-      const storedUser = getStoredUser();
+      const session = await getSessionAuth();
+      if (!session) {
+        clearAuth();
+        setUser(null);
+        setToken(null);
+        setIsLoading(false);
+        return;
+      }
 
-      if (storedToken && storedUser) {
-        // Check if token is expired
-        if (isTokenExpired(storedToken)) {
-          // Try to refresh
-          const newToken = await refreshAccessToken();
-          if (newToken) {
-            setToken(newToken);
-            const newUser = parseJwt(newToken);
-            setUser(newUser);
-          } else {
-            clearAuth();
-          }
-        } else {
-          setToken(storedToken);
-          setUser(storedUser);
+      if (isTokenExpired(session.accessToken)) {
+        const refreshedToken = await refreshAccessToken();
+        if (!refreshedToken) {
+          clearAuth();
+          setUser(null);
+          setToken(null);
+          setIsLoading(false);
+          return;
         }
+
+        const refreshedUser = parseJwt(refreshedToken) || session.user;
+        if (refreshedUser) {
+          setAuth(refreshedToken, null, refreshedUser);
+        }
+        setToken(refreshedToken);
+        setUser(refreshedUser);
       } else {
-        const session = await getSessionAuth();
-        if (session) {
-          setToken(session.accessToken);
-          setUser(session.user);
-          setAuth(session.accessToken, null, session.user);
-        }
+        setToken(session.accessToken);
+        setUser(session.user);
+        setAuth(session.accessToken, null, session.user);
       }
 
       setIsLoading(false);
@@ -88,7 +91,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Login - redirect to Janua
   const login = useCallback((returnTo?: string) => {
-    const loginUrl = getLoginUrl(returnTo || window.location.pathname);
+    const loginUrl = getLoginUrl(sanitizeReturnPath(returnTo || window.location.pathname));
     window.location.href = loginUrl;
   }, []);
 
@@ -115,6 +118,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setToken(newToken);
       const newUser = parseJwt(newToken);
       setUser(newUser);
+      if (newUser) {
+        setAuth(newToken, null, newUser);
+      }
     } else {
       clearAuth();
       setUser(null);

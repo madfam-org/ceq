@@ -12,6 +12,21 @@ const JANUA_URL = process.env.NEXT_PUBLIC_JANUA_URL || "https://auth.madfam.io";
 const CLIENT_ID = process.env.NEXT_PUBLIC_JANUA_CLIENT_ID || "ceq-studio";
 const CLIENT_SECRET = process.env.JANUA_CLIENT_SECRET || "";
 
+function parseJanuaError(raw: string): string {
+  try {
+    const parsed = JSON.parse(raw);
+    return (
+      parsed.error_description ||
+      parsed.error ||
+      parsed.message ||
+      parsed.detail ||
+      raw
+    );
+  } catch {
+    return raw;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -44,10 +59,11 @@ export async function POST(request: NextRequest) {
     });
 
     if (!tokenResponse.ok) {
-      const error = await tokenResponse.text();
-      console.error("Token exchange failed:", error);
+      const errorText = await tokenResponse.text();
+      const januaError = parseJanuaError(errorText);
+      console.error("Token exchange failed:", januaError);
       return NextResponse.json(
-        { error: "Token exchange failed" },
+        { error: "Token exchange failed", detail: januaError },
         { status: tokenResponse.status }
       );
     }

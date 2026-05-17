@@ -546,6 +546,25 @@ Returns production acceptance signals without raw cluster access: environment,
 app version, R2/auth/secret readiness, current Alembic revision when readable,
 and Redis queue/dead-letter lengths.
 
+Example response:
+
+```json
+{
+  "environment": "production",
+  "redis": {
+    "reachable": true,
+    "pending_jobs": 2,
+    "processing_jobs": 1,
+    "completion_dead_letters": 0
+  },
+  "r2_configured": true,
+  "callback_token_configured": true,
+  "webhook_secret_configured": false,
+  "app_version": "0.1.0",
+  "alembic_revision": "20260514_outputs_job_storage_unique"
+}
+```
+
 ### Completion Dead Letters
 
 ```http

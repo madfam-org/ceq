@@ -21,7 +21,7 @@ from fastapi import (
     status,
 )
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ceq_api.auth.janua import JanuaUser, get_current_user, validate_token
@@ -58,6 +58,30 @@ class OutputResponse(BaseModel):
     height: int | None = None
     duration_seconds: float | None = None
     preview_url: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    published_to: list[dict[str, Any]] = Field(default_factory=list)
+
+    @classmethod
+    def from_output(
+        cls,
+        output: Output,
+        public_url: str | None = None,
+    ) -> OutputResponse:
+        """Build job-context output response from an ORM output model."""
+        return cls(
+            id=output.id,
+            filename=output.filename,
+            storage_uri=output.storage_uri,
+            public_url=public_url or output.storage_uri,
+            file_type=output.file_type,
+            file_size_bytes=output.file_size_bytes,
+            width=output.width,
+            height=output.height,
+            duration_seconds=output.duration_seconds,
+            preview_url=output.preview_url,
+            metadata=output.output_metadata or {},
+            published_to=output.published_to or [],
+        )
 
     class Config:
         from_attributes = True
@@ -97,7 +121,12 @@ class JobStatusResponse(BaseModel):
             current_node=job.current_node,
             error=job.error,
             input_params=job.input_params,
-            outputs=[OutputResponse.from_orm(o) for o in job.outputs] if hasattr(job, 'outputs') and job.outputs else [],
+            outputs=[
+                OutputResponse.from_output(output)
+                for output in job.outputs
+            ]
+            if hasattr(job, "outputs") and job.outputs
+            else [],
             output_metadata=job.output_metadata or {},
             queued_at=job.queued_at,
             started_at=job.started_at,
@@ -246,9 +275,9 @@ async def list_jobs(
         conditions.append(Job.workflow_id == workflow_id)
 
     # Count total
-    count_query = select(Job).where(and_(*conditions))
+    count_query = select(func.count()).select_from(Job).where(and_(*conditions))
     count_result = await db.execute(count_query)
-    total = len(count_result.scalars().all())
+    total = count_result.scalar_one() or 0
 
     # Fetch with pagination (outputs auto-loaded via lazy="selectin")
     query = (
@@ -542,12 +571,18 @@ async def cancel_job(
         )
 
     # Update job status
+    prior_status = job.status
+    cancelled_at = datetime.now(UTC)
     job.status = JobStatusEnum.CANCELLED.value
-    job.progress = 0.0
-    job.completed_at = datetime.now(UTC)
+    if prior_status == JobStatusEnum.QUEUED.value:
+        job.progress = 0.0
+        job.completed_at = cancelled_at
+    else:
+        job.progress = max(job.progress, 0.0)
     job.output_metadata = {
         **(job.output_metadata or {}),
-        "cancel_requested_at": job.completed_at.isoformat(),
+        "cancel_requested_at": cancelled_at.isoformat(),
+        "cancel_requested_from_status": prior_status,
     }
 
     # Audit log the cancellation
@@ -564,7 +599,7 @@ async def cancel_job(
         f"ceq:job:{job_id}",
         mapping={
             "status": JobStatusEnum.CANCELLED.value,
-            "progress": "0.0",
+            "progress": str(job.progress),
             "cancel_requested": "true",
         },
     )
@@ -573,7 +608,7 @@ async def cancel_job(
         json.dumps({
             "action": "cancel",
             "job_id": str(job_id),
-            "requested_at": job.completed_at.isoformat(),
+            "requested_at": cancelled_at.isoformat(),
         }),
     )
 
@@ -778,6 +813,8 @@ async def list_job_outputs(
             height=output.height,
             duration_seconds=output.duration_seconds,
             preview_url=output.preview_url,
+            metadata=output.output_metadata or {},
+            published_to=output.published_to or [],
         )
         for output in outputs
     ]

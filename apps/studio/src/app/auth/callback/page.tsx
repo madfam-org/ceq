@@ -9,7 +9,8 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { setAuth, parseJwt, AUTH_CONFIG } from "@/lib/auth";
+import { getSessionAuth, setAuth } from "@/lib/auth";
+import { sanitizeReturnPath } from "@/lib/auth";
 import { Terminal, Loader2, AlertCircle } from "lucide-react";
 
 export default function AuthCallbackPage() {
@@ -21,7 +22,7 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     const handleCallback = async () => {
       const code = searchParams.get("code");
-      const state = searchParams.get("state") || "/";
+      const state = sanitizeReturnPath(searchParams.get("state"));
       const errorParam = searchParams.get("error");
       const errorDescription = searchParams.get("error_description");
 
@@ -45,23 +46,25 @@ export default function AuthCallbackPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ code }),
         });
+        const tokenPayload = await response.json();
 
         if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error || "Token exchange failed");
+          throw new Error(
+            tokenPayload.error ||
+              tokenPayload.detail ||
+              "Token exchange failed"
+          );
         }
 
         setStatus("Materializing session...");
 
-        const data = await response.json();
-        const user = parseJwt(data.access_token);
+        const session = await getSessionAuth();
 
-        if (!user) {
-          throw new Error("Failed to parse user from token");
+        if (!session) {
+          throw new Error("Session bootstrap failed after token exchange.");
         }
 
-        // Store auth data
-        setAuth(data.access_token, data.refresh_token, user);
+        setAuth(session.accessToken, tokenPayload.refresh_token || null, session.user);
 
         setStatus("Signal acquired. Entering the terminal...");
 
