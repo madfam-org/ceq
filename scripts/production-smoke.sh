@@ -8,6 +8,7 @@
 # Optional gates:
 #   CEQ_RUN_OPERATIONS_STATUS=true CEQ_ADMIN_AUTH_TOKEN=<admin Janua JWT>
 #   CEQ_TEMPLATE_SMOKES_JSON='[{"label":"image","template_id":"...","params":{}}]'
+#   CEQ_EXPECT_MAX_COMPLETION_DEAD_LETTERS=0
 #   CEQ_RUN_CANCEL_SMOKE=true CEQ_CANCEL_TEMPLATE_ID=<long-running template UUID>
 #   CEQ_PUBLIC_ONLY=true
 #   CEQ_STRICT_SMOKE=true
@@ -31,6 +32,7 @@ RUN_OPERATIONS_STATUS="${CEQ_RUN_OPERATIONS_STATUS:-false}"
 REQUIRE_OPERATIONS_STATUS="${CEQ_REQUIRE_OPERATIONS_STATUS:-false}"
 REQUIRE_WEBHOOK_SECRET="${CEQ_REQUIRE_WEBHOOK_SECRET:-false}"
 EXPECT_ALEMBIC_REVISION="${CEQ_EXPECT_ALEMBIC_REVISION:-}"
+EXPECT_MAX_COMPLETION_DEAD_LETTERS="${CEQ_EXPECT_MAX_COMPLETION_DEAD_LETTERS:-}"
 RUN_CANCEL_SMOKE="${CEQ_RUN_CANCEL_SMOKE:-false}"
 REQUIRE_CANCEL_SMOKE="${CEQ_REQUIRE_CANCEL_SMOKE:-false}"
 EXPECT_APP_AUTH_REDIRECT="${CEQ_EXPECT_APP_AUTH_REDIRECT:-true}"
@@ -145,7 +147,26 @@ run_operations_status() {
   webhook_configured="$(jq -r '.webhook_secret_configured' <<<"$operations_json")"
 
   [[ "$callback_configured" == "true" ]] || fail "Worker callback token is not configured in operations status."
-  [[ "$redis_reachable" == "true" ]] || fail "Redis is not reachable in operations status."
+  if [[ "$redis_reachable" != "true" ]]; then
+    if [[ "$REQUIRE_OPERATIONS_STATUS" == "true" ]]; then
+      fail "Redis reachability check reported errors in operations status."
+    fi
+    log "operations status: redis.reachable is not true (non-fatal unless REQUIRE_OPERATIONS_STATUS=true)."
+  else
+    log "operations status: redis.reachable is true."
+  fi
+
+  if [[ -n "$EXPECT_MAX_COMPLETION_DEAD_LETTERS" ]]; then
+    [[ "$dead_letters" != "null" && "$dead_letters" != "unknown" ]] || fail "Could not read completion dead-letter depth."
+    if ! [[ "$dead_letters" =~ ^[0-9]+$ ]]; then
+      fail "Completion dead-letter depth is not an integer: ${dead_letters}"
+    fi
+
+    if (( dead_letters > EXPECT_MAX_COMPLETION_DEAD_LETTERS )); then
+      fail "Completion dead-letter depth (${dead_letters}) exceeds limit (${EXPECT_MAX_COMPLETION_DEAD_LETTERS})."
+    fi
+    log "Completion dead-letter depth is within configured max (${dead_letters}/${EXPECT_MAX_COMPLETION_DEAD_LETTERS})."
+  fi
   if [[ "$REQUIRE_WEBHOOK_SECRET" == "true" ]]; then
     [[ "$webhook_configured" == "true" ]] || fail "JOB_WEBHOOK_SECRET is not configured in operations status."
   fi

@@ -276,6 +276,7 @@ CEQ_AUTH_TOKEN="<janua-jwt>" \
 CEQ_ADMIN_AUTH_TOKEN="<admin-janua-jwt>" \
 CEQ_RUN_OPERATIONS_STATUS=true \
 CEQ_REQUIRE_WEBHOOK_SECRET=true \
+CEQ_EXPECT_MAX_COMPLETION_DEAD_LETTERS=0 \
 CEQ_EXPECT_ALEMBIC_REVISION="20260514_outputs_job_storage_unique" \
 CEQ_TEMPLATE_ID="<template-uuid>" \
 scripts/production-smoke.sh
@@ -288,6 +289,7 @@ access:
 CEQ_AUTH_TOKEN="<janua-jwt>" \
 CEQ_ADMIN_AUTH_TOKEN="<admin-janua-jwt>" \
 CEQ_RUN_OPERATIONS_STATUS=true \
+CEQ_EXPECT_MAX_COMPLETION_DEAD_LETTERS=3 \
 CEQ_TEMPLATE_SMOKES_JSON='[
   {"label":"image","template_id":"<image-template-id>","params":{}},
   {"label":"video","template_id":"<video-template-id>","params":{}},
