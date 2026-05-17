@@ -34,14 +34,6 @@ labels:
 
 # Resources to include
 # PreSync hook job — runs alembic upgrade head before deployments roll.
-resources:
-- namespace.yaml
-- api-deployment.yaml
-- studio-deployment.yaml
-- worker-deployment.yaml
-- db-migrate-job.yaml
-- external-secret.yaml
-- network-policies.yaml
   # secrets.yaml is a local template only (never commit secrets). Apply your
   # real secret manifest separately as `secrets.local.yaml` (gitignored) or via
   # external-secrets tooling before ArgoCD applies this bundle.
@@ -51,6 +43,14 @@ resources:
   # needed. Old config + leaked token (R1 audit) removed in this commit.
   # - cloudflared.yaml
   # seed-templates-job.yaml is intentionally excluded — manual one-shot only.
+resources:
+- namespace.yaml
+- api-deployment.yaml
+- studio-deployment.yaml
+- worker-deployment.yaml
+- db-migrate-job.yaml
+- external-secret.yaml
+- network-policies.yaml
 - observability.yaml
 
 # Image customization. CI's deploy.yaml workflow rewrites these entries
@@ -68,13 +68,13 @@ resources:
 # `ghcr.io/madfam-org/ceq-{api,studio,worker}:latest`; kustomize rewrites
 # those mutable references to the immutable digest entries below.
 images:
-- digest: sha256:044513d46c0b7385479888c55221a15fb62a9f45c1260bc9d04050a1fec9542c
+- digest: sha256:7aaef5398ab831aebc53c80fc0c0c91e4d04d7ecf349d210ec3faeadc1a9d37e
   name: ghcr.io/madfam-org/ceq-api
   newName: ghcr.io/madfam-org/ceq-api
-- digest: sha256:1662ba2493eb76a22953c08cb0858bb38186cf9f2e2bf41f356447dbc66d3b0f
+- digest: sha256:4a52dcf34889de2ac5140b688b8e8e224c56477f2d5731d705f26b4ced4276fd
   name: ghcr.io/madfam-org/ceq-studio
   newName: ghcr.io/madfam-org/ceq-studio
-- digest: sha256:9eb171574e32c2a2c285a7e38fcd2f2956dfb0b4962318cdcf52c2ebd4028cd8
+- digest: sha256:e1d633a14562bccfd0f853d3ba7050123545b066c8972bc2d4209dce70b02996
   name: ghcr.io/madfam-org/ceq-worker
   newName: ghcr.io/madfam-org/ceq-worker
 
