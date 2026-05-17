@@ -40,6 +40,7 @@ resources:
 - studio-deployment.yaml
 - worker-deployment.yaml
 - db-migrate-job.yaml
+- external-secret.yaml
 - network-policies.yaml
   # secrets.yaml is a local template only (never commit secrets). Apply your
   # real secret manifest separately as `secrets.local.yaml` (gitignored) or via
