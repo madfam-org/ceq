@@ -27,12 +27,10 @@ namespace: ceq
 # for grouping in dashboards, but leaves selectors alone so they keep
 # matching whatever the Deployment template actually emits.
 labels:
-- includeSelectors: false
-  pairs:
+- pairs:
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: ceq
     app.kubernetes.io/part-of: madfam-platform
-  includeSelectors: false
 
 # Resources to include
   # PreSync hook job — runs alembic upgrade head before deployments roll.
@@ -68,13 +66,13 @@ resources:
 # `ghcr.io/madfam-org/ceq-{api,studio,worker}:latest`; kustomize rewrites
 # those mutable references to the immutable digest entries below.
 images:
-- digest: sha256:26c588a0a325a073d625f4839192a0715fbcde7fa6aa93ec3cf8156c1ddd2d1e
+- digest: sha256:3e0ff08f3ba553a61df61f7cf7017bce7a841512602bfa2e1893fe61ec8b74a7
   name: ghcr.io/madfam-org/ceq-api
   newName: ghcr.io/madfam-org/ceq-api
-- digest: sha256:20bc96f43554f4abba8c23d12b1bc2e8310f4191e307ddcacfdd5a72dbb6a017
+- digest: sha256:9e36d557c5a03f3af1807ef1c0ac9b6dd80c1ee8fa215f49bf9715cec8c87279
   name: ghcr.io/madfam-org/ceq-studio
   newName: ghcr.io/madfam-org/ceq-studio
-- digest: sha256:349d516440575bd2463451fd4bd0e5ea16f9ded494092688e6cd276e16ab9d1f
+- digest: sha256:10ccaf6d865fb753b3ab18f19b48993534de2935afc457ee0270761d9bdcab8a
   name: ghcr.io/madfam-org/ceq-worker
   newName: ghcr.io/madfam-org/ceq-worker
 
