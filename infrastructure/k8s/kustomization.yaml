@@ -33,7 +33,7 @@ labels:
     app.kubernetes.io/part-of: madfam-platform
 
 # Resources to include
-  # PreSync hook job — runs alembic upgrade head before deployments roll.
+# PreSync hook job — runs alembic upgrade head before deployments roll.
 resources:
 - namespace.yaml
 - api-deployment.yaml
@@ -51,7 +51,7 @@ resources:
   # needed. Old config + leaked token (R1 audit) removed in this commit.
   # - cloudflared.yaml
   # seed-templates-job.yaml is intentionally excluded — manual one-shot only.
-  - observability.yaml
+- observability.yaml
 
 # Image customization. CI's deploy.yaml workflow rewrites these entries
 # via `kustomize edit set image <name>=<name>@sha256:...` on every build,

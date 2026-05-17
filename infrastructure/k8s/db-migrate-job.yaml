@@ -24,7 +24,10 @@ metadata:
     argocd.argoproj.io/sync-wave: "-1"
 spec:
   ttlSecondsAfterFinished: 300  # Auto-delete after 5 minutes
-  backoffLimit: 3
+  # Bound failures caused by missing ExternalSecrets so ArgoCD does not remain
+  # in an indefinite "waiting for hook" operation during Vault outages.
+  activeDeadlineSeconds: 300
+  backoffLimit: 1
   template:
     metadata:
       labels:
@@ -58,6 +61,9 @@ spec:
             - /bin/sh
             - -c
             - |
+              set -eu
+              : "${DATABASE_URL:?DATABASE_URL missing from ceq-secrets}"
+              : "${REDIS_URL:?REDIS_URL missing from ceq-secrets}"
               echo "Running CEQ database migrations..."
               cd /app
               python -m alembic upgrade head
@@ -74,11 +80,13 @@ spec:
                 secretKeyRef:
                   name: ceq-secrets
                   key: DATABASE_URL
+                  optional: true
             - name: REDIS_URL
               valueFrom:
                 secretKeyRef:
                   name: ceq-secrets
                   key: REDIS_URL
+                  optional: true
           resources:
             requests:
               memory: "128Mi"
