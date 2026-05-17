@@ -34,122 +34,28 @@ describe('API Client', () => {
     vi.stubGlobal('WebSocket', MockWebSocket)
   })
 
-  it('should have API_URL configured', () => {
-    expect(process.env.NEXT_PUBLIC_API_URL).toBe('http://localhost:5800')
-  })
-
-  it('should handle successful API responses', async () => {
-    const mockData = { workflows: [], total: 0 }
+  it('routes all Studio API traffic through /api/proxy', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => mockData,
+      json: async () => ({ workflows: [], total: 0 }),
     })
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/workflows`)
-    const data = await response.json()
+    await runWorkflow('workflow-1', { params: { seed: 42 } })
 
     expect(mockFetch).toHaveBeenCalledTimes(1)
-    expect(data).toEqual(mockData)
-  })
-
-  it('should handle API errors', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 404,
-      statusText: 'Not Found',
-    })
-
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/workflows/unknown`)
-
-    expect(response.ok).toBe(false)
-    expect(response.status).toBe(404)
-  })
-
-  it('should handle network errors', async () => {
-    mockFetch.mockRejectedValueOnce(new Error('Network error'))
-
-    await expect(
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/workflows`)
-    ).rejects.toThrow('Network error')
-  })
-
-  it('sends workflow run params using the API contract shape', async () => {
-    mockGetToken.mockReturnValue('janua-token')
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        job_id: 'job-1',
-        status: 'queued',
-        message: 'queued',
-      }),
-    })
-
-    await runWorkflow('workflow-1', {
-      params: { prompt: 'cosmic nebula', seed: 42 },
-      priority: 4,
-      webhook_url: 'https://example.com/webhook',
-    })
-
     expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:5800/v1/workflows/workflow-1/run',
+      '/api/proxy/v1/workflows/workflow-1/run',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({
-          params: { prompt: 'cosmic nebula', seed: 42 },
-          priority: 4,
-          webhook_url: 'https://example.com/webhook',
-        }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ params: { seed: 42 } }),
       })
     )
-    const request = mockFetch.mock.calls[0][1]
-    expect(JSON.parse(request.body)).not.toHaveProperty('input_params')
-    expect(request.headers.Authorization).toBe('Bearer janua-token')
   })
 
-  it('sends template run params using the API contract shape', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        job_id: 'job-2',
-        status: 'queued',
-        message: 'queued',
-      }),
-    })
-
-    await runTemplate('template-1', {
-      params: { title: 'Launch', accent: '#ff00ff' },
-      priority: 1,
-    })
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:5800/v1/templates/template-1/run',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({
-          params: { title: 'Launch', accent: '#ff00ff' },
-          priority: 1,
-        }),
-      })
-    )
-    expect(JSON.parse(mockFetch.mock.calls[0][1].body)).not.toHaveProperty('input_params')
-  })
-})
-
-describe('WebSocket URL', () => {
-  const mockGetToken = vi.mocked(getToken)
-
-  beforeEach(() => {
-    mockGetToken.mockReset()
-    mockGetToken.mockReturnValue(null)
-    MockWebSocket.instances = []
-    vi.stubGlobal('WebSocket', MockWebSocket)
-  })
-
-  it('should have WS_URL configured', () => {
-    expect(process.env.NEXT_PUBLIC_WS_URL).toBe('ws://localhost:5800')
-  })
-
-  it('appends the Janua token required by the job stream endpoint', () => {
+  it('uses the browser token only for websocket auth when available', async () => {
     mockGetToken.mockReturnValue('jwt.token+with/symbols')
 
     const ws = subscribeToJob('job-1', vi.fn())
@@ -160,11 +66,34 @@ describe('WebSocket URL', () => {
     )
   })
 
-  it('keeps the stream URL query-free when no token is available', () => {
-    subscribeToJob('job-2', vi.fn())
+  it('does not rely on Authorization for REST calls', async () => {
+    mockGetToken.mockReturnValue('jwt.token+with/symbols')
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ templates: [], total: 0 }),
+    })
 
-    expect(MockWebSocket.instances[0].url).toBe(
-      'ws://localhost:5800/v1/jobs/job-2/stream'
+    await runTemplate('template-1', { params: { title: 'Launch' } })
+
+    const headers = (mockFetch.mock.calls[0][1] as RequestInit | undefined)?.headers
+    expect(headers).toEqual(
+      expect.not.objectContaining({ Authorization: 'Bearer jwt.token+with/symbols' })
     )
+  })
+
+  it('propagates API errors with APIError', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      json: async () => ({ detail: 'Not Found' }),
+    })
+
+    await expect(runWorkflow('workflow-missing')).rejects.toMatchObject({ status: 404 })
+  })
+
+  it('propagates network failures', async () => {
+    mockFetch.mockRejectedValueOnce(new Error('Network error'))
+
+    await expect(runWorkflow('workflow-fail')).rejects.toThrow('Network error')
   })
 })

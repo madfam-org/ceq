@@ -51,6 +51,7 @@ resources:
   # needed. Old config + leaked token (R1 audit) removed in this commit.
   # - cloudflared.yaml
   # seed-templates-job.yaml is intentionally excluded — manual one-shot only.
+  - observability.yaml
 
 # Image customization. CI's deploy.yaml workflow rewrites these entries
 # via `kustomize edit set image <name>=<name>@sha256:...` on every build,

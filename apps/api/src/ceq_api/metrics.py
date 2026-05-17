@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from prometheus_client import Counter, Histogram
+from prometheus_client import Counter, Gauge, Histogram
 
 worker_completion_reports_total = Counter(
     "ceq_worker_completion_reports_total",
@@ -37,6 +37,28 @@ job_webhook_delivery_seconds = Histogram(
     "Total time spent delivering user job completion webhooks.",
 )
 
+queue_depth = Gauge(
+    "ceq_queue_depth",
+    "Pending and running job counts in Redis queues.",
+    ["queue"],
+)
+
+completion_dead_letters = Gauge(
+    "ceq_completion_dead_letters",
+    "Number of completion callback dead letters buffered in Redis.",
+)
+
+running_jobs_stale_1h = Gauge(
+    "ceq_running_jobs_stale_1h",
+    "Number of running jobs still marked running longer than 1 hour.",
+)
+
+alembic_revision_health = Gauge(
+    "ceq_alembic_revision_health",
+    "Current Alembic revision currently persisted in the DB.",
+    ["revision"],
+)
+
 
 def record_worker_completion_report(status: str, outputs_persisted: int) -> None:
     """Record a durable worker completion callback."""
@@ -59,3 +81,25 @@ def record_job_webhook_delivery(status: str, elapsed_seconds: float) -> None:
     """Record a user webhook delivery outcome."""
     job_webhook_deliveries_total.labels(status=status).inc()
     job_webhook_delivery_seconds.observe(max(0.0, elapsed_seconds))
+
+
+def set_queue_depth(*, pending: int, processing: int) -> None:
+    """Set Redis queue depth gauges from runtime sampler."""
+    queue_depth.labels("pending").set(max(0, int(pending)))
+    queue_depth.labels("processing").set(max(0, int(processing)))
+
+
+def set_completion_dead_letters(count: int) -> None:
+    """Set completion dead-letter queue depth."""
+    completion_dead_letters.set(max(0, int(count)))
+
+
+def set_running_jobs_stale_1h(count: int) -> None:
+    """Set count of running jobs that have crossed 1h age threshold."""
+    running_jobs_stale_1h.set(max(0, int(count)))
+
+
+def set_alembic_revision_health(revision: str | None) -> None:
+    """Record current Alembic revision in Prometheus labels."""
+    alembic_revision_health.clear()
+    alembic_revision_health.labels(revision=revision or "unknown").set(1)

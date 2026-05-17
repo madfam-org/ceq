@@ -88,6 +88,10 @@ The Studio route is now server-gated with CEQ session cookies:
 - `/api/auth/session` bootstraps the client from the httpOnly session cookie
   and refreshes via Janua when the refresh cookie is present.
 - `/api/auth/logout` clears CEQ session cookies before Janua logout.
+- `/api/proxy` now forwards Studio API calls through CEQ session-aware BFF logic,
+  attaching bearer credentials from `/api/auth/session` to the internal API.
+- REST workflows were moved off direct browser token usage; the legacy direct
+  token path remains only as a compatibility layer (e.g. websocket bootstrap flows).
 
 | Field | Value |
 |-------|-------|

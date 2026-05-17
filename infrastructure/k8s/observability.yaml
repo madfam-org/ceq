@@ -1,0 +1,177 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ceq-api
+  namespace: ceq
+  labels:
+    app: ceq
+spec:
+  namespaceSelector:
+    matchNames:
+      - ceq
+  selector:
+    matchLabels:
+      app: ceq-api
+  endpoints:
+    - port: http
+      interval: 30s
+      scrapeTimeout: 10s
+      path: /metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ceq-api-stability-alerts
+  namespace: ceq
+  labels:
+    app: ceq
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: ceq-api-stability.rules
+      rules:
+        - alert: CEQQueueDepthHigh
+          expr: sum(ceq_queue_depth) > 120
+          for: 10m
+          labels:
+            severity: warning
+            service: ceq-api
+          annotations:
+            summary: CEQ queue depth is above threshold
+            description: >
+              Combined pending+processing job queue depth has been above 120 for 10m.
+              Check worker capacity and API backlog.
+        - alert: CEQStaleJobsRunningTooLong
+          expr: ceq_running_jobs_stale_1h > 0
+          for: 5m
+          labels:
+            severity: warning
+            service: ceq-api
+          annotations:
+            summary: CEQ has stale running jobs
+            description: >
+              Jobs have remained in running state for over 1h. Validate worker health,
+              queue consumers, and GPU process connectivity.
+        - alert: CEQCompletionDeadLettersGrowing
+          expr: ceq_completion_dead_letters > 5
+          for: 5m
+          labels:
+            severity: warning
+            service: ceq-api
+          annotations:
+            summary: CEQ completion callback dead-letter queue is growing
+            description: >
+              Completion callbacks for worker outputs are not being acknowledged.
+              Review dead-letter queue and callback target health.
+        - alert: CEQWebhookFailures
+          expr: >
+            increase(ceq_job_webhook_deliveries_total{status="failed"}[5m]) > 3
+          for: 5m
+          labels:
+            severity: warning
+            service: ceq-api
+          annotations:
+            summary: CEQ webhook delivery failures are high
+            description: >
+              User webhook deliveries are failing repeatedly. Check webhook URLs,
+              secret sharing, and downstream endpoint availability.
+        - alert: CEQAlembicRevisionUnknown
+          expr: ceq_alembic_revision_health{revision="unknown"} == 1
+          for: 2m
+          labels:
+            severity: critical
+            service: ceq-api
+          annotations:
+            summary: CEQ alembic revision could not be read
+            description: >
+              API cannot read the current Alembic migration revision. Check DB
+              connectivity and migration pre-sync status.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ceq-observability-dashboard
+  namespace: ceq
+  labels:
+    grafana_dashboard: "1"
+    app: ceq
+data:
+  ceq-observability.json: |
+    {
+      "title": "CEQ API Stability",
+      "uid": "ceq-api-stability",
+      "schemaVersion": 37,
+      "version": 1,
+      "refresh": "30s",
+      "time": { "from": "now-6h", "to": "now" },
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "Queue Depth (pending + processing)",
+          "datasource": "Prometheus",
+          "targets": [
+            { "expr": "ceq_queue_depth{queue=\"pending\"}", "legendFormat": "pending" },
+            { "expr": "ceq_queue_depth{queue=\"processing\"}", "legendFormat": "processing" }
+          ],
+          "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+        },
+        {
+          "type": "stat",
+          "title": "Stale running jobs (1h+)",
+          "datasource": "Prometheus",
+          "targets": [
+            { "expr": "ceq_running_jobs_stale_1h", "legendFormat": "stale_running_jobs" }
+          ],
+          "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+        },
+        {
+          "type": "stat",
+          "title": "Completion dead letters",
+          "datasource": "Prometheus",
+          "targets": [
+            { "expr": "ceq_completion_dead_letters", "legendFormat": "dead_letters" }
+          ],
+          "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+        },
+        {
+          "type": "timeseries",
+          "title": "Webhook outcomes (5m)",
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "increase(ceq_job_webhook_deliveries_total{status=\"failed\"}[5m])",
+              "legendFormat": "failed"
+            },
+            {
+              "expr": "increase(ceq_job_webhook_deliveries_total{status=\"delivered\"}[5m])",
+              "legendFormat": "delivered"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+        },
+        {
+          "type": "stat",
+          "title": "Alembic revision health",
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "ceq_alembic_revision_health",
+              "legendFormat": "{{revision}}"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+        }
+      ],
+      "templating": { "list": [] },
+      "annotations": {
+        "list": [
+          {
+            "name": "owner",
+            "type": "text",
+            "datasource": "prometheus",
+            "value": "ceq-ops"
+          }
+        ]
+      }
+    }

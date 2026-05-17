@@ -107,6 +107,10 @@ kind: Service
 metadata:
   name: ceq-api
   namespace: ceq
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "80"
 spec:
   selector:
     app: ceq-api

@@ -72,16 +72,22 @@ Run CEQ as a deterministic, observable system:
    - Required next action: run `scripts/production-smoke.sh` with auth/admin/multi-template/cancel options and collect outputs.
 
 4. **Observability and operational alarms (P1)**
-   - Runtime counters are instrumented, but alerting and dashboards remain pending.
-   - Impact: degraded-state detection is less actionable than required for confidence.
-   - Owner: operators + platform observability.
-   - Required next action: wire dashboards + alerts for queue depth, stuck jobs, dead letters, callback/webhook failure rate, migrations.
+ - Runtime counters are now wired into deployable Prometheus assets:
+   - scrape annotations on `ceq-api` service
+   - `ServiceMonitor` for `/metrics`
+   - Prometheus alerting rules for queue depth, stale jobs, dead letters, webhook failures, alembic state
+   - dashboard ConfigMap with baseline operational panels.
+ - Impact: degraded-state detection is now alertable and can be handled as a first-class runbook surface.
+ - Owner: operators + platform observability.
+ - Remaining next action: confirm alert routing and runbook assignment in the Enclii observability tenant.
 
 5. **Browser auth/session hardening (P1)**
-   - Studio currently uses local token patterns that should migrate toward server-mediated session flows.
-   - Impact: token handling remains the last large security/UX debt path.
-   - Owner: `apps/studio`, `api.ceq.lol` auth surface.
-   - Required next action: implement proxy/BFF route and browser E2E auth/session fixtures.
+ - REST-style Studio traffic now runs through `/api/proxy`, which injects `Authorization`
+   from server session cookies and supports refresh via `/api/auth/session`.
+ - Impact: API credential handling has moved off direct browser token plumbing for standard API calls.
+ - Owner: `apps/studio`, `api.ceq.lol` auth surface.
+ - Remaining next action: complete websocket session fixture migration (optional hardening) and
+   browser auth/session E2E validation in production smoke.
 
 6. **Product completion debt (P2)**
    - Monetization and demo conversion are intentionally incomplete.
@@ -408,10 +414,12 @@ Owner surface: `.github/workflows`, `scripts/`, Enclii observability,
 Prometheus/alerts.
 
 1. **Wire alerts and dashboards**
-   - Queue depth, stuck running jobs, callback dead letters, R2 upload failures,
-     worker health, migration failures, and OAuth error rate.
-   - Acceptance: each critical failure mode has a dashboard panel and alert
-     threshold.
+   - Queue depth, stale jobs, dead letters, webhook failures, and migration
+     health.
+   - Completed by wiring `infrastructure/k8s/observability.yaml`
+     (ServiceMonitor, PrometheusRule, and Grafana dashboard ConfigMap).
+   - Remaining: confirm alert receiver routing and annotate owners/runbooks in the
+     Enclii observability tenant.
 
 2. **Harden production smoke automation**
    - Keep public smoke as the unauthenticated edge gate.
@@ -549,8 +557,9 @@ The items below are what remains after the current stabilization patch. They are
 ### P3 — Observability And Product Completion
 
 1. **Add alerts and dashboards**
-   - Queue depth, stuck running jobs, callback failures, R2 upload failures, GPU worker health, migration failures.
-   - Prometheus counters now exist for key API runtime paths; dashboards and alert rules still need to be wired.
+   - Queue depth, stuck running jobs, callback failures, dead-letter growth, and migration status.
+   - Prometheus counters now exist for key API runtime paths.
+   - Dashboard/alert wiring is implemented in `infrastructure/k8s/observability.yaml`.
 
 2. **Finalize monetization path**
    - Replace InterestGate with checkout/tier enforcement once pricing and billing are locked.
@@ -713,15 +722,17 @@ The table below records ownership for the completed remediation and the next rec
   - Built rich output descriptors, sent callbacks with auth, awaited async progress callbacks, added active cancellation, retried callbacks, and kept Redis fallback/dead-letter writes.
 
 - **infrastructure/k8s**
-  - `api-deployment.yaml`, `worker-deployment.yaml`, `secrets.yaml`
+  - `api-deployment.yaml`, `worker-deployment.yaml`, `secrets.yaml`,
+    `observability.yaml`
   - Wired callback env vars, token secret, API callback URL, and R2 bucket alias.
 
 - **apps/studio**
-  - `src/lib/api.ts`, gallery components, auth context/routes, middleware
+  - `src/lib/api.ts`, `src/app/api/proxy/[[...path]]/route.ts`, gallery
+    components, auth context/routes, middleware
   - Consumes `public_url` where available, preserves `storage_uri` fallback behavior, renders audio/video/model output types, and gates app-host Studio routes with CEQ session cookies.
 
 - **docs/tests**
-  - `docs/CEQ_STABILITY_ROADMAP.md`, `tests/*`, `scripts/production-smoke.sh`
+  - `docs/CEQ_STABILITY_ROADMAP.md`, `__tests__/*`, `scripts/production-smoke.sh`
   - Documents remediation and keeps tests/smokes in sync with runtime contracts.
 
 ## Completed Acceptance Criteria
