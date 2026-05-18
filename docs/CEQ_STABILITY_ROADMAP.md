@@ -794,3 +794,12 @@ The table below records ownership for the completed remediation and the next rec
 - The roadmap sections above were updated to reflect the current checkpoint:
   - Closed: legacy output contract bugs, callback durability gaps, image tracing deprecation warning, CI modernization, worker digest pinning, observability primitives, browser proxy auth hardening.
   - Open: production authentication unblock, secret provisioning, and production-grade end-to-end acceptance proof.
+
+### 2026-05-18 production digest guardrail
+
+- Deploy digest `sha256:1a03d7ef5fcc43e9914b970800145ddf38326063dfab5a8eb4a891c5273dbe12`
+  for `ceq-studio` crashed immediately with `Cannot find module '/app/server.js'`.
+- Production is pinned back to the last observed healthy Studio digest,
+  `sha256:20bc96f43554f4abba8c23d12b1bc2e8310f4191e307ddcacfdd5a72dbb6a017`,
+  until the Studio Docker output path is fixed and verified in a replacement
+  image.

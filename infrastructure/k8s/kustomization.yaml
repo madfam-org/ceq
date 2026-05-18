@@ -71,7 +71,7 @@ images:
 - digest: sha256:d688d0af03a2e217a3cd5cd7e92daf3fecd6b3da3dd8681d5a7f38627fffe302
   name: ghcr.io/madfam-org/ceq-api
   newName: ghcr.io/madfam-org/ceq-api
-- digest: sha256:1a03d7ef5fcc43e9914b970800145ddf38326063dfab5a8eb4a891c5273dbe12
+- digest: sha256:20bc96f43554f4abba8c23d12b1bc2e8310f4191e307ddcacfdd5a72dbb6a017
   name: ghcr.io/madfam-org/ceq-studio
   newName: ghcr.io/madfam-org/ceq-studio
 - digest: sha256:97a17d1c3c48845323bf3319d986bbb2f893d6ecfd9aedc31ac6e7e8201fd7aa
