@@ -64,29 +64,64 @@ spec:
               set -eu
               : "${DATABASE_URL:?DATABASE_URL missing from ceq-secrets}"
               : "${REDIS_URL:?REDIS_URL missing from ceq-secrets}"
+              : "${R2_ENDPOINT:?R2_ENDPOINT missing from ceq-secrets}"
+              : "${R2_ACCESS_KEY:?R2_ACCESS_KEY missing from ceq-secrets}"
+              : "${R2_SECRET_KEY:?R2_SECRET_KEY missing from ceq-secrets}"
+              : "${JOB_COMPLETION_CALLBACK_TOKEN:?JOB_COMPLETION_CALLBACK_TOKEN missing from ceq-secrets}"
               echo "Running CEQ database migrations..."
               cd /app
               python -m alembic upgrade head
               echo "Migrations complete!"
           env:
-            # The ceq-secrets secret stores keys in UPPER_CASE (DATABASE_URL,
-            # REDIS_URL) — these must match exactly. studio-deployment.yaml
-            # uses envFrom: secretRef which is case-preserving; the job
-            # references via secretKeyRef and originally had lowercase
-            # `database-url` which produced
-            #   "couldn't find key database-url in Secret ceq/ceq-secrets"
+            - name: ENVIRONMENT
+              value: production
+            # Keep this production settings surface aligned with
+            # api-deployment.yaml. Alembic imports ceq_api.config, whose
+            # production validation runs before migration code executes.
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: ceq-secrets
                   key: DATABASE_URL
-                  optional: true
             - name: REDIS_URL
               valueFrom:
                 secretKeyRef:
                   name: ceq-secrets
                   key: REDIS_URL
-                  optional: true
+            - name: R2_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: R2_ENDPOINT
+            - name: R2_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: R2_ACCESS_KEY
+            - name: R2_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: R2_SECRET_KEY
+            - name: R2_BUCKET_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: R2_BUCKET_NAME
+            - name: JOB_COMPLETION_CALLBACK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: JOB_COMPLETION_CALLBACK_TOKEN
+            - name: JOB_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: JOB_WEBHOOK_SECRET
+            - name: JANUA_API_URL
+              value: "http://janua-api.janua.svc.cluster.local:4100"
+            - name: FURNACE_API_URL
+              value: "http://furnace-gateway.enclii.svc.cluster.local:4210"
           resources:
             requests:
               memory: "128Mi"
