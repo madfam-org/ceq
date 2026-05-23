@@ -66,6 +66,8 @@ vim infra/terraform/terraform.tfvars
 
 ### 3. Register OAuth Client in Janua (Action Required)
 
+> **Operator runbook:** See [`docs/JANUA_OPERATOR.md`](./JANUA_OPERATOR.md) for the full checklist, verification commands, and acceptance gates.
+
 The Studio uses Janua's OIDC discovery endpoints:
 
 - Authorization: `https://auth.madfam.io/api/v1/oauth/authorize`
@@ -489,5 +491,29 @@ stringData:
 | CEQ README | [/README.md](../README.md) |
 | CEQ Agent Instructions | [/CLAUDE.md](../CLAUDE.md) |
 | CEQ PRD | [/docs/PRD.md](./PRD.md) |
+| CEQ Stability Roadmap | [/docs/CEQ_STABILITY_ROADMAP.md](./CEQ_STABILITY_ROADMAP.md) |
+| Janua Operator Guide | [/docs/JANUA_OPERATOR.md](./JANUA_OPERATOR.md) |
 | Enclii Deployment | [/path/to/enclii/CLAUDE.md](../../enclii/CLAUDE.md) |
 | Port Allocation | [solarpunk-foundry/PORT_ALLOCATION.md](https://github.com/madfam-io/solarpunk-foundry/blob/main/docs/PORT_ALLOCATION.md) |
+
+---
+
+## Pre-deploy verification (CI)
+
+Before ArgoCD picks up new Studio digests, CI must pass:
+
+| Job | What it guards |
+|-----|----------------|
+| `Studio · Docker smoke` | Standalone entrypoint at `apps/studio/server.js` + HTTP 200 |
+| `Studio · Playwright auth` | Mocked Janua OAuth, session bootstrap, refresh, logout (6 tests) |
+| `verify-ci` (deploy workflow) | Deploy waits for CEQ CI green on the commit SHA |
+
+Local equivalents:
+
+```bash
+# After building the studio image locally
+bash scripts/studio-docker-smoke.sh ceq-studio:local
+
+# Auth E2E (install Chromium once)
+cd apps/studio && pnpm exec playwright install chromium && CI=true pnpm test:e2e
+```

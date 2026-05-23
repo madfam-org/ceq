@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getToken } from '@/lib/auth'
-import { runTemplate, runWorkflow, subscribeToJob } from '@/lib/api'
+import { getSessionAuth, getToken, setAuth } from '@/lib/auth'
+import { resolveStreamAuthToken, runTemplate, runWorkflow, subscribeToJob } from '@/lib/api'
 
 vi.mock('@/lib/auth', () => ({
   getToken: vi.fn(),
+  getSessionAuth: vi.fn(),
+  setAuth: vi.fn(),
 }))
 
 // Mock fetch globally
@@ -25,11 +27,16 @@ class MockWebSocket {
 
 describe('API Client', () => {
   const mockGetToken = vi.mocked(getToken)
+  const mockGetSessionAuth = vi.mocked(getSessionAuth)
+  const mockSetAuth = vi.mocked(setAuth)
 
   beforeEach(() => {
     mockFetch.mockClear()
     mockGetToken.mockReset()
+    mockGetSessionAuth.mockReset()
+    mockSetAuth.mockReset()
     mockGetToken.mockReturnValue(null)
+    mockGetSessionAuth.mockResolvedValue(null)
     MockWebSocket.instances = []
     vi.stubGlobal('WebSocket', MockWebSocket)
   })
@@ -55,15 +62,59 @@ describe('API Client', () => {
     )
   })
 
-  it('uses the browser token only for websocket auth when available', async () => {
+  it('uses the in-memory token for websocket auth when available', async () => {
     mockGetToken.mockReturnValue('jwt.token+with/symbols')
 
-    const ws = subscribeToJob('job-1', vi.fn())
+    const ws = await subscribeToJob('job-1', vi.fn())
 
     expect(ws).toBe(MockWebSocket.instances[0])
     expect(MockWebSocket.instances[0].url).toBe(
       'ws://localhost:5800/v1/jobs/job-1/stream?token=jwt.token%2Bwith%2Fsymbols'
     )
+    expect(mockGetSessionAuth).not.toHaveBeenCalled()
+  })
+
+  it('bootstraps websocket auth from the session endpoint when needed', async () => {
+    mockGetSessionAuth.mockResolvedValue({
+      accessToken: 'session.jwt',
+      user: { id: 'user-1', email: 'ops@madfam.io' },
+    })
+
+    const ws = await subscribeToJob('job-2', vi.fn())
+
+    expect(mockGetSessionAuth).toHaveBeenCalledTimes(1)
+    expect(mockSetAuth).toHaveBeenCalledWith('session.jwt', null, {
+      id: 'user-1',
+      email: 'ops@madfam.io',
+    })
+    expect(MockWebSocket.instances[0].url).toBe(
+      'ws://localhost:5800/v1/jobs/job-2/stream?token=session.jwt'
+    )
+    expect(ws).toBe(MockWebSocket.instances[0])
+  })
+
+  it('returns cached token from resolveStreamAuthToken without session fetch', async () => {
+    mockGetToken.mockReturnValue('cached.jwt')
+
+    await expect(resolveStreamAuthToken()).resolves.toBe('cached.jwt')
+    expect(mockGetSessionAuth).not.toHaveBeenCalled()
+  })
+
+  it('hydrates in-memory auth from resolveStreamAuthToken when needed', async () => {
+    mockGetSessionAuth.mockResolvedValue({
+      accessToken: 'session.jwt',
+      user: { id: 'user-1', email: 'ops@madfam.io' },
+    })
+
+    await expect(resolveStreamAuthToken()).resolves.toBe('session.jwt')
+    expect(mockSetAuth).toHaveBeenCalledWith('session.jwt', null, {
+      id: 'user-1',
+      email: 'ops@madfam.io',
+    })
+  })
+
+  it('returns null from resolveStreamAuthToken when no session exists', async () => {
+    await expect(resolveStreamAuthToken()).resolves.toBeNull()
   })
 
   it('does not rely on Authorization for REST calls', async () => {

@@ -48,12 +48,13 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-# Copy standalone output
-# Note: Next.js 14 with outputFileTracingRoot produces flat structure
-# (server.js at root, node_modules/ with symlinks)
+# Copy standalone output.
+# With outputFileTracingRoot at the monorepo root, Next.js emits the server
+# entrypoint at apps/studio/server.js (not /app/server.js). The 2026-05-18
+# production crash was caused by CMD ["node", "server.js"] against this layout.
 COPY --from=builder --chown=nextjs:nodejs /app/apps/studio/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/studio/.next/static ./.next/static
-COPY --from=builder /app/apps/studio/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/apps/studio/.next/static ./apps/studio/.next/static
+COPY --from=builder /app/apps/studio/public ./apps/studio/public
 
 # Fix broken pnpm symlinks: copy .pnpm store and recreate links
 # Next.js 14 standalone doesn't trace .pnpm/ into output
@@ -72,7 +73,10 @@ EXPOSE 5801
 
 USER nextjs
 
+# Fail the image build if the standalone entrypoint is missing.
+RUN test -f apps/studio/server.js
+
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD wget -q --spider http://localhost:5801/ || exit 1
 
-CMD ["node", "server.js"]
+CMD ["node", "apps/studio/server.js"]

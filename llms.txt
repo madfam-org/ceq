@@ -7,23 +7,20 @@ Compact LLM context index for this repository.
 - `AGENTS.md` — canonical agent operating instructions.
 - `README.md` — human/product overview when present.
 - `ECOSYSTEM.md` — MADFAM ecosystem and Enclii deployment context when present.
+- `docs/CEQ_STABILITY_ROADMAP.md` — stabilization phases, smoke matrix, remaining gates.
+- `docs/JANUA_OPERATOR.md` — Janua OAuth registration checklist (Phase 0 operator gate).
 - `llms-full.txt` — full context map and durable operating contract.
+
+## Testing and CI gates
+
+- Studio unit tests: `pnpm --filter @ceq/studio test`
+- Studio Playwright auth E2E: `pnpm --filter @ceq/studio test:e2e` (mock Janua server)
+- Studio Docker smoke: `scripts/studio-docker-smoke.sh <image>`
+- Public production smoke: `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`
+- CI jobs: `Studio · Docker smoke`, `Studio · Playwright auth` (see `.github/workflows/ci.yaml`)
 
 ## Production operations
 
 Routine production operations are Enclii-first. Use Enclii web, API, or CLI
 before raw infrastructure tools. Direct `kubectl`, `helm`, SSH, provider CLIs,
 `docker exec`, or direct container access is bootstrap/break-glass only.
-
-## Stability context
-
-- `docs/CEQ_STABILITY_ROADMAP.md` — current stabilization record and remaining P0-P3 gates.
-- `docs/PRODUCTION_DEPLOYMENT.md` — production rollout, callback secret, and smoke verification.
-- `docs/API.md` — endpoint contracts, including worker completion callbacks.
-- `scripts/production-smoke.sh` — public/API-level production smoke runner for admin status, completion, multi-template, and cancellation paths.
-- User job completion webhooks are signed with `JOB_WEBHOOK_SECRET` and recorded in `job.output_metadata.webhook_delivery`.
-- Active cancellation uses Redis `ceq:job:{id}:control` plus `cancel_requested=true`; workers interrupt ComfyUI and report durable `cancelled`.
-- Exhausted worker completion callbacks are dead-lettered to `ceq:jobs:completion:dead`.
-- Admin operations live under `/v1/operations/*` for runtime status plus completion dead-letter list/replay/discard.
-- Output rows are guarded by `uq_outputs_job_storage_uri` on `(job_id, storage_uri)`.
-- `apps/api/README.md` and `apps/workers/README.md` — local env and service-specific runtime details.

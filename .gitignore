@@ -46,6 +46,9 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Testing
+playwright-report/
+test-results/
+blob-report/
 coverage/
 .coverage
 htmlcov/

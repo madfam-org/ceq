@@ -1,805 +1,862 @@
 # CEQ Stability Roadmap and Remediation Plan
 
-## Purpose
+> **Last updated:** 2026-05-22  
+> **Status:** Implementation in progress — Phase 4 engineering gates landing; P0 operator actions open  
+> **Canonical smoke runner:** `scripts/production-smoke.sh`  
+> **Studio Docker smoke:** `scripts/studio-docker-smoke.sh`  
+> **Production ops:** Enclii-first (web, API, CLI). Raw `kubectl`/SSH is break-glass only.
 
-ceq is MADFAM’s internal generative-production service layer for turning prompts and workflows into deterministic, persisted outputs across social/video/3D modalities.
+---
+
+## Table of contents
+
+1. [Purpose, mission, vision](#purpose-mission-vision)
+2. [Current status snapshot](#current-status-snapshot-2026-05-22)
+3. [Definition of done — full stability](#definition-of-done--full-stability)
+4. [Critical path](#critical-path)
+5. [Implementation phases](#implementation-phases)
+6. [Execution schedule](#execution-schedule)
+7. [Smoke matrix](#smoke-matrix-operator-quick-reference)
+8. [Risk register](#risk-register-program-level)
+9. [Immediate next actions](#immediate-next-actions-this-week)
+10. [Stability declaration template](#stability-declaration-template)
+11. [Product backlog (post-stability)](#product-backlog-post-stability)
+12. [Historical closure record](#historical-closure-record)
+
+---
+
+## Purpose, mission, vision
+
+### Purpose
+
+ceq is MADFAM's internal generative-production service layer for turning prompts
+and workflows into deterministic, persisted outputs across social, video, and 3D
+modalities.
 
 It combines:
 
-- `ceq-studio` (Next.js) for execution UX, output gallery, and queue monitor
-- `ceq-api` (FastAPI) for auth, workflow orchestration, persistence, and job/outputs APIs
-- `ceq-workers` for GPU execution + ComfyUI + output upload pipeline
-- Kubernetes + Enclii for shared infra (Redis, PostgreSQL, ingress, autoscaling)
+- `ceq-studio` (Next.js) — execution UX, output gallery, queue monitor
+- `ceq-api` (FastAPI) — auth, workflow orchestration, persistence, render pillar
+- `ceq-workers` — GPU execution, ComfyUI, output upload pipeline
+- Kubernetes + Enclii — shared infra (Redis DB 14, PostgreSQL, ingress, GitOps)
 
-## Mission
+CEQ also ships the **asset pillar**: content-addressed `/v1/render/*` endpoints
+and `@ceq/sdk` for stable URLs consumed across the MADFAM ecosystem.
 
-Make CEQ a stable production execution primitive: job dispatch and completion must be reliably persisted, queryable, and replayable while keeping user experience fast and predictable.
+### Mission
 
-## Vision
+Make CEQ a **stable production execution primitive**: job dispatch and completion
+must be reliably persisted, queryable, and replayable while keeping user
+experience fast and predictable.
 
-Run CEQ as a deterministic, observable system:
+Operational translation: **submit → queue → worker → callback → DB → UI** must
+be contractually deterministic, with explicit failure modes and operator
+recovery paths.
+
+### Vision
+
+Run CEQ as a deterministic, observable, auditable system:
 
 - Jobs are submitted once and tracked end-to-end
-- Completion always updates both Redis (real-time) and PostgreSQL (durable)
-- Output metadata/schema is consistent across DB, API responses, and callbacks
-- Remediation actions are documented as code-backed, test-covered change sets
+- Completion updates both Redis (real-time) and PostgreSQL (durable)
+- Output metadata is consistent across DB, API responses, callbacks, and Studio UI
+- Remediation is code-backed, test-covered, and smoke-verified before "done"
+- Production health gates are enforced before declaring feature completion
 
-## 2026-05-17 Stability Audit and Roadmap Closure
+Product positioning (from `docs/PRD.md`): a **high-velocity, hacker-centric
+terminal** — ComfyUI power with streamlined UX, MADFAM ecosystem integration,
+latent chaos → shipped content.
 
-### Current Snapshot
+---
 
-- ceq’s purpose and mission remain unchanged: reliable end-to-end generation job orchestration with durable outputs.
-- Runtime contract, callback durability, and deployment reproducibility are implemented and documented.
-- Full user-facing stability is not yet declared because production validation gates still block completion.
+## Current status snapshot (2026-05-22)
 
-#### What was closed in the latest closure cycle
+### Verdict
 
-- Added production smoke hardening in `scripts/production-smoke.sh`:
-  - optional callback/secret readiness checks,
-  - multi-template modality smoke orchestration,
-  - cancellation smoke mode,
-  - dead-letter depth enforcement via `CEQ_EXPECT_MAX_COMPLETION_DEAD_LETTERS`.
-- Hardened completion durability:
-  - worker completion retries,
-  - Redis dead-letter capture for exhausted callback payloads,
-  - admin endpoints for dead-letter list/replay/discard.
-- Closed operational friction:
-  - `.github/workflows/ci.yaml` updated to Node 24,
-  - `outputFileTracingRoot` warning removed from studio build by moving it under `experimental` in `apps/studio/next.config.mjs`,
-  - deploy path now requires worker digest and commits worker by digest alongside API and Studio.
-- Scope coverage is captured by:
-  - `46b3262` (smoke hardening),
-  - `1648ebc` (CI + Next build hardening).
+**Infra-stable, user-incomplete.** The public edge and API are live; runtime
+contracts are closed in the local test matrix; **full stability is not declared**
+because production acceptance gates remain open.
 
-#### Remaining Stability Shortcomings (priority order)
+### Live production evidence
 
-1. **Auth/identity production unblock (P0)**
-   - The documented Janua OAuth client still returns `invalid_client` in live checks.
-   - Impact: no real Studio browser-session proof path in production.
-   - Owner: Janua operator + `apps/studio`.
-   - Required next action: register/rotate client and re-run production auth/session smoke.
-
-2. **Production callback/webhook gate readiness (P0)**
-   - `JOB_COMPLETION_CALLBACK_TOKEN` and `JOB_WEBHOOK_SECRET` must be present in production secrets to close callback/webhook hardening.
-   - Impact: production callback/webhook behavior can fail closed or remain disabled.
-   - Owner: API/operators (`apps/api`, `apps/workers`, production secrets).
-   - Required next action: set secrets, validate `/v1/operations/status`, then proceed with recovery drills.
-
-3. **Production end-to-end execution proof (P0)**
-   - Authenticated GPU smoke (submit -> queue -> worker -> R2 -> callback -> DB -> gallery) and active-cancel proof still pending on live cluster.
-   - Impact: durability is locally verified but not yet fully validated under production operational conditions.
-   - Owner: operators + `apps/api`, `apps/workers`, `apps/studio`.
-   - Required next action: run `scripts/production-smoke.sh` with auth/admin/multi-template/cancel options and collect outputs.
-
-4. **Observability and operational alarms (P1)**
- - Runtime counters are now wired into deployable Prometheus assets:
-   - scrape annotations on `ceq-api` service
-   - `ServiceMonitor` for `/metrics`
-   - Prometheus alerting rules for queue depth, stale jobs, dead letters, webhook failures, alembic state
-   - dashboard ConfigMap with baseline operational panels.
- - Impact: degraded-state detection is now alertable and can be handled as a first-class runbook surface.
- - Owner: operators + platform observability.
- - Remaining next action: confirm alert routing and runbook assignment in the Enclii observability tenant.
-
-5. **Browser auth/session hardening (P1)**
- - REST-style Studio traffic now runs through `/api/proxy`, which injects `Authorization`
-   from server session cookies and supports refresh via `/api/auth/session`.
- - Impact: API credential handling has moved off direct browser token plumbing for standard API calls.
- - Owner: `apps/studio`, `api.ceq.lol` auth surface.
- - Remaining next action: complete websocket session fixture migration (optional hardening) and
-   browser auth/session E2E validation in production smoke.
-
-6. **Product completion debt (P2)**
-   - Monetization and demo conversion are intentionally incomplete.
-   - Impact: onboarding-to-value momentum is weaker than runtime stability.
-   - Owner: product/PMF surface owners.
-   - Required next action: complete funnel instrumentation and publish-channel rollout while keeping CEQ runtime unchanged.
-
-## Current Status Snapshot (2026-05-17)
+| Check | Result | Notes |
+|-------|--------|-------|
+| `https://ceq.lol` | HTTP 200 | Marketing/landing host |
+| `https://api.ceq.lol/health` | `{"status":"ok","service":"ceq-api","version":"0.1.0"}` | API reachable |
+| `https://app.ceq.lol/` (no session) | HTTP 307 → login | Server-side auth gate |
+| `https://app.ceq.lol/login` | HTTP 200 | Studio login surface |
+| `https://api.ceq.lol/docs` | HTTP 404 | OpenAPI not exposed in prod |
+| `POST /v1/render/card` (no auth) | 401 | Render pillar auth-gated |
+| Janua OAuth for documented client | `invalid_client` | Blocks real Studio login |
 
 ### What is working
 
-- Service topology and production deployment paths are present.
-- Core APIs are reachable in production; render pipelines (card/audio/3D) are functional.
-- DB, Redis, R2, Janua, and CI scaffolding are in place.
+- Service topology and GitOps deploy path (ArgoCD `ceq-services`, digest-pinned
+  images for API, Studio, Worker)
+- Core APIs reachable; `/v1/render/*` pipeline implemented (card, thumbnail,
+  audio, 3D) with R2 content-addressed cache
+- DB, Redis, R2, CI scaffolding in place
+- Job completion callback contract, retries, dead-letter replay, active
+  cancellation — implemented and locally tested
+- Studio host split (`ceq.lol` vs `app.ceq.lol`), session cookies,
+  `/api/proxy` BFF, public auth-gate smoke passing
+- Prometheus metrics, ServiceMonitor, alert rules, Grafana dashboard ConfigMap
+  in `infrastructure/k8s/observability.yaml`
+- OpenAPI disabled in production (`docs_url=None` when `ENVIRONMENT=production`)
 
-### Closed instability surfaces in this stabilization pass
+### Local test matrix (last verified 2026-05-17)
 
-1. **API/worker contract mismatch**
-   - Output APIs now use the current `Output` model fields (`filename`, `file_type`, `file_size_bytes`, `preview_url`, `output_metadata`).
-   - `jobs.py` cancellation now removes current and legacy queued payload shapes.
-   - `synthesis.py` no longer reads missing `Template.slug` / `Template.is_deleted` fields and creates an ephemeral workflow before creating a job.
+| Suite | Result |
+|-------|--------|
+| `apps/api` | 305 passed, 2 skipped |
+| `apps/workers` | 119 passed |
+| `apps/studio` | 85 passed; typecheck passed |
+| Alembic head | `20260514_outputs_job_storage_unique` (single head) |
+| Public production smoke | `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` green |
 
-2. **Worker completion persistence gap**
-   - Worker completion now posts a token-protected callback to the API.
-   - PostgreSQL job status and output rows are persisted from worker results; Redis remains the real-time status path.
+### Pinned production digests (kustomization.yaml)
 
-3. **Migration drift**
-   - A follow-up Alembic revision aligns the `outputs` table with the live model contract.
+| Service | Digest |
+|---------|--------|
+| ceq-api | `sha256:d688d0af03a2e217a3cd5cd7e92daf3fecd6b3da3dd8681d5a7f38627fffe302` |
+| ceq-studio | `sha256:20bc96f43554f4abba8c23d12b1bc2e8310f4191e307ddcacfdd5a72dbb6a017` |
+| ceq-worker | `sha256:97a17d1c3c48845323bf3319d986bbb2f893d6ecfd9aedc31ac6e7e8201fd7aa` |
 
-4. **Schema drift risk in API responses**
-   - `jobs`, `outputs`, worker callback payloads, and Studio gallery consumers now share the modern output shape.
+Studio digest `sha256:1a03d7ef…` was rolled back after crash
+(`Cannot find module '/app/server.js'`). See
+[2026-05-18 digest guardrail](#2026-05-18-studio-digest-guardrail) in the
+historical record.
 
-5. **Worker image-name drift**
-   - Worker defaults, Vast/Furnace provider defaults, and Vast deployment docs now use the production dash-form image name: `ghcr.io/madfam-org/ceq-worker`.
+### What blocks full stability
 
-6. **Studio execution contract drift**
-   - Studio workflow/template run calls now send `params`, matching the API routers.
-   - Studio job WebSocket subscriptions now append the Janua token required by `/v1/jobs/{job_id}/stream`.
+1. Janua OAuth client unregistered (`invalid_client` for documented client ID)
+2. Production runtime secrets not verified live (`JOB_COMPLETION_CALLBACK_TOKEN`,
+   `JOB_WEBHOOK_SECRET`)
+3. Authenticated GPU E2E, cancellation, and multi-modal smoke not proven in prod
+4. Alert routing and on-call runbooks not confirmed in Enclii observability tenant
+5. GitHub branch protection on `main` not enabled (org admin action)
 
-### Remediation status in this change set
+### 2026-05-22 implementation progress
 
-- P1 runtime contract fixes are implemented for DB session access, synthesis workflow creation, queue cancellation, output API shape, and worker completion persistence.
-- P2 schema/config/infra alignment is implemented with a dedicated Alembic migration, callback token settings, R2 bucket env alias support, Kubernetes worker/API env wiring, and dash-form worker image defaults.
-- P3 regression coverage is added for callback persistence/idempotency/auth, cancel queue removal, modern output registration/listing, worker upload descriptors, and worker callback posting.
-- Follow-up implementation wave closed the Studio request/websocket contract gap and added an API-only production smoke runner.
-- Verification completed locally:
-  - API suite passed (latest run available in history).
-  - Worker suite passed (latest run available in history).
-  - Studio suite passed; typecheck passed.
-  - Alembic head includes `20260514_outputs_job_storage_unique`.
-- Production public-edge smoke completed with `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`:
-  - `https://api.ceq.lol/health`: `ok`
-  - `https://ceq.lol`: HTTP `200`
-- API webhook implementation verification passed:
-- Implementation wave closed locally on 2026-05-14:
-  - Active worker cancellation implemented locally across API Redis control signals, worker pub/sub, ComfyUI interrupt, and cancelled callback persistence.
-  - Worker output collection broadened beyond images with image dimensions, WAV duration, MP4/MOV duration best-effort, GLB metadata, and Studio audio/video/model gallery handling.
-  - Worker completion callbacks now retry retryable failures and dead-letter exhausted payloads to Redis.
-  - `outputs(job_id, storage_uri)` DB-level idempotency migration added locally.
-  - Deploy workflow now waits for `build-worker` when it runs so worker images can be pinned by digest during GitOps deploy commits.
-- Operations acceptance wave closed locally on 2026-05-14:
-  - Admin operations API added for runtime status, completion dead-letter listing, replay, and discard.
-  - Job status responses now expose `output_metadata` so cancellation, webhook, and callback state is visible through normal APIs.
-  - Prometheus counters added for worker completion reports, persisted outputs, cancellations, dead-letter replay outcomes, and user webhook delivery outcomes.
-  - Production smoke runner now supports admin status, multi-template modality smokes, and active cancellation smokes without raw cluster/Redis access.
-  - Deploy workflow now builds and signs `ceq-worker` on every deploy and requires a worker digest before committing GitOps image updates.
-  - GitOps deploy run `25850545748` completed successfully and commit `44f2e0b` pinned API, Studio, and Worker by digest.
-- Next-wave local verification:
-  - `apps/api`: `305 passed, 2 skipped`
-  - Targeted API operations/jobs/migration verification: `36 passed, 1 skipped`
-  - Changed API files linted with Ruff: passed
-  - `apps/workers`: `119 passed`
-  - `apps/studio`: typecheck passed; `75 passed`
-  - `bash -n scripts/production-smoke.sh`: passed
-  - Alembic has one head: `20260514_outputs_job_storage_unique`
-  - `kubectl kustomize infrastructure/k8s` rendered successfully
-  - Public production smoke passed: `https://api.ceq.lol/health` ok and `https://ceq.lol` HTTP 200
+Engineering work landed in-repo (operator-only P0 items remain open):
 
-## Implementation Wave 2026-05-14 Wrap-Up
+| Phase | Item | Status |
+|-------|------|--------|
+| **Baseline** | Public production smoke | ✅ Green (`CEQ_PUBLIC_ONLY=true`) |
+| **Phase 4** | Studio Docker entrypoint fix | ✅ `CMD node apps/studio/server.js`; static at `apps/studio/.next/static` |
+| **Phase 4** | `scripts/studio-docker-smoke.sh` | ✅ Added |
+| **Phase 4** | CI `Studio · Docker smoke` job | ✅ `.github/workflows/ci.yaml` |
+| **Phase 4** | Deploy waits for CI + Studio smoke before push | ✅ `.github/workflows/deploy.yaml` |
+| **Phase 5** | WebSocket auth via session bootstrap | ✅ `resolveStreamAuthToken()` + async `subscribeToJob()` |
+| **Phase 6** | `ECOSYSTEM.md` drift fix | ✅ Ports, render status, Janua auth note |
+| **Phase 0** | Janua OAuth client registration | ⏳ Operator — see `docs/JANUA_OPERATOR.md` |
+| **Phase 1** | Production callback/webhook secrets | ⏳ Operator — verify via `operations/status` |
+| **Phase 2** | Authenticated GPU smokes | ⏳ Blocked on Phase 0 + 1 |
+| **Phase 4** | Studio Docker regression CI gate | ✅ Closed 2026-05-22 |
+| **Phase 4** | GitHub branch protection on `main` | ⏳ Org admin |
+| **Phase 4** | Playwright auth E2E in CI | ✅ 6/6 green locally (`mock-janua-server` + `next dev`; middleware allows `127.0.0.1`) |
 
-This wave moved CEQ from durable completion persistence into active runtime
-control and artifact-contract hardening.
+## Definition of done — full stability
 
-### Delivered
+CEQ is **fully healthy** when all gates below pass without manual exceptions:
 
-1. **Running-job cancellation**
-   - API cancellation now writes durable Redis cancellation state and publishes a per-job control command.
-   - Workers watch the control channel while a job is active, cancel the handler task, interrupt ComfyUI, and report terminal `cancelled`.
-   - API ignores late non-cancelled worker reports after a user cancellation, preserving the user-visible terminal state.
+| Gate | Proof |
+|------|-------|
+| **Public edge** | `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` green |
+| **Identity** | Real browser login on `app.ceq.lol` → session cookies → Studio shell |
+| **Runtime secrets** | `GET /v1/operations/status` reports callback + webhook readiness green |
+| **Schema** | Alembic head `20260514_outputs_job_storage_unique` applied; `uq_outputs_job_storage_uri` live |
+| **GPU E2E** | Authenticated smoke: submit → Redis → worker → R2 → callback → PostgreSQL → gallery |
+| **Cancellation** | Active cancel smoke on running GPU job; late success cannot overwrite `cancelled` |
+| **Multi-modal** | Image + video + audio + 3D template smokes pass in prod |
+| **Observability** | Alerts route to on-call; runbooks linked; dashboard usable |
+| **CI/CD** | PRs cannot merge without CI; deploy cannot promote broken Studio/Worker images |
+| **Docs truth** | `ECOSYSTEM.md`, README, and this roadmap match live behavior |
 
-2. **Multi-modal output contract**
-   - ComfyUI output collection now accepts image, video, audio, model, and generic file descriptors.
-   - Worker storage descriptors now include richer metadata: MIME type, size, preview URL, image dimensions, WAV duration/audio data, best-effort MP4/MOV duration, and GLB header metadata.
-   - Studio gallery now renders image previews, video playback, audio playback, model categorization, and generic files.
+**Rule:** No "full stability" declaration until P0 phases complete. P1/P2 work
+may run in parallel where noted, but must not delay P0 closure.
 
-3. **Completion callback reliability**
-   - Worker -> API completion callbacks retry retryable failures with configurable backoff.
-   - Exhausted completion callback payloads are retained in Redis `ceq:jobs:completion:dead`.
-   - Job Redis hashes are marked with callback failure metadata for operator inspection.
+---
 
-4. **Durable idempotency**
-   - Added migration `20260514_outputs_job_storage_unique`.
-   - Migration removes duplicate `(job_id, storage_uri)` rows before adding `uq_outputs_job_storage_uri`.
-   - The app-level idempotency behavior remains in place.
+## Critical path
 
-5. **GitOps reproducibility**
-   - Deploy workflow now includes `build-worker` in the deploy dependency graph.
-   - GitOps deploy commit `44f2e0b` now pins `ceq-worker` by digest alongside API and Studio.
+```
+Janua OAuth client registration
+        ↓
+Browser login proof (app.ceq.lol)
+        ↓
+Provision callback/webhook secrets → operations/status green
+        ↓
+Authenticated GPU smoke
+        ↓
+Cancel + multi-modal smokes
+        ↓
+Alert routing + runbooks + CI guardrails
+        ↓
+Declare full stability
+```
 
-6. **Operations recovery surface**
-   - `GET /v1/operations/status` exposes admin-only readiness signals for callback/webhook secrets, R2/auth configuration, Alembic revision, and Redis queue/dead-letter depth.
-   - `GET /v1/operations/completion-dead-letters` lists exhausted worker completion callbacks from Redis.
-   - `POST /v1/operations/completion-dead-letters/{index}/replay` replays one callback with `JOB_COMPLETION_CALLBACK_TOKEN` and removes the exact Redis item after success.
-   - `DELETE /v1/operations/completion-dead-letters/{index}` discards handled poison payloads.
+Janua remains the **critical path blocker**. Other lanes can start in parallel,
+but CEQ cannot be marked fully functional for users until Janua accepts the CEQ
+client and a real browser session reaches the Studio shell.
 
-7. **Acceptance automation**
-   - `scripts/production-smoke.sh` now supports `CEQ_RUN_OPERATIONS_STATUS=true`, `CEQ_TEMPLATE_SMOKES_JSON`, and `CEQ_RUN_CANCEL_SMOKE=true`.
-   - The smoke path remains API-first and does not require raw Redis, pod, or cluster access.
+---
 
-8. **Observability hooks**
-   - `/metrics` now includes CEQ application counters for worker completion reports, persisted outputs, user/API cancellations, dead-letter replay outcomes, and user webhook delivery outcomes.
+## Implementation phases
 
-9. **Worker rollout hardening**
-   - Deploy workflow now builds/signs worker on every deploy, requires `WORKER_DIGEST`, and commits the worker digest alongside API and Studio.
-   - Deploy run `25850545748` confirmed the first gated worker build and pushed digest commit `44f2e0b`.
-   - The first cold worker build took about 26 minutes; CI/CD optimization remains a follow-up stability target.
+### Phase 0 — Unblock identity (P0)
 
-### Local Acceptance
+**Owner:** Janua operator + `apps/studio`  
+**Duration:** ~1–2 days  
+**Operator runbook:** [`docs/JANUA_OPERATOR.md`](./JANUA_OPERATOR.md)  
+**Enclii-first:** Register client via Janua admin or Enclii secrets adapter.
+Record adapter gap if raw Janua admin is used.
 
-- API suite: `305 passed, 2 skipped`
-- Targeted API operations/jobs/migration suite: `36 passed, 1 skipped`
-- Changed API files Ruff lint: passed
-- Worker suite: `119 passed`
-- Studio suite: `75 passed`
-- Studio typecheck: passed
-- Smoke script syntax: passed
-- Alembic heads: one head, `20260514_outputs_job_storage_unique`
-- Kustomize render: passed
-- Public production smoke: API health `ok`, Studio HTTP `200`
+#### Tasks
 
-### Production Acceptance Still Required
+1. **Register or rotate Janua OAuth client**
+   - Name: `CEQ Studio`
+   - Client ID (documented): `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk` — rotate if
+     Janua no longer recognizes it
+   - Redirect URIs:
+     - `https://app.ceq.lol/auth/callback` (production)
+     - `http://localhost:5801/auth/callback` (development)
+   - Grant types: `authorization_code`, `refresh_token`
+   - Scopes: `openid`, `profile`, `email`
+   - Janua OIDC endpoints:
+     - Authorization: `https://auth.madfam.io/api/v1/oauth/authorize`
+     - Token: `https://auth.madfam.io/api/v1/oauth/token`
+     - UserInfo: `https://auth.madfam.io/api/v1/oauth/userinfo`
 
-- Provision/verify `JOB_COMPLETION_CALLBACK_TOKEN` and `JOB_WEBHOOK_SECRET` in production `ceq-secrets`.
-- Let ArgoCD run the PreSync migration job and confirm `20260514_outputs_job_storage_unique` is applied.
-- Run authenticated end-to-end GPU smoke through Studio/API -> Redis -> worker -> R2 -> callback -> PostgreSQL -> gallery.
-- Run active-cancel smoke on a real running GPU job.
-- Run video/audio/3D template smoke to prove multi-modal output handling in production.
-- Monitor the next deploys for worker image build duration and digest commit consistency.
+2. **Update secrets if client ID rotates**
+   - `NEXT_PUBLIC_JANUA_CLIENT_ID` (Studio build-time)
+   - `JANUA_CLIENT_SECRET` (K8s `ceq-secrets` / `external-secret.yaml`)
+   - Redeploy Studio via GitOps if client ID changes
 
-## Implementation Wave 2026-05-14 Auth + Conversion Hardening
+3. **Browser acceptance checklist**
+   - [ ] No-cookie `https://app.ceq.lol/` → `/login?returnTo=%2F`
+   - [ ] Janua login succeeds (no `invalid_client`)
+   - [ ] `/auth/callback` sets httpOnly CEQ session cookies
+   - [ ] `GET /api/auth/session` bootstraps Studio browser state
+   - [ ] Token refresh rotates cookies correctly
+   - [ ] Logout clears CEQ cookies before Janua logout redirect
+   - [ ] Studio API calls succeed via `/api/proxy`
+   - [ ] Job WebSocket stream works with token from session bootstrap
 
-This wave addresses the landing-vs-Studio split and the missing hard auth
-boundary on `app.ceq.lol`.
+#### Acceptance
 
-### Delivered And Deployed
+```bash
+CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh
+# Plus manual browser login with real credentials on app.ceq.lol
+```
 
-1. **Server-gated Studio routes**
-   - `app.ceq.lol` Studio routes now require a CEQ session cookie before the
-     React shell renders.
-   - No-cookie app-host users are redirected to `/login?returnTo=...`.
-   - Public app-host routes remain open for `/login`, `/auth/*`, and
-     `/api/auth/*`.
+#### Risks
 
-2. **CEQ session cookie bridge**
-   - OAuth token exchange now sets httpOnly access/refresh cookies.
-   - Token refresh can use the httpOnly refresh cookie when local storage does
-     not contain a refresh token.
-   - Logout clears CEQ cookies before redirecting to Janua logout.
+| Risk | Mitigation |
+|------|------------|
+| Wrong redirect URI | Match exactly — trailing slash matters |
+| Stale Studio image | Confirm ArgoCD rolled digest after env change |
+| WebSocket still uses legacy token path | Track in Phase 5; REST already proxied |
 
-3. **Session bootstrap endpoint**
-   - `GET /api/auth/session` returns the current user and access token from
-     httpOnly cookies.
-   - If the access cookie has expired and a refresh cookie exists, the endpoint
-     refreshes with Janua and rotates cookies.
-   - The current direct browser-to-API bearer-token client remains compatible
-     while CEQ moves toward a fuller server/proxy session model.
+---
 
-4. **Route-level smoke coverage**
-   - Public production smoke now verifies `ceq.lol` remains landing/demo only,
-     `ceq.lol/login` hands off to `app.ceq.lol/login`, `app.ceq.lol/landing`
-     returns to the marketing host, and no-cookie `app.ceq.lol/` is protected.
+### Phase 1 — Production runtime secrets and schema (P0)
 
-5. **Regression coverage**
-   - Added tests for JWT/session helper behavior.
-   - Added middleware helper tests for host split, public auth paths, session
-     cookie checks, and `returnTo` login redirects.
+**Owner:** Platform operators + `apps/api` + `apps/workers`  
+**Duration:** ~1 day  
+**Prerequisite:** None (parallel with Phase 0 tail)  
+**Enclii-first:** Provision via Enclii secrets; use break-glass
+`secrets.local.yaml` only if adapter missing — record gap in runbook.
 
-### Local Acceptance
+#### Tasks
 
-- `pnpm --filter @ceq/studio lint`: passed with no warnings.
-- `pnpm --filter @ceq/studio typecheck`: passed.
-- `pnpm --filter @ceq/studio exec vitest run`: `85 passed`.
-- `pnpm --filter @ceq/studio build`: passed; existing
-  `outputFileTracingRoot` warning was resolved by moving it under `experimental`.
-- `bash -n scripts/production-smoke.sh`: passed.
-- Local middleware smoke:
-  - `Host: ceq.lol /` rewrites to `/landing`.
-  - `Host: ceq.lol /login` redirects to `app.ceq.lol/login`.
-  - `Host: app.ceq.lol /landing` redirects to `ceq.lol/`.
-  - `Host: app.ceq.lol /` without CEQ session cookies redirects to
-    `/login?returnTo=%2F`.
-  - `Host: app.ceq.lol /` with a refresh cookie reaches the Studio shell.
-- Before this wave was deployed, production public smoke remained compatible
-  with `CEQ_EXPECT_APP_AUTH_REDIRECT=false`. After deploy, the default public
-  smoke must keep the unauthenticated app-gate assertion enabled.
-- Live Janua check still returns `invalid_client: Unknown client_id` for
-  `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`.
+1. **Provision secrets in production `ceq-secrets`**
+   - `JOB_COMPLETION_CALLBACK_TOKEN` — shared API/worker token (32+ byte random)
+   - `JOB_WEBHOOK_SECRET` — HMAC for user-provided job completion webhooks
+   - Confirm `infrastructure/k8s/external-secret.yaml` syncs from vault, or apply
+     operator-local manifest once
 
-### Production Acceptance
+2. **Verify via admin API (no raw pod access)**
 
-- GitOps deploy for `d2ca8b8 harden studio auth gate` completed successfully.
-- Deploy-bot digest commit `1eaf6a6` was fast-forwarded locally.
-- Public production smoke passed after deploy:
-  `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`
-  - `https://api.ceq.lol/health`: `ok`
-  - `https://ceq.lol`: HTTP `200`
-  - `ceq.lol/login`: `307` to `https://app.ceq.lol/login`
-  - `app.ceq.lol/landing`: `307` to `https://ceq.lol/`
-  - no-cookie `app.ceq.lol/`: `307` to
-    `https://app.ceq.lol/login?returnTo=%2F`
+   ```bash
+   CEQ_RUN_OPERATIONS_STATUS=true \
+   CEQ_REQUIRE_OPERATIONS_STATUS=true \
+   CEQ_REQUIRE_WEBHOOK_SECRET=true \
+   CEQ_ADMIN_AUTH_TOKEN=<admin-jwt> \
+   scripts/production-smoke.sh
+   ```
 
-### Remaining Acceptance
+3. **Confirm migration applied**
+   - ArgoCD PreSync job (`db-migrate-job.yaml`) ran `alembic upgrade head`
+   - Expected revision: `20260514_outputs_job_storage_unique`
 
-- Register or rotate the Janua OAuth client so
-  `https://app.ceq.lol/auth/callback` is accepted.
-- Complete a browser login with real credentials and verify session bootstrap,
-  refresh, logout, Studio API calls, and job WebSocket token use.
-- Follow up with a deeper session migration that proxies CEQ API calls through
-  the Studio server so access tokens no longer need browser storage.
+   ```bash
+   CEQ_EXPECT_ALEMBIC_REVISION=20260514_outputs_job_storage_unique \
+   CEQ_RUN_OPERATIONS_STATUS=true \
+   CEQ_ADMIN_AUTH_TOKEN=<admin-jwt> \
+   scripts/production-smoke.sh
+   ```
 
-### Deployment Handoff
+4. **Establish dead-letter baseline**
 
-After this wave is committed and deployed, the public-only production smoke
-should run with the default auth-gate assertion enabled:
+   ```bash
+   CEQ_EXPECT_MAX_COMPLETION_DEAD_LETTERS=0 \
+   CEQ_RUN_OPERATIONS_STATUS=true \
+   CEQ_ADMIN_AUTH_TOKEN=<admin-jwt> \
+   scripts/production-smoke.sh
+   ```
+
+5. **Verify worker env alignment**
+   - Worker deployment reads same `JOB_COMPLETION_CALLBACK_TOKEN` as API
+   - Worker posts to `POST /v1/jobs/{job_id}/outputs/report`
+
+#### Acceptance
+
+- `GET /v1/operations/status` → callback ready, webhook ready, alembic revision
+  correct, dead-letter depth ≤ threshold
+- Worker and API share callback token value
+
+---
+
+### Phase 2 — Production GPU runtime proof (P0)
+
+**Owner:** Operators + `apps/api` + `apps/workers` + GPU provider (Vast.ai)  
+**Duration:** ~2–4 days  
+**Prerequisites:** Phase 0 (auth token for smokes) + Phase 1 (secrets verified)
+
+#### Tasks
+
+1. **Ensure worker pods are running and reachable**
+   - Worker digest pinned in `infrastructure/k8s/kustomization.yaml`
+   - Vast.ai instances healthy OR in-cluster worker deployment scaled > 0
+   - NetworkPolicies allow:
+     - Worker → API callback
+     - Worker/API → Redis DB 14
+     - Worker/API → Cloudflare R2 (`ceq-assets`)
+
+2. **Seed templates if DB is empty**
+   - Operator one-shot: `infrastructure/k8s/seed-templates-job.yaml` (excluded
+     from kustomize bundle by design)
+   - Record template UUIDs in operator runbook for smoke env vars
+   - Repo ships 6 ComfyUI workflow JSON files under `templates/`:
+     - `social/flux-schnell.json`, `social/instantid-portrait.json`
+     - `video/hunyuan-video.json`
+     - `3d/triposr-image-to-3d.json`
+     - `utility/sdxl-txt2img.json`, `utility/image-upscaler.json`
+
+3. **Run authenticated end-to-end GPU smoke**
+
+   ```bash
+   CEQ_AUTH_TOKEN=<janua-jwt> \
+   CEQ_TEMPLATE_ID=<image-template-uuid> \
+   CEQ_RUN_OPERATIONS_STATUS=true \
+   CEQ_ADMIN_AUTH_TOKEN=<admin-jwt> \
+   CEQ_EXPECT_OUTPUTS=true \
+   scripts/production-smoke.sh
+   ```
+
+   Validates: job reaches `completed`, outputs durable, gallery URLs open.
+
+4. **Run active cancellation smoke**
+
+   ```bash
+   CEQ_AUTH_TOKEN=<jwt> \
+   CEQ_RUN_CANCEL_SMOKE=true \
+   CEQ_REQUIRE_CANCEL_SMOKE=true \
+   CEQ_CANCEL_TEMPLATE_ID=<long-running-template-uuid> \
+   CEQ_CANCEL_AFTER_SECONDS=10 \
+   scripts/production-smoke.sh
+   ```
+
+5. **Run multi-modal artifact smoke**
+
+   ```bash
+   CEQ_AUTH_TOKEN=<jwt> \
+   CEQ_TEMPLATE_SMOKES_JSON='[
+     {"label":"image","template_id":"<uuid>","params":{}},
+     {"label":"video","template_id":"<uuid>","params":{}},
+     {"label":"audio","template_id":"<uuid>","params":{}},
+     {"label":"3d","template_id":"<uuid>","params":{}}
+   ]' \
+   scripts/production-smoke.sh
+   ```
+
+6. **Render pillar smoke (auth-gated)**
+
+   ```bash
+   curl -H "Authorization: Bearer $CEQ_AUTH_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"template":"card-standard","data":{"title":"Smoke","accent":"#FF5A3C"}}' \
+     https://api.ceq.lol/v1/render/card
+   ```
+
+   Confirm R2 cache hit on second identical call (`cached: true`).
+
+7. **Verify network policy paths under load**
+   - Worker → `ceq-api` callback path
+   - Worker/API → Redis DB 14
+   - Worker/API → Cloudflare R2 egress
+
+#### Acceptance
+
+All three smoke modes pass with strict gate:
+
+```bash
+CEQ_STRICT_SMOKE=true \
+CEQ_AUTH_TOKEN=<jwt> \
+CEQ_ADMIN_AUTH_TOKEN=<admin-jwt> \
+CEQ_TEMPLATE_ID=<image-template-uuid> \
+CEQ_CANCEL_TEMPLATE_ID=<long-running-uuid> \
+CEQ_TEMPLATE_SMOKES_JSON='[...]' \
+scripts/production-smoke.sh
+```
+
+(`CEQ_STRICT_SMOKE=true` enables operations + cancel requirements automatically.)
+
+#### Risks
+
+| Risk | Mitigation |
+|------|------------|
+| GPU worker cold start / model download | Increase `CEQ_POLL_TIMEOUT_SECONDS` (default 600) |
+| Vast.ai spend/runaway | Worker orchestrator spending limits |
+| Template UUID mismatch | Document UUIDs after seed job |
+| Missing GPU models on worker | Prefetch via worker model cache; verify R2 model paths |
+
+---
+
+### Phase 3 — Operational closure (P1)
+
+**Owner:** Platform observability + on-call  
+**Duration:** ~2–3 days (parallel with Phase 2 tail)  
+**Enclii-first:** Configure alert receivers in Enclii observability tenant.
+
+#### Tasks
+
+1. **Confirm alert routing**
+   - Assets: `infrastructure/k8s/observability.yaml`
+   - Wire receivers for:
+     - Queue depth high
+     - Stale running jobs
+     - Completion dead-letter growth
+     - Webhook delivery failures
+     - Alembic revision drift
+
+2. **Write operator runbooks** (in `docs/` or `internal-devops/`)
+   - Dead-letter replay:
+     `POST /v1/operations/completion-dead-letters/{index}/replay`
+   - Force re-migration: delete `ceq-db-migrate` job → ArgoCD recreates PreSync
+   - Worker/API digest rollback: revert kustomization digest commit
+   - Janua client rotation procedure
+   - Incident: empty Service endpoints (kustomize selector mismatch class)
+
+3. **Dashboard review**
+   - Validate Grafana panels: queue depth, callback rates, cancellation counts
+   - Assign dashboard owner
+
+#### Acceptance
+
+- Test alert fires to intended channel (synthetic queue depth or dead-letter
+  injection in staging)
+- Runbook links attached to alert annotations in Enclii tenant
+
+---
+
+### Phase 4 — CI/CD hardening (P1)
+
+**Owner:** Repo maintainers + GitHub org admins  
+**Duration:** ~2–3 days (parallel with Phase 2–3)
+
+#### Tasks
+
+1. **Enable branch protection on `main`**
+   - Require status checks:
+     - `NetworkPolicy port consistency`
+     - `API · lint + tests`
+     - `Workers · lint + tests`
+     - `Studio · lint + typecheck + vitest`
+     - `Studio · Docker smoke`
+     - `Studio · Playwright auth`
+   - Require PR before merge
+   - Update `AGENTS.md` and README when enforced
+   - Org admin command (requires `gh` admin on repo):
+
+     ```bash
+     gh api repos/madfam-org/ceq/branches/main/protection -X PUT \
+       -f required_status_checks[strict]=true \
+       -f required_status_checks[contexts][]='NetworkPolicy port consistency' \
+       -f required_status_checks[contexts][]='API · lint + tests' \
+       -f required_status_checks[contexts][]='Workers · lint + tests' \
+       -f required_status_checks[contexts][]='Studio · lint + typecheck + vitest' \
+       -f required_status_checks[contexts][]='Studio · Docker smoke' \
+       -f required_status_checks[contexts][]='Studio · Playwright auth' \
+       -f enforce_admins=true \
+       -f required_pull_request_reviews[dismiss_stale_reviews]=true \
+       -f required_pull_request_reviews[required_approving_review_count]=1 \
+       -f restrictions=
+     ```
+
+2. **Fix Studio Docker regression gate (2026-05-18 incident)**
+   - Bad digest crashed: `Cannot find module '/app/server.js'`
+   - Add CI/deploy step: build Studio Docker image + container smoke
+     (`node /app/server.js` or HTTP health inside container)
+   - Prevent bad Studio digests from reaching kustomization commit
+
+3. **Worker build cache / deploy velocity**
+   - Cold worker build ~26 min blocks deploy velocity
+   - Add cached base image layer or skip worker rebuild when `apps/workers/**`
+     unchanged (content-hash gate in `.github/workflows/deploy.yaml`)
+
+4. **Optional: gate deploy on CI**
+   - Deploy workflow waits for CI success on same SHA before digest commit
+   - Or: deploy only from tagged releases
+
+5. **Add Playwright auth E2E to CI**
+   - Mock Janua OIDC responses deterministically
+   - Cover: unauthenticated redirect, callback cookie set, session bootstrap,
+     logout
+   - Separate manual live-auth smoke doc for production
+
+#### Acceptance
+
+- Bad Studio image caught in CI before GitOps commit
+- PR to `main` cannot merge with failing tests
+- Playwright auth suite green in CI
+
+#### Already closed in this lane
+
+- [x] Node 24 in CI (was Node 20)
+- [x] Next `outputFileTracingRoot` warning fixed (`experimental` in
+  `apps/studio/next.config.mjs`)
+- [x] Worker digest required on every deploy
+- [x] Studio Docker smoke script + CI job (2026-05-22)
+- [x] Deploy workflow waits for CEQ CI success on same SHA (2026-05-22)
+- [x] Studio container smoke before GHCR push (2026-05-22)
+- [x] Fixed standalone entrypoint path (`apps/studio/server.js`) (2026-05-22)
+
+---
+
+### Phase 5 — Auth and session completion (P1)
+
+**Owner:** `apps/studio`  
+**Duration:** ~3–5 days  
+**Prerequisite:** Phase 0 browser login proof
+
+#### Tasks
+
+1. **WebSocket session migration**
+   - Move job stream auth off legacy browser `localStorage` bearer token
+   - Use session bootstrap token or same-origin WS proxy
+
+2. **Remove legacy direct-token path**
+   - After WS migration + prod proof, delete browser bearer fallback
+   - Update `@ceq/sdk` docs for service-account / machine token consumers
+
+3. **Browser E2E in production smoke doc**
+   - Scripted checklist or Playwright against staging with real Janua
+
+#### Acceptance
+
+- No readable bearer tokens in browser storage for REST or WebSocket
+- Reload + deep-link navigation works without re-login within refresh window
+
+#### Already closed in this lane
+
+- [x] REST API calls proxied through `/api/proxy` with session cookies
+- [x] `GET /api/auth/session` bootstrap + refresh
+- [x] Server-gated Studio routes on `app.ceq.lol`
+- [x] Host split: `ceq.lol` landing vs `app.ceq.lol` authenticated app
+- [x] WebSocket token resolves from session bootstrap when in-memory token empty (2026-05-22)
+
+---
+
+### Phase 6 — Documentation and hygiene (P2)
+
+**Owner:** Repo maintainers  
+**Duration:** ~1–2 days (anytime after Phase 0)
+
+#### Tasks
+
+1. **Fix `ECOSYSTEM.md` drift**
+   - Remove stale "audio/3D rendering stubs return 501" claim (implemented in
+     `/v1/render/audio` and `/v1/render/3d`)
+   - Correct container ports: Studio 5801, API 5800 (not 3000/8000)
+   - Note render endpoints require Janua auth in production
+
+2. **Secret hygiene**
+   - Migrate fully to ExternalSecret; remove `REPLACE_ME` from applied manifests
+   - Rotate any credentials in operator-local examples
+   - Record Enclii adapter gap if ExternalSecret sync is still manual
+
+3. **Reconcile README and PRODUCTION_DEPLOYMENT.md**
+   - Align deployment status dates and action-required items with this roadmap
+
+4. **Update this roadmap on each phase closure**
+   - Mark phases complete with smoke command outputs + dates
+
+#### Acceptance
+
+- `ECOSYSTEM.md`, README, `PRODUCTION_DEPLOYMENT.md`, and this file agree on
+  live behavior
+
+---
+
+### Phase 7 — Product backlog (post-stability, P2/P3)
+
+These do **not** block the stability declaration. Track separately after P0–P1
+gates pass.
+
+| Item | Owner | Notes |
+|------|-------|-------|
+| Template catalog expansion | Product + eng | 6 workflows exist; PRD lists dozens — prioritize social + video MVP |
+| Publishing channels | `apps/api` outputs | Twitter/Instagram/LinkedIn/Discord `coming_soon`; webhook only live |
+| Monetization | Product/PMF | InterestGate → checkout when Tulana pricing locks (low confidence) |
+| Landing conversion | Studio landing | Self-contained demo on `ceq.lol`; funnel instrumentation |
+| Furnace migration | Workers | Vast.ai today; Furnace provider not deployed |
+| PRD promotion | Product | Move from Draft v0.1.0 to accepted MVP spec |
+| Intelligence layer | API | `synthesis`, `intent`, `printability` — define prod acceptance separately |
+| Redis Sentinel | Platform | Shared infra maturity gap per AGENTS.md dependency table |
+| Worker CI/CD optimization | Eng | Reduce ~26 min cold worker build |
+
+---
+
+## Execution schedule
+
+| Week | Focus | Exit criteria |
+|------|-------|---------------|
+| W1 D1–2 | Phase 0: Janua client | Browser login works |
+| W1 D3 | Phase 1: Secrets + migration verify | `operations/status` green |
+| W1 D4–5 | Phase 2: GPU E2E + cancel | Authenticated smokes pass |
+| W2 D1 | Phase 2: Multi-modal + render | `CEQ_STRICT_SMOKE=true` green |
+| W2 D2–3 | Phase 3: Alerts + runbooks | On-call wired |
+| W2 D3–5 | Phase 4: CI hardening | Branch protection + Studio Docker gate |
+| W3 | Phase 5–6: Session cleanup + docs | Declare full stability |
+
+Parallel lanes: Phase 3 + 4 start during Phase 2 tail; Phase 6 anytime after
+Phase 0.
+
+---
+
+## Smoke matrix (operator quick reference)
+
+| Scenario | Command flags |
+|----------|---------------|
+| Public edge only | `CEQ_PUBLIC_ONLY=true` |
+| Full strict gate | `CEQ_STRICT_SMOKE=true CEQ_AUTH_TOKEN=… CEQ_TEMPLATE_ID=…` |
+| Operations readiness | `CEQ_RUN_OPERATIONS_STATUS=true CEQ_REQUIRE_OPERATIONS_STATUS=true CEQ_ADMIN_AUTH_TOKEN=…` |
+| Webhook secret required | `CEQ_REQUIRE_WEBHOOK_SECRET=true` |
+| Cancel proof | `CEQ_RUN_CANCEL_SMOKE=true CEQ_REQUIRE_CANCEL_SMOKE=true CEQ_CANCEL_TEMPLATE_ID=…` |
+| Multi-modal | `CEQ_TEMPLATE_SMOKES_JSON='[…]'` |
+| Dead-letter guard | `CEQ_EXPECT_MAX_COMPLETION_DEAD_LETTERS=0` |
+| Alembic revision check | `CEQ_EXPECT_ALEMBIC_REVISION=20260514_outputs_job_storage_unique` |
+| App auth gate (default on) | `CEQ_EXPECT_APP_AUTH_REDIRECT=true` |
+
+### Single "declare stability" command
+
+Run after Phases 0–2 prerequisites are met:
+
+```bash
+CEQ_STRICT_SMOKE=true \
+CEQ_AUTH_TOKEN=<jwt> \
+CEQ_ADMIN_AUTH_TOKEN=<admin-jwt> \
+CEQ_TEMPLATE_ID=<image-template-uuid> \
+CEQ_CANCEL_TEMPLATE_ID=<long-running-uuid> \
+CEQ_TEMPLATE_SMOKES_JSON='[...]' \
+CEQ_EXPECT_MAX_COMPLETION_DEAD_LETTERS=0 \
+CEQ_EXPECT_ALEMBIC_REVISION=20260514_outputs_job_storage_unique \
+scripts/production-smoke.sh
+```
+
+### Public-only gate (no credentials)
 
 ```bash
 CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh
 ```
 
-If that fails on the `Unauthenticated app gate` check, verify ArgoCD has rolled
-the new Studio image and that `app.ceq.lol` is reaching the current pod. Do not
-disable the assertion after rollout except for a documented rollback.
-
-## Next Implementation Wave Plan — Production Auth Acceptance + Full Runtime Proof
-
-This is the active remediation and implementation plan across the relevant CEQ
-services. The work should run in parallel where ownership is independent, but
-acceptance must stay ordered so CEQ does not declare stability before the user
-journey and GPU runtime are proven end to end.
-
-### Lane 1 — Identity And Studio Session
-
-Owner surface: Janua operator config, `apps/studio`, `api.ceq.lol` auth usage.
-
-1. **Register or rotate the Janua OAuth client**
-   - Required redirect URI: `https://app.ceq.lol/auth/callback`.
-   - Keep `http://localhost:5801/auth/callback` for development.
-   - Update `NEXT_PUBLIC_JANUA_CLIENT_ID` and `JANUA_CLIENT_SECRET` if the
-     client ID rotates.
-   - Acceptance: Janua no longer returns `invalid_client` for the CEQ client.
-
-2. **Browser-prove the deployed session flow**
-   - Visit no-cookie `https://app.ceq.lol/`.
-   - Confirm redirect to `app.ceq.lol/login`, then Janua.
-   - Complete credential login.
-   - Confirm `/auth/callback` sets CEQ session cookies.
-   - Confirm `/api/auth/session` bootstraps the Studio browser state.
-   - Confirm refresh and logout clear/rotate cookies correctly.
-
-3. **Migrate Studio API access behind a BFF/proxy**
-   - Add same-origin Studio server routes for CEQ API calls.
-   - Server reads httpOnly CEQ session cookies and attaches Janua bearer tokens
-     to `api.ceq.lol`.
-   - Remove or sharply reduce browser `localStorage` token dependency.
-   - Acceptance: reloads and protected route navigation work without readable
-     browser bearer-token storage.
-
-4. **Add browser E2E auth tests**
-   - Cover unauthenticated app redirect, marketing/app host split, callback
-     success/failure, refresh, logout, and authenticated Studio shell.
-   - Acceptance: Playwright suite runs locally and in CI for auth-critical
-     routes with deterministic mocked Janua responses, plus a documented manual
-     live-auth smoke for production.
-
-### Lane 2 — API, Worker, And Data Runtime Proof
-
-Owner surface: `apps/api`, `apps/workers`, Redis DB 14, PostgreSQL, R2.
-
-1. **Provision and verify runtime secrets**
-   - `JOB_COMPLETION_CALLBACK_TOKEN`
-   - `JOB_WEBHOOK_SECRET`
-   - Acceptance: admin `GET /v1/operations/status` reports callback/webhook
-     readiness without raw pod or secret access.
-
-2. **Verify migration and data contract in production**
-   - Confirm Alembic head includes `20260514_outputs_job_storage_unique`.
-   - Confirm `outputs(job_id, storage_uri)` uniqueness exists.
-   - Confirm current output rows expose `filename`, `file_type`,
-     `file_size_bytes`, `preview_url`, and `output_metadata`.
-   - Acceptance: operations status plus authenticated output API reads prove the
-     active runtime contract.
-
-3. **Run authenticated GPU smoke**
-   - `scripts/production-smoke.sh` with `CEQ_AUTH_TOKEN`, `CEQ_TEMPLATE_ID`,
-     `CEQ_RUN_OPERATIONS_STATUS=true`, and `CEQ_ADMIN_AUTH_TOKEN`.
-   - Acceptance: Studio/API submission reaches Redis, worker executes, R2
-     upload succeeds, callback persists PostgreSQL rows, and Studio gallery can
-     open the output URLs.
-
-4. **Run active cancellation smoke**
-   - Use `CEQ_RUN_CANCEL_SMOKE=true` and a long-running template.
-   - Acceptance: worker interrupts ComfyUI, API remains `cancelled`, and late
-     success reports cannot overwrite the terminal state.
-
-5. **Run multi-modal artifact smoke**
-   - Use `CEQ_TEMPLATE_SMOKES_JSON` for image, video, audio, and 3D/model
-     templates.
-   - Acceptance: each artifact persists with correct MIME/metadata and renders
-     or opens from Studio gallery.
-
-### Lane 3 — Operations, Observability, And CI/CD
-
-Owner surface: `.github/workflows`, `scripts/`, Enclii observability,
-Prometheus/alerts.
-
-1. **Wire alerts and dashboards**
-   - Queue depth, stale jobs, dead letters, webhook failures, and migration
-     health.
-   - Completed by wiring `infrastructure/k8s/observability.yaml`
-     (ServiceMonitor, PrometheusRule, and Grafana dashboard ConfigMap).
-   - Remaining: confirm alert receiver routing and annotate owners/runbooks in the
-     Enclii observability tenant.
-
-2. **Harden production smoke automation**
-   - Keep public smoke as the unauthenticated edge gate.
-   - Add a browser smoke entrypoint for auth/session behavior.
-   - Keep authenticated GPU/cancel/multi-modal smokes API-first and
-     Enclii-first.
-   - Acceptance: CI/manual runbooks tell operators which smoke to run for each
-     deployment or incident.
-
-3. **Clean CI/CD debt**
-   - [x] Fix the existing Next `outputFileTracingRoot` warning by moving it under
-     `experimental` in `apps/studio/next.config.mjs`.
-   - [x] Update GitHub Actions away from Node 20; CI now uses Node 24.
-   - Investigate deploy/notify queue delays and cold-deploy latency.
-   - Acceptance: Studio build has no config warnings and deploy workflows do
-     not rely on deprecated action runtimes.
-
-### Lane 4 — Landing, Demo, And Conversion
-
-Owner surface: `ceq.lol` landing/demo, `apps/studio/src/components/landing`,
-PMF/InterestGate telemetry.
-
-1. **Make the landing host conversion-complete**
-   - `ceq.lol` remains public landing/demo only.
-   - Add a self-contained demo that shows CEQ value without entering Studio.
-   - Route all product-use CTAs to `https://app.ceq.lol/login`.
-   - Acceptance: no Studio shell leaks onto `ceq.lol`, and CTAs preserve the
-     intended return path.
-
-2. **Instrument funnel events**
-   - Landing view, demo interaction, login click, auth success, first render,
-     gallery view, and InterestGate capture.
-   - Acceptance: PMF/funnel data can be inspected without raw production access.
-
-### Cross-Lane Execution Order
-
-1. Janua client registration/rotation.
-2. Browser login/session acceptance.
-3. Production secret and migration readiness.
-4. Authenticated GPU + cancellation + multi-modal smokes.
-5. BFF/session migration and browser E2E tests.
-6. Observability/CI cleanup.
-7. Landing/demo conversion instrumentation.
-
-Janua remains the critical path blocker. All other lanes can begin in parallel,
-but CEQ cannot be marked fully functional for users until Janua accepts the CEQ
-client and a real browser session reaches the Studio shell.
-
-## Remaining Roadmap To Full Stability
-
-The items below are what remains after the current stabilization patch. They are ordered by production risk and should be treated as the next execution plan.
-
-### P0 — Production Rollout Gates
-
-1. **Provision runtime callback/webhook secrets**
-   - Add `JOB_COMPLETION_CALLBACK_TOKEN` to production `ceq-secrets`.
-   - The API requires this in production; workers use the same value when POSTing completion reports.
-   - Add `JOB_WEBHOOK_SECRET` before enabling user-provided `webhook_url` delivery.
-   - Acceptance can now be checked with admin `GET /v1/operations/status`.
-
-2. **Run and verify migrations**
-   - Apply Alembic head through the GitOps migration job.
-   - Confirm existing `outputs` rows have non-null `filename`, `file_type`, and `file_size_bytes`.
-   - Confirm `uq_outputs_job_storage_uri` exists after `20260514_outputs_job_storage_unique`.
-   - Acceptance can now use `GET /v1/operations/status` for the visible Alembic revision, with DB-level constraint proof handled by the optional PostgreSQL migration test harness.
-
-3. **Run a real end-to-end GPU smoke**
-   - Studio/API job submission -> Redis pending queue -> worker execution -> R2 upload -> API callback -> PostgreSQL output row -> Studio gallery render.
-   - Use `scripts/production-smoke.sh` with `CEQ_AUTH_TOKEN` and `CEQ_TEMPLATE_ID` after deployment.
-   - Add `CEQ_RUN_OPERATIONS_STATUS=true` and `CEQ_ADMIN_AUTH_TOKEN` to verify admin readiness gates in the same run.
-   - Acceptance: the final job is `completed`, output rows are durable, and gallery URLs open from the browser.
+Verifies: API health, `ceq.lol` HTTP 200, host-split redirects, unauthenticated
+app gate on `app.ceq.lol`.
+
+---
+
+## Risk register (program level)
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|------------|--------|------------|
+| Janua client blocked on operator availability | High | Blocks all user value | Escalate P0; temporary service-account JWT for SDK smokes only |
+| GPU provider outage during acceptance | Medium | Delays declaration | Run smokes during known-good Vast window; document retry |
+| Secret mismatch API vs worker | Medium | Silent callback failures | `operations/status` gate before GPU smoke |
+| Studio Docker regression recurs | Medium | 502 on app host | CI container smoke before digest commit |
+| kustomize selector mismatch (2026-05-04 class) | Low | Hours-long 502 | Never use `commonLabels` with conflicting pod template labels; use `labels:` with `includeSelectors: false` |
+| Scope creep into product features | High | Stability never declared | Freeze Phase 7 until P0–P1 gates pass |
+
+---
+
+## Immediate next actions (this week)
+
+1. **Janua operator:** Register/rotate OAuth client for `app.ceq.lol` — *critical path*
+2. **Platform operator:** Provision `JOB_COMPLETION_CALLBACK_TOKEN` +
+   `JOB_WEBHOOK_SECRET` via Enclii/ExternalSecret
+3. **CEQ operator:** Run `operations/status` smoke with admin JWT
+4. **CEQ operator:** Seed templates if needed; capture UUIDs in runbook
+5. **CEQ operator:** Run authenticated GPU + cancel + multi-modal smokes
+6. **GitHub admin:** Enable branch protection requiring CI checks
+7. **Engineering:** Add Studio Docker smoke to deploy workflow (prevent
+   `server.js` regression)
+
+---
+
+## Stability declaration template
+
+When all P0/P1 gates pass, add this section to the top of this document:
+
+```markdown
+## Full Stability Declared — YYYY-MM-DD
+
+- Janua client: registered, browser login verified
+- Secrets: callback + webhook provisioned, operations/status green
+- GPU E2E: strict smoke passed (attach log reference)
+- Cancel + multi-modal: passed
+- Alerts: routed to <channel>, runbooks at <path>
+- CI: branch protection enforced; Studio Docker gate active
+- Docs: ECOSYSTEM.md reconciled
+
+Remaining product debt tracked in Phase 7 backlog.
+```
+
+---
+
+## Product backlog (post-stability)
+
+See [Phase 7](#phase-7--product-backlog-post-stability-p2p3) for the full
+backlog table. Do not start Phase 7 work until the stability declaration
+template above is filled in.
+
+---
+
+## Historical closure record
+
+The sections below document work closed during the 2026-05-04 through
+2026-05-18 stabilization sweeps. They are retained for audit trail; **forward
+work is defined in [Implementation phases](#implementation-phases) above.**
+
+### Closed instability surfaces (2026-05-04 through 2026-05-17)
+
+1. **API/worker contract mismatch** — Output APIs use modern `Output` fields;
+   cancellation removes current and legacy queue payload shapes; synthesis no
+   longer reads missing `Template.slug` / `Template.is_deleted`.
+2. **Worker completion persistence gap** — Token-protected callback persists
+   PostgreSQL job status + output rows; Redis remains real-time path.
+3. **Migration drift** — Alembic revision aligns `outputs` table with live model.
+4. **Schema drift in API responses** — Jobs, outputs, callbacks, Studio gallery
+   share modern output shape.
+5. **Worker image-name drift** — Dash-form `ghcr.io/madfam-org/ceq-worker`.
+6. **Studio execution contract drift** — Studio sends `params`; WebSocket appends
+   Janua token for `/v1/jobs/{job_id}/stream`.
+7. **ArgoCD/kustomize selector mismatch** — Switched from `commonLabels` to
+   `labels:` with `includeSelectors: false` (prevented ~7h 502 on 2026-05-04).
+8. **NetworkPolicy gaps** — Added allow rules for cloudflared ingress, intra-namespace,
+   HTTPS egress, data egress.
+9. **Kyverno rejections** — Migration job + worker securityContext aligned.
+10. **Migration secret key casing** — Uppercase `DATABASE_URL` / `REDIS_URL`.
+11. **ImagePullBackOff on migration job** — Added `ghcr-credentials` pull secret.
+12. **No CI test gate** — `.github/workflows/ci.yaml` runs lint + tests on every PR.
+13. **OpenAPI exposed in prod concern** — `docs_url=None` when production; verified
+    live `/docs` → 404.
+
+### Implementation wave 2026-05-14 — runtime control
+
+Delivered locally and in GitOps:
+
+- Active worker cancellation (Redis control channel, ComfyUI interrupt, durable
+  `cancelled`)
+- Multi-modal output contract (image, video, audio, model, generic files)
+- Completion callback retries + Redis dead-letter (`ceq:jobs:completion:dead`)
+- DB idempotency: `uq_outputs_job_storage_uri` via migration
+  `20260514_outputs_job_storage_unique`
+- Admin API: `/v1/operations/status`, dead-letter list/replay/discard
+- Prometheus counters for completions, outputs, cancellations, webhooks
+- GitOps: worker digest pinned on every deploy (commit `44f2e0b`, run
+  `25850545748`)
 
-4. **Run active cancellation smoke**
-   - Submit a long-running GPU job.
-   - Cancel it from Studio/API while it is running.
-   - Use `CEQ_RUN_CANCEL_SMOKE=true` with `CEQ_CANCEL_TEMPLATE_ID`.
-   - Acceptance: worker interrupts ComfyUI, API remains `cancelled`, and no late success report overwrites the cancelled state.
-
-5. **Run multi-modal artifact smoke**
-   - Exercise image, video, audio, and 3D/model workflows.
-   - Use `CEQ_TEMPLATE_SMOKES_JSON` to run modality template IDs in one smoke pass.
-   - Acceptance: each output persists with correct MIME/metadata and renders or opens from Studio gallery.
-
-6. **Verify network policy paths**
-   - Worker -> `ceq-api` callback path.
-   - Worker/API -> Redis DB 14.
-   - Worker/API -> Cloudflare R2.
-
-7. **Verify Janua production client**
-   - Confirm Janua knows the active CEQ client ID and `https://app.ceq.lol/auth/callback`.
-   - Live check on 2026-05-14 returned `invalid_client: Unknown client_id` for the documented client ID.
-   - CEQ Studio now uses Janua OIDC `/api/v1/oauth/*` endpoints and reserves `ceq.lol` for landing/demo traffic.
-   - CEQ Studio routes are server-gated by CEQ session cookies before the React shell renders.
-   - Acceptance: production Studio login succeeds, `/api/auth/session` bootstraps the browser, and websocket auth token can be used for job streams.
-
-### P1 — Functional Correctness
-
-1. **Implement user-provided job webhooks** — completed locally
-   - `webhook_url` completion delivery now sends signed terminal job events.
-   - Delivery attempts, failures, and success metadata are recorded under `job.output_metadata.webhook_delivery`.
-   - Production still needs `JOB_WEBHOOK_SECRET` provisioned before webhook delivery is enabled.
-
-2. **Implement active worker cancellation** — completed locally
-   - API records `cancel_requested=true`, publishes a per-job cancel command, and prevents late success reports from overriding `cancelled`.
-   - Workers subscribe while processing a job, cancel the handler task, interrupt ComfyUI, and report durable `cancelled`.
-   - Production acceptance still requires a real running GPU cancel smoke after rollout.
-
-3. **Broaden worker output collection** — completed locally
-   - ComfyUI descriptors now collect image, video, audio, model, and arbitrary file outputs.
-   - Storage descriptors include expanded MIME mapping plus image dimensions, WAV duration, best-effort MP4/MOV duration, and GLB metadata.
-   - Studio gallery now renders video controls, audio controls, and 3D/model categorization.
-   - Production acceptance still requires video/audio/3D template smoke coverage.
-
-### P2 — Reliability Hardening
-
-1. **Add callback retry and dead-letter handling** — completed locally for worker callbacks
-   - Failed worker -> API callbacks retry with configurable backoff.
-   - Exhausted callbacks land in Redis `ceq:jobs:completion:dead` and mark `ceq:job:{job_id}` with callback failure metadata.
-   - Admin operations endpoints now list, replay, and discard those dead letters.
+### Implementation wave 2026-05-14 — auth + conversion
 
-2. **Add DB-level idempotency** — completed locally
-   - Added Alembic revision `20260514_outputs_job_storage_unique`.
-   - Migration removes duplicate `(job_id, storage_uri)` rows before adding `uq_outputs_job_storage_uri`.
-   - Keep the app-level idempotency already added.
-
-3. **Add production-grade migration tests** — completed locally
-   - Added a deterministic migration operation test for dedupe SQL and constraint creation.
-   - Added an optional PostgreSQL-backed regression harness gated by `CEQ_TEST_POSTGRES_URL`.
-
-4. **Pin worker images by digest** — completed in GitOps
-   - Deploy job now builds/signs `ceq-worker` on every deploy and requires `WORKER_DIGEST`.
-   - Deploy commit `44f2e0b` pins `ceq-worker` by digest alongside API and Studio.
-   - Next: reduce cold worker image build time with a cached base image or digest reuse for unchanged worker sources.
+Delivered and deployed:
 
-### P3 — Observability And Product Completion
+- Server-gated Studio routes on `app.ceq.lol` (session cookie required)
+- OAuth callback sets httpOnly access/refresh cookies
+- `GET /api/auth/session` bootstrap + refresh
+- Host split: `ceq.lol` landing, `app.ceq.lol` authenticated app
+- Public smoke verifies auth gate after deploy (digest commit `1eaf6a6`)
 
-1. **Add alerts and dashboards**
-   - Queue depth, stuck running jobs, callback failures, dead-letter growth, and migration status.
-   - Prometheus counters now exist for key API runtime paths.
-   - Dashboard/alert wiring is implemented in `infrastructure/k8s/observability.yaml`.
-
-2. **Finalize monetization path**
-   - Replace InterestGate with checkout/tier enforcement once pricing and billing are locked.
+Partially delivered (Phase 5 remaining):
 
-3. **Complete publishing channels**
-   - Twitter/X, Instagram, LinkedIn, and Discord remain `coming_soon`; webhook is the only implemented publishing channel.
+- `/api/proxy` BFF for REST — done
+- WebSocket session migration — done (`resolveStreamAuthToken()`)
+- Browser Playwright E2E in CI — done (6 mocked Janua tests; CI job `Studio · Playwright auth`)
 
-4. **Secret hygiene**
-   - Move production secrets fully to sealed/external secrets.
-   - Rotate any real-looking credentials left in operator-local examples.
+### 2026-05-17 remediation wrap-up
 
-## Completed Remediation Plan
+- Observability primitives wired in `infrastructure/k8s/observability.yaml`
+- Browser proxy auth hardening for REST workflows
+- Remaining at that checkpoint: Janua unblock, secret provisioning, prod GPU
+  proof, alert routing confirmation
 
-The team requested an implementation plan in **priority order** and explicit parallel work where safe. The order below is the remediation sequence executed in this stabilization pass:
+Key commits referenced in closure cycles:
 
-1. Fixed immediate runtime blockers first (P1), so existing services stop failing fast.
-2. Closed data-contract gaps (P2), so remaining behavior becomes deterministic.
-3. Added hardening and test coverage (P3), so regression risk is reduced.
+- `46b3262` — smoke hardening
+- `1648ebc` — CI + Next build hardening
+- `44f2e0b` — first worker digest-gated GitOps commit
+- `1eaf6a6` — Studio auth gate deploy
 
-All P1 changes were independent from infra wiring. P2 infra edits are additive and should be rolled out behind the production gates listed above.
-
-## Completed Workstreams
-
-### Roadmap Execution Strategy
-
-- **Documented**: every implementation has a corresponding acceptance entry below.
-- **P1, then P2, then P3**: later-phase changes did not mask earlier blockers.
-- **Parallelized P3**: tests and docs updates were added around the stabilized contracts.
-
-### P1 — Runtime Contract Correctness (completed)
-
-1. **Export writable DB session factory alias used by websocket/job path** — completed
-   - File: `apps/api/src/ceq_api/db/session.py`
-   - Add `async_session_maker` compatibility export and wire through `apps/api/src/ceq_api/db/__init__.py`.
-   - Keep behavior safe under startup lifecycle used by current sessions.
-
-2. **Fix broken synthesis template resolution** — completed
-   - File: `apps/api/src/ceq_api/routers/synthesis.py`
-   - Stop using nonexistent `Template.slug` and `Template.is_deleted`.
-   - Resolve by existing `Template` schema (`name`/`category` + `workflow_json`) with deterministic fallback.
-
-3. **Fix queue cancellation payload mismatch** — completed
-   - File: `apps/api/src/ceq_api/routers/jobs.py`
-   - Remove pending jobs using `{"id": str(job_id)}` and not legacy `{"job_id": ...}`.
-
-4. **Modernize output API contract** — completed
-   - File: `apps/api/src/ceq_api/routers/outputs.py`
-   - Align request/response fields to `Output` model fields.
-   - Ensure publish/delete/list paths use modern field names.
-
-5. **Add worker→API completion callback** — completed
-   - File: `apps/api/src/ceq_api/routers/jobs.py`
-   - Add internal endpoint (token-protected) to persist final job status + outputs.
-
-6. **Update worker execution return payload and callback behavior** — completed
-   - Files: `apps/workers/src/ceq_worker/handler.py`, `apps/workers/src/ceq_worker/queue.py`
-   - Build per-output descriptors with size/type metadata.
-   - POST completion payload to API callback endpoint.
-   - Keep Redis fallback writes as non-fatal backstop.
-
-7. **Add idempotent worker→API completion endpoint contract tests** — completed
-   - File: `apps/api/tests/test_jobs.py`
-   - Add regression test for authenticated callback updates and a malformed payload guard.
-
-### P1 Completion Criteria (met locally)
-
-- `POST /v1/jobs/{job_id}/outputs/report` accepts a callback payload and persists job status + outputs.
-- Cancel endpoint removes pending queue items for both `{"id":...}` and legacy `{"job_id":...}` payloads.
-- `jobs` and `synthesis` routes no longer access non-existent model fields.
-- `outputs` list/register are compatible with current `Output` model.
-
-### Why this order
-
-- P1 item 1 enables worker and script code paths that already import `async_session_maker`.
-- P1 item 2, 3, and 4 eliminate runtime exceptions in production endpoints.
-- P1 item 5 and 6 ensure finalization is not best-effort-only anymore.
-
-### P2 — Data/Schema Consistency (completed)
-
-1. **Create Alembic migration to align `outputs` table** — completed
-   - File: `apps/api/src/ceq_api/alembic/versions/...`
-   - Transition legacy columns to modern contract without data-loss of existing rows.
-
-2. **Add worker/API settings for callback path + auth** — completed
-   - Files: `apps/api/src/ceq_api/config.py`, `apps/workers/src/ceq_worker/config.py`, `infrastructure/k8s/*`
-   - Add configurable `API_URL`, callback path, and shared callback token.
-
-3. **Update infra docs + manifests** — completed
-   - Files: `infrastructure/k8s/worker-deployment.yaml`, secrets/config docs where needed
-   - Ensure callback env + secret token are present in runtime config.
-
-### P3 — Reliability and Observability (completed locally)
-
-1. **Fallback behavior hardening** — completed
-   - Keep Redis result writes for continuity when callback fails.
-   - Mark transient callback failure without dropping worker execution status.
-
-2. **Add regression tests for end-to-end contract edges** — completed
-   - Files: `apps/api/tests/*`, `apps/workers/tests/*`
-   - Add targeted tests for output contract, completion callback, queue-cancel payload correctness.
-
-### P3 Completion Criteria (met locally)
-
-- Job completion callback has negative-path test cases (invalid signature, unknown job, partial payload).
-- Queue cancel compatibility with stale queue shapes is covered by tests.
-- Output contract compatibility test includes both `file_type` filter and `storage_uri` payload shape.
-- Migration regression test validates new outputs columns can be read and written end-to-end in tests using SQLite models.
-
-## Service Scope and Parallelization Record
-
-The table below records ownership for the completed remediation and the next recommended parallel work.
-
-- **api-core** (`apps/api/src/ceq_api`)
-  - `db/session.py`, `db/__init__.py`, `routers/synthesis.py`, `routers/jobs.py`, `routers/outputs.py`, `config.py`
-  - Completed runtime contracts, callback endpoint, output persistence, and API settings.
-  - Next: production smoke for active cancellation and richer callback observability.
-
-- **worker** (`apps/workers/src/ceq_worker`)
-  - `handler.py`, `queue.py`, `storage.py`, `config.py`
-  - Completed execution payloads, R2 descriptors, callback posting, and Redis fallback writes.
-  - Next: production GPU smoke across image/video/audio/3D outputs and replay tooling for dead-lettered callbacks.
-
-- **data**
-  - `apps/api/src/ceq_api/alembic/versions/*`
-  - Completed outputs schema alignment.
-  - Next: PostgreSQL-backed migration test harness and live duplicate audit confirmation during rollout.
-
-- **infra** (`infrastructure/k8s/*`)
-  - `worker-deployment.yaml`, `secrets.yaml`
-  - Completed callback token wiring and R2 env alias wiring.
-  - Next: provision production tokens, verify NetworkPolicies, and monitor GitOps digest commits.
-
-- **frontend** (`apps/studio/src`)
-  - Completed gallery URL consumption through `public_url` fallback and added
-    session-cookie auth gating for `app.ceq.lol`.
-  - Next: browser E2E auth fixture after Janua client registration, then
-    video/audio/3D smoke fixtures and output-type-specific gallery polish.
-
-## Risk Register (short and explicit)
-
-| Risk | Impact | Mitigation |
-| --- | --- | --- |
-| Callback path added but token not provisioned in staging/prod first | Callback requests rejected, queue fallback still works | Keep Redis fallback; expose non-fatal logs and mark callback failures in `job.error` metadata |
-| Alembic migration run in environments with pre-existing output rows | Possible migration constraint errors | Migration copies legacy data to new columns with defaults and keeps old `published_to`/`output_metadata` shape |
-| Template fallback logic in synthesis selects wrong template | Suboptimal GPU routing | Choose by `category='3d'`, with deterministic fallback by name substring and tags; record `output_error` if none found |
-
-## Known debt (deferred to next milestone)
-
-- Remaining debt is now tracked in **Remaining Roadmap To Full Stability** above.
-- Do not add new stability work without assigning it to a P0/P1/P2/P3 bucket.
-
-## Files Changed By Scope
-
-- **apps/api**
-  - `db.session`, `routers.jobs`, `routers.synthesis`, `routers.outputs`, `config`
-  - Added callback endpoint, contract fixes, token checks, output persistence, and migration coverage.
-
-- **apps/workers**
-  - `handler.py`, `queue.py`, `storage.py`, `config.py`, `comfyui.py`, `orchestrator.py`
-  - Built rich output descriptors, sent callbacks with auth, awaited async progress callbacks, added active cancellation, retried callbacks, and kept Redis fallback/dead-letter writes.
-
-- **infrastructure/k8s**
-  - `api-deployment.yaml`, `worker-deployment.yaml`, `secrets.yaml`,
-    `observability.yaml`
-  - Wired callback env vars, token secret, API callback URL, and R2 bucket alias.
-
-- **apps/studio**
-  - `src/lib/api.ts`, `src/app/api/proxy/[[...path]]/route.ts`, gallery
-    components, auth context/routes, middleware
-  - Consumes `public_url` where available, preserves `storage_uri` fallback behavior, renders audio/video/model output types, and gates app-host Studio routes with CEQ session cookies.
-
-- **docs/tests**
-  - `docs/CEQ_STABILITY_ROADMAP.md`, `__tests__/*`, `scripts/production-smoke.sh`
-  - Documents remediation and keeps tests/smokes in sync with runtime contracts.
-
-## Completed Acceptance Criteria
-
-- `/v1/jobs/{id}/cancel` reliably removes queued payload from Redis with the actual queued shape.
-- `/v1/outputs` and `/v1/jobs/{id}/outputs` consistently use `Output` model fields.
-- Worker completions persist final `Job` status and durable `Output` rows.
-- `apps/api` migration chain has a committed revision that aligns `outputs` schema.
-- Callback endpoint accepts worker completion payload and authenticates via shared token.
-- Active worker cancellation interrupts running handler work and reports durable `cancelled`.
-- Worker completion callback failures retry and dead-letter exhausted payloads.
-- Output persistence has DB-level `(job_id, storage_uri)` idempotency.
-- Worker/Studio output handling covers image, video, audio, model, and generic file descriptors.
-- CI includes regression for at least:
-  - synthesis template fallback logic
-  - queue cancel payload
-  - callback persistence idempotency
-  - modern output response fields
-
-## 2026-05-17 Remediation Wrap-Up
-
-### Audit Summary
-
-- **Purpose:** Operate a production-grade ComfyUI execution platform for composable creative content generation across social, video, and 3D workflows.
-- **Mission:** Keep generation execution reliable end-to-end (submit → queue → worker → callback → persistent state → UI visibility) with deterministic behavior and clear operator controls.
-- **Vision:** Reach a stable, observable, auditable system where jobs are contractually deterministic, failure modes are explicit, and production health gates are enforced before declaring feature completion.
-- **Current status:** Runtime contract and security hardening are complete for the local test matrix and deployment wiring. The platform is functionally credible but not fully “full stability” pending production acceptance gates.
-
-### Remediation closure (items 4 and 5)
-
-- **4) Observability and operational alerting:** implemented and wired into deployable manifests.
-  - `infrastructure/k8s/observability.yaml` now ships `ServiceMonitor`, `PrometheusRule`, and Grafana dashboard assets.
-  - `ceq-api` includes runtime gauge registration and startup readiness gating in `/v1/operations/status`.
-  - Remaining: confirm alert routing and on-call ownership in Enclii tenant.
-
-- **5) Browser auth/session hardening:** implemented with a server-attached API boundary for REST workflows.
-  - Studio now proxies core API calls through `/api/proxy` using CEQ session state from `GET /api/auth/session`.
-  - Authorization now comes from server-side session bootstrap where possible; legacy token path is retained as compatibility fallback only.
-  - Remaining: complete production browser login verification after Janua client registration and finalize socket auth fixture migration.
-
-### What is explicitly still blocking “full stability”
-
-1. **Janua OAuth production readiness** (`invalid_client` still observed against the documented CEQ client).
-2. **Production runtime secret enforcement** (`JOB_COMPLETION_CALLBACK_TOKEN`, `JOB_WEBHOOK_SECRET`).
-3. **Authenticated production runbook proof** (end-to-end GPU smoke, cancellation smoke, multi-modal smoke with real worker pods).
-4. **Network-policy/ingress validation** of worker/API data paths under production load.
-
-### Full stability acceptance (next checkpoint)
-
-- Public smoke remains green for `CEQ_PUBLIC_ONLY` unauthenticated checks.
-- Janua Studio login works with real credentials and returns CEQ session state.
-- `GET /v1/operations/status` reports callback + webhook readiness in green.
-- One authenticated GPU smoke in prod completes and surfaces outputs in gallery.
-- Cancellation and multi-modal smokes are completed with no late status regression.
-- Alerts are firing to the intended owner channels with runbooks linked.
-
-### Roadmap update status
-
-- The roadmap sections above were updated to reflect the current checkpoint:
-  - Closed: legacy output contract bugs, callback durability gaps, image tracing deprecation warning, CI modernization, worker digest pinning, observability primitives, browser proxy auth hardening.
-  - Open: production authentication unblock, secret provisioning, and production-grade end-to-end acceptance proof.
-
-### 2026-05-18 production digest guardrail
+### 2026-05-18 studio digest guardrail
 
 - Deploy digest `sha256:1a03d7ef5fcc43e9914b970800145ddf38326063dfab5a8eb4a891c5273dbe12`
   for `ceq-studio` crashed immediately with `Cannot find module '/app/server.js'`.
-- Production is pinned back to the last observed healthy Studio digest,
-  `sha256:20bc96f43554f4abba8c23d12b1bc2e8310f4191e307ddcacfdd5a72dbb6a017`,
-  until the Studio Docker output path is fixed and verified in a replacement
-  image.
+- Production pinned back to healthy digest
+  `sha256:20bc96f43554f4abba8c23d12b1bc2e8310f4191e307ddcacfdd5a72dbb6a017`.
+- **Follow-up (Phase 4):** Add Studio Docker container smoke to CI/deploy
+  workflow before digest commits.
+
+### Completed acceptance criteria (local / code-level)
+
+These are met in the repo and local test matrix. Production proof is tracked in
+[Phase 2](#phase-2--production-gpu-runtime-proof-p0).
+
+- `/v1/jobs/{id}/cancel` removes queued payloads (current + legacy shapes)
+- `/v1/outputs` and `/v1/jobs/{id}/outputs` use modern `Output` model fields
+- Worker completions persist final `Job` status and durable `Output` rows
+- Callback endpoint authenticates via shared token; idempotent on replay
+- Active cancellation interrupts ComfyUI and reports durable `cancelled`
+- Callback failures retry; exhausted payloads dead-lettered
+- DB-level `(job_id, storage_uri)` idempotency via migration
+- Worker/Studio handle image, video, audio, model, generic file descriptors
+- User-provided job webhooks implemented locally (`webhook_url` + HMAC);
+  production needs `JOB_WEBHOOK_SECRET` provisioned
+- CI regression covers synthesis fallback, queue cancel, callback idempotency,
+  modern output fields
+
+### Service scope ownership (reference)
+
+| Scope | Paths | Status |
+|-------|-------|--------|
+| api-core | `apps/api/src/ceq_api` | Runtime contracts closed; prod smoke open |
+| worker | `apps/workers/src/ceq_worker` | Callback + cancel closed; prod GPU smoke open |
+| data | `apps/api/src/ceq_api/alembic/` | Migration committed; prod apply verify open |
+| infra | `infrastructure/k8s/` | Wired; secrets + alert routing open |
+| frontend | `apps/studio/src` | Auth gate + proxy closed; WS + E2E open |
+
+### Files changed during stabilization (reference)
+
+- **apps/api** — `db.session`, `routers.jobs`, `routers.synthesis`,
+  `routers.outputs`, `routers.operations`, `config`, alembic migrations
+- **apps/workers** — `handler.py`, `queue.py`, `storage.py`, `config.py`,
+  `comfyui.py`, `orchestrator.py`
+- **infrastructure/k8s** — deployments, `external-secret.yaml`,
+  `network-policies.yaml`, `observability.yaml`
+- **apps/studio** — `middleware.ts`, auth routes, `/api/proxy`, gallery components
+- **scripts** — `production-smoke.sh`, `check-networkpolicy-ports.py`
+- **docs** — this file, `PRODUCTION_DEPLOYMENT.md`, `API.md`
+
+---
+
+*Forward work lives in [Implementation phases](#implementation-phases). Do not
+add new stability work without assigning it to a phase and acceptance gate.*

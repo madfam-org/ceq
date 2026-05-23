@@ -158,6 +158,9 @@ R2_BUCKET=ceq-assets
 | `pnpm install` | Install all dependencies |
 | `pnpm build` | Build all packages |
 | `pnpm typecheck` | Run TypeScript checks |
+| `pnpm --filter @ceq/studio test` | Studio unit tests (Vitest) |
+| `pnpm --filter @ceq/studio test:e2e` | Studio auth E2E (Playwright + mocked Janua) |
+| `bash scripts/studio-docker-smoke.sh <image>` | Verify Studio Docker entrypoint + HTTP |
 | `pnpm --filter @ceq/studio dev` | Run studio locally |
 | `pnpm --filter @ceq/studio build` | Build studio for production |
 
@@ -245,6 +248,7 @@ bridge for the current direct API client.
 |----------|-------------|
 | [docs/PRD.md](./docs/PRD.md) | Product requirements & manifesto |
 | [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md) | Production deployment guide |
+| [docs/JANUA_OPERATOR.md](./docs/JANUA_OPERATOR.md) | Janua OAuth registration & login unblock checklist |
 | [docs/CEQ_STABILITY_ROADMAP.md](./docs/CEQ_STABILITY_ROADMAP.md) | Stabilization record and remaining roadmap |
 | [apps/api/README.md](./apps/api/README.md) | API documentation (incl. `/v1/render/*` contract) |
 | [apps/workers/README.md](./apps/workers/README.md) | GPU worker documentation |

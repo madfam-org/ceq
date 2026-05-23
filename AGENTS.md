@@ -174,6 +174,15 @@ pnpm build
 
 # Type check
 pnpm typecheck
+
+# Studio unit tests
+pnpm --filter @ceq/studio test
+
+# Studio auth E2E (mock Janua on 127.0.0.1:5999; requires Playwright Chromium)
+cd apps/studio && pnpm exec playwright install chromium && pnpm test:e2e
+
+# Studio Docker smoke (after building the studio image)
+bash scripts/studio-docker-smoke.sh ceq-studio:local
 ```
 
 ## Authentication Configuration

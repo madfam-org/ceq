@@ -16,7 +16,11 @@ const APP_HOSTNAMES = new Set([
 ]);
 
 export function isAppHost(host: string): boolean {
-  return APP_HOSTNAMES.has(host) || host.startsWith("app.");
+  return (
+    APP_HOSTNAMES.has(host) ||
+    host.startsWith("app.") ||
+    host.startsWith("127.0.0.1")
+  );
 }
 
 export function isPublicAppPath(pathname: string): boolean {

@@ -46,6 +46,7 @@ export function UserMenu() {
           <Button
             variant="ghost"
             size="icon"
+            aria-label="Sign in"
             onClick={() => login()}
             className="h-10 w-10 mx-auto text-muted-foreground hover:text-foreground"
           >
@@ -75,6 +76,7 @@ export function UserMenu() {
             <Button
               variant="ghost"
               size="icon"
+              aria-label="Account"
               className="h-10 w-10 mx-auto rounded-full p-0"
             >
               <Avatar className="h-8 w-8">

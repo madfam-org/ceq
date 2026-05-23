@@ -19,19 +19,19 @@ embedded below.
 
 ## 1. What this repo is
 
-CEQ is MADFAM's internal content generation platform: a streamlined hacker-centric ComfyUI wrapper. Ships `/v1/render/*` deterministic R2-cached render endpoints + `@ceq/sdk` as the asset pillar consumed across the ecosystem. First consumer: Rondelio's stratum-tcg. Audio/3D rendering stubs exist but return 501. Domain: `ceq.lol`.
+CEQ is MADFAM's internal content generation platform: a streamlined hacker-centric ComfyUI wrapper. Ships `/v1/render/*` deterministic R2-cached render endpoints + `@ceq/sdk` as the asset pillar consumed across the ecosystem. First consumer: Rondelio's stratum-tcg. Render families live today: card/thumbnail (Pillow), audio (WAV), 3D (GLB). Production render calls require Janua auth. Domain: `ceq.lol`.
 
 **Pillar**: Brand / Asset pillar
 **Type**: service
-**Status**: production
+**Status**: production (infra-stable; user login blocked pending Janua client registration — see `docs/CEQ_STABILITY_ROADMAP.md`)
 
 ### Deployed services
 
 | Service | Public domain | Container port |
 |---|---|---|
-| `ceq-studio` | ceq.lol | 3000 |
-| `ceq-api` | api.ceq.lol | 8000 |
-| `ceq-workers` | (ComfyUI worker — GPU node) | 8188 |
+| `ceq-studio` | ceq.lol, app.ceq.lol | 5801 |
+| `ceq-api` | api.ceq.lol, ws.ceq.lol | 5800 |
+| `ceq-workers` | (ComfyUI worker — GPU node) | 5810–5819 |
 
 **Kubernetes namespace**: `ceq`
 **Cluster**: bare-metal k3s on Hetzner (see topology section below).

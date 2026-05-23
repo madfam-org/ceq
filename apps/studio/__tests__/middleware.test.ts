@@ -36,6 +36,8 @@ describe("Studio middleware helpers", () => {
     expect(isAppHost("app.ceq.lol")).toBe(true);
     expect(isAppHost("app.preview.ceq.lol")).toBe(true);
     expect(isAppHost("localhost")).toBe(true);
+    expect(isAppHost("127.0.0.1")).toBe(true);
+    expect(isAppHost("127.0.0.1:5801")).toBe(true);
     expect(isAppHost("ceq.lol")).toBe(false);
   });
 

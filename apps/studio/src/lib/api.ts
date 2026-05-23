@@ -4,7 +4,7 @@
  * Type-safe API client for communicating with ceq-api.
  */
 
-import { getToken } from "@/lib/auth";
+import { getSessionAuth, getToken, setAuth } from "@/lib/auth";
 
 const API_BASE = "/api/proxy";
 const WS_BASE =
@@ -226,13 +226,29 @@ export async function getGalleryOutputs(params?: {
 
 // WebSocket for real-time job updates
 
-export function subscribeToJob(
+/** Resolve a Janua bearer token for job stream auth via session cookies. */
+export async function resolveStreamAuthToken(): Promise<string | null> {
+  const cached = getToken();
+  if (cached) {
+    return cached;
+  }
+
+  const session = await getSessionAuth();
+  if (!session?.accessToken) {
+    return null;
+  }
+
+  setAuth(session.accessToken, null, session.user);
+  return session.accessToken;
+}
+
+export async function subscribeToJob(
   jobId: string,
   onMessage: (data: unknown) => void,
   onError?: (error: Event) => void,
   onClose?: () => void
-): WebSocket {
-  const token = getToken();
+): Promise<WebSocket> {
+  const token = await resolveStreamAuthToken();
   const query = new URLSearchParams();
   if (token) {
     query.set("token", token);

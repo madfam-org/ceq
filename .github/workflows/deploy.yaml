@@ -58,10 +58,54 @@ env:
 
 jobs:
   # ===========================================================================
+  # Wait for CI on the same commit before building deploy images.
+  # ===========================================================================
+  verify-ci:
+    name: Verify CI passed
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Wait for CEQ CI workflow
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const maxAttempts = 90;
+            const sleepMs = 20000;
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+              const { data } = await github.rest.actions.listWorkflowRunsForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: "ci.yaml",
+                head_sha: context.sha,
+                per_page: 5,
+              });
+              const runs = data.workflow_runs || [];
+              const ciRun = runs.find((run) => run.name === "CEQ CI") || runs[0];
+              if (!ciRun) {
+                core.info(`CI run not found yet (attempt ${attempt}/${maxAttempts})`);
+                await new Promise((resolve) => setTimeout(resolve, sleepMs));
+                continue;
+              }
+              if (ciRun.status !== "completed") {
+                core.info(`CI status=${ciRun.status} (attempt ${attempt}/${maxAttempts})`);
+                await new Promise((resolve) => setTimeout(resolve, sleepMs));
+                continue;
+              }
+              if (ciRun.conclusion !== "success") {
+                core.setFailed(`CEQ CI finished with conclusion=${ciRun.conclusion}`);
+                return;
+              }
+              core.info(`CEQ CI succeeded for ${context.sha}`);
+              return;
+            }
+            core.setFailed("Timed out waiting for CEQ CI to succeed");
+
+  # ===========================================================================
   # Build API Image
   # ===========================================================================
   build-api:
     name: Build API
+    needs: [verify-ci]
     runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-latest' }}
     permissions:
       contents: read
@@ -124,6 +168,7 @@ jobs:
   # ===========================================================================
   build-studio:
     name: Build Studio
+    needs: [verify-ci]
     runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-latest' }}
     permissions:
       contents: read
@@ -131,12 +176,7 @@ jobs:
       id-token: write
 
     outputs:
-      # docker/build-push-action's `outputs.digest` IS the manifest-list
-      # digest for multi-arch and the image manifest digest for single-arch
-      # — same value cosign signs above. Reusing it avoids the broken
-      # imagetools-inspect retry that was failing on every CEQ Deploy run
-      # since acecfd5 (75s × 5 retries, then exit 1).
-      digest: ${{ steps.build.outputs.digest }}
+      digest: ${{ steps.push.outputs.digest }}
 
     steps:
       - name: Checkout
@@ -164,9 +204,29 @@ jobs:
             type=sha,prefix=
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
-      - name: Build and push
+      - name: Build Studio image for smoke
         uses: docker/build-push-action@v5
         id: build
+        with:
+          context: .
+          file: ./apps/studio/Dockerfile
+          push: false
+          load: true
+          tags: ceq-studio:deploy-smoke
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.CEQ_PUBLIC_API_URL || 'https://api.ceq.lol' }}
+            NEXT_PUBLIC_WS_URL=${{ vars.CEQ_PUBLIC_WS_URL || 'wss://ws.ceq.lol' }}
+            NEXT_PUBLIC_JANUA_URL=${{ vars.CEQ_PUBLIC_JANUA_URL || 'https://auth.madfam.io' }}
+            NEXT_PUBLIC_JANUA_CLIENT_ID=${{ vars.CEQ_PUBLIC_JANUA_CLIENT_ID || 'jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test Studio container
+        run: bash scripts/studio-docker-smoke.sh ceq-studio:deploy-smoke
+
+      - name: Push Studio image
+        uses: docker/build-push-action@v5
+        id: push
         with:
           context: .
           file: ./apps/studio/Dockerfile
@@ -185,13 +245,14 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
-          cosign sign --yes ${{ env.IMAGE_NAMESPACE }}/ceq-studio@${{ steps.build.outputs.digest }}
+          cosign sign --yes ${{ env.IMAGE_NAMESPACE }}/ceq-studio@${{ steps.push.outputs.digest }}
 
   # ===========================================================================
   # Build Worker Image
   # ===========================================================================
   build-worker:
     name: Build Worker
+    needs: [verify-ci]
     runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-latest' }}
     permissions:
       contents: read
