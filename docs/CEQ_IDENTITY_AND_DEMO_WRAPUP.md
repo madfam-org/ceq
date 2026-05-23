@@ -114,15 +114,19 @@ demo declaration.
 
 Execute in order. Full prompts: [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md).
 
-| # | Agent | Action | Blocker for |
-|---|-------|--------|-------------|
-| 1 | Enclii/Vault | Write `JANUA_CLIENT_SECRET` to Vault `secret/ceq` | Token exchange |
-| 2 | Platform/K8s | ExternalSecret sync + `ceq-studio` rollout | Pod env |
-| 3 | CEQ acceptance | Browser login + `production-smoke.sh` with JWT | Tier B demo |
-| 4 | Janua (P1) | Fix `GET /logout` 404 | Sign-out redirect |
-| 5 | CEQ deploy | Monitor GitOps digest deploy | Latest images |
-| 6 | Phase 1 secrets | `JOB_COMPLETION_CALLBACK_TOKEN`, webhook secret | GPU smoke |
-| 7 | GitHub org | Branch protection on `main` | CI governance |
+| # | Agent | Action | Blocker for | 2026-05-23 status |
+|---|-------|--------|-------------|-------------------|
+| 1 | Enclii/Vault | Write `JANUA_CLIENT_SECRET` to Vault `secret/ceq` | Token exchange | ❌ **Not synced** — key absent from `ceq-secrets` |
+| 2 | Platform/K8s | ExternalSecret sync + `ceq-studio` rollout | Pod env | ⏸ After Agent 1 |
+| 3 | CEQ acceptance | Browser login + `production-smoke.sh` with JWT | Tier B demo | ⏸ Public smoke only |
+| 4 | Janua (P1) | Deploy `GET /logout` fix | Sign-out redirect | 🔧 Code in `janua`; prod 404 |
+| 5 | CEQ deploy | Monitor GitOps digest deploy | Latest images | Ongoing |
+| 6 | Phase 1 secrets | `JOB_COMPLETION_CALLBACK_TOKEN`, webhook secret | GPU smoke | Open |
+| 7 | GitHub org | Branch protection on `main` | CI governance | Open |
+
+**Coordinator run (2026-05-23):** Confirmed GitHub repo secret exists; Vault property not
+materialized in cluster; `CEQ_PUBLIC_ONLY=true` production smoke green; Janua authorize 302.
+See [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md) § Coordinator session outcomes.
 
 ### Quick operator commands
 

@@ -2,9 +2,9 @@
 
 > **Last updated:** 2026-05-23  
 > **Goal:** Complete CEQ Tier B demo identity gate — real login on `app.ceq.lol`  
-> **CEQ repo state:** `main` @ `aa4288b` (CI green; deploy in progress on worker build)  
+> **CEQ repo state:** `main` @ `8f141fb`+ (CI green; K8s wiring on main)  
 > **Janua P0:** ✅ OAuth client registered (`jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`, authorize 302)  
-> **CEQ engineering P0:** ✅ K8s manifests wired; ⏳ Vault sync + rollout + browser proof
+> **CEQ engineering P0:** ✅ K8s manifests wired; ❌ Vault `JANUA_CLIENT_SECRET` **not in Vault** (2026-05-23 coordinator run)
 
 ---
 
@@ -298,10 +298,33 @@ Confirm ArgoCD ceq-services Healthy after digest commit lands.
 
 ---
 
+## Coordinator session outcomes (2026-05-23)
+
+Agents 1→2→3 dispatched per this doc. Agent 4 (Janua logout) run in parallel.
+
+| Agent | Result | Evidence (redacted) |
+|-------|--------|---------------------|
+| **1 Vault** | ❌ **Blocked** — automation cannot read GitHub secret value | `ceq-secrets` has **no** `JANUA_CLIENT_SECRET` key; 10 other keys present |
+| **2 K8s** | ⏸ Waiting on Agent 1 | ExternalSecret `SecretSynced`; pod env empty until Vault |
+| **3 Acceptance** | ⏸ Partial | `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` **PASS**; session **401**; browser login blocked |
+| **4 Janua logout** | 🔧 Fix in `janua` repo | `GET /logout` + OIDC `end_session_endpoint`; **prod still 404** until Janua deploy |
+
+**Operator unblock (Agent 1):** run `scripts/sync-janua-client-secret-to-vault.sh` with Vault auth
+(paste secret from GitHub Actions settings — never commit). Verify:
+`vault kv get -format=json secret/ceq | jq 'has("data.data.JANUA_CLIENT_SECRET")'` → `true`.
+
+**Automation limits:** `gh` cannot read secret values; local `vault` CLI absent; `ssh.madfam.io`
+timed out; Enclii `ops secrets vault` is inspect-only. CEQ deploy workflow intentionally has
+no kube-apiserver access from ARC runners (NetworkPolicy).
+
+Consolidated wrap-up: [`CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md).
+
+---
+
 ## Enclii adapter gaps to record
 
 | Gap | Break-glass used | Follow-up |
 |-----|------------------|-----------|
-| GitHub → Vault sync for CEQ Janua secret | Vault CLI / UI | Enclii secret sync adapter |
-| ArgoCD / rollout verification | kubectl via ssh.madfam.io | Enclii deploy status API |
-| Janua logout route missing | Janua admin / deploy | Janua OIDC end-session endpoint |
+| GitHub → Vault sync for CEQ Janua secret | Vault CLI / `sync-janua-client-secret-to-vault.sh` | Enclii secret sync adapter |
+| ArgoCD / rollout verification | kubectl (in-cluster) | Enclii deploy status API |
+| Janua logout route missing | Janua PR + deploy (`GET /logout` implemented locally) | OIDC end-session on `auth.madfam.io` |
