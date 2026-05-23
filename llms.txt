@@ -11,6 +11,7 @@ Compact LLM context index for this repository.
 - `docs/GA_DEMO_DEFINITION.md` — capped GA demo definition, readiness scorecard, Tier A/B/C.
 - `docs/JANUA_OPERATOR.md` — Janua OAuth registration checklist (Phase 0 operator gate).
 - `docs/JANUA_AGENT_HANDOFF.md` — complete cross-repo handoff for Janua-side agents.
+- `docs/PLATFORM_AGENT_HANDOFFS.md` — orchestrator + Vault/K8s/acceptance agent prompts.
 - `llms-full.txt` — full context map and durable operating contract.
 
 ## Testing and CI gates

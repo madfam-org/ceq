@@ -3,6 +3,7 @@
 > **Purpose:** Unblock Phase 0 identity for CEQ full stability.  
 > **Audience:** Janua operators, platform admins, CEQ on-call.  
 > **Janua-side agent:** See [`JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md) for the complete cross-repo handoff.  
+> **Platform agents (Vault/K8s/acceptance):** [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md)  
 > **Demo context:** [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md)  
 > **Enclii-first:** Register clients and rotate secrets via Enclii/Janua adapters when available. Use Janua admin only as documented break-glass and record adapter gaps.
 
@@ -212,7 +213,7 @@ endpoint. Track as P1 — not a blocker for capped GA demo login.
 ## Related docs
 
 - [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md) — capped GA demo scope, Tier B checklist, timeline
-- [`JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md) — complete handoff for Janua-side agents
+- [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md) — orchestrator + platform agent prompts
 - `docs/CEQ_STABILITY_ROADMAP.md` — Phase 0 acceptance + full stability gates
 - `docs/PRODUCTION_DEPLOYMENT.md` — secrets, deploy checklist, smoke runner
 - `apps/studio/e2e/auth.spec.ts` — CI auth regression (mocked Janua)
