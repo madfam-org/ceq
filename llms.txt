@@ -8,7 +8,9 @@ Compact LLM context index for this repository.
 - `README.md` — human/product overview when present.
 - `ECOSYSTEM.md` — MADFAM ecosystem and Enclii deployment context when present.
 - `docs/CEQ_STABILITY_ROADMAP.md` — stabilization phases, smoke matrix, remaining gates.
+- `docs/GA_DEMO_DEFINITION.md` — capped GA demo definition, readiness scorecard, Tier A/B/C.
 - `docs/JANUA_OPERATOR.md` — Janua OAuth registration checklist (Phase 0 operator gate).
+- `docs/JANUA_AGENT_HANDOFF.md` — complete cross-repo handoff for Janua-side agents.
 - `llms-full.txt` — full context map and durable operating contract.
 
 ## Testing and CI gates

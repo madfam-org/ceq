@@ -38,7 +38,9 @@ gap or incident link.
 - `README.md`
 - `ECOSYSTEM.md`
 - `docs/CEQ_STABILITY_ROADMAP.md`
+- `docs/GA_DEMO_DEFINITION.md`
 - `docs/JANUA_OPERATOR.md`
+- `docs/JANUA_AGENT_HANDOFF.md`
 - `docs/PRODUCTION_DEPLOYMENT.md`
 - `docs/`
 - `.github/workflows/`
@@ -53,6 +55,7 @@ gap or incident link.
 | Studio auth E2E | `pnpm --filter @ceq/studio test:e2e` — `apps/studio/e2e/` + `mock-janua-server.mjs` |
 | Studio Docker smoke | `scripts/studio-docker-smoke.sh <image>` — guards standalone entrypoint path |
 | Public prod smoke | `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` |
+| Capped GA demo gates | `docs/GA_DEMO_DEFINITION.md` — Tier B checklist + smoke flags |
 | CI gates | `.github/workflows/ci.yaml` — includes `Studio · Docker smoke`, `Studio · Playwright auth` |
 
 Playwright runs Studio via `next dev` on `127.0.0.1:5801`; middleware treats `127.0.0.1` as an app host (same as `localhost`).

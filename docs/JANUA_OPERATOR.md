@@ -2,6 +2,8 @@
 
 > **Purpose:** Unblock Phase 0 identity for CEQ full stability.  
 > **Audience:** Janua operators, platform admins, CEQ on-call.  
+> **Janua-side agent:** See [`JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md) for the complete cross-repo handoff.  
+> **Demo context:** [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md)  
 > **Enclii-first:** Register clients and rotate secrets via Enclii/Janua adapters when available. Use Janua admin only as documented break-glass and record adapter gaps.
 
 ---
@@ -77,7 +79,17 @@ Studio uses these for browser login, token exchange (`/api/auth/token`), refresh
 - [ ] Grant types include `authorization_code` and `refresh_token`
 - [ ] Client secret generated and stored in production secrets (not committed to git)
 
-### 2. Verify Janua accepts the client (no browser required)
+### 2. Wire Studio runtime secret (required after Janua delivers)
+
+Studio token exchange requires `JANUA_CLIENT_SECRET` at **runtime**. Confirm
+`infrastructure/k8s/studio-deployment.yaml` mounts it from `ceq-secrets`
+(see [`JANUA_AGENT_HANDOFF.md` §8.2](./JANUA_AGENT_HANDOFF.md)).
+
+- [ ] `JANUA_CLIENT_SECRET` in vault / `ceq-secrets`
+- [ ] Studio Deployment env or `envFrom` references the secret
+- [ ] ArgoCD rolled Studio pods after secret mount
+
+### 3. Verify Janua accepts the client (no browser required)
 
 ```bash
 # Should NOT return invalid_client for authorize (expect 302/200, not OAuth error page)
@@ -87,7 +99,7 @@ curl -sS -o /dev/null -w "authorize: %{http_code}\n" \
 
 Token exchange requires a real authorization code — use browser acceptance for full proof.
 
-### 3. Browser acceptance (production)
+### 4. Browser acceptance (production)
 
 - [ ] Visit `https://app.ceq.lol/` (no cookies) → redirects to `/login?returnTo=%2F`
 - [ ] Click through to Janua — **no** `invalid_client` error
@@ -97,7 +109,7 @@ Token exchange requires a real authorization code — use browser acceptance for
 - [ ] Studio loads workflows/queue via `/api/proxy` (requires live `api.ceq.lol` + Janua JWT)
 - [ ] Sign out clears CEQ cookies and redirects through Janua logout
 
-### 4. Post-login production smokes
+### 5. Post-login production smokes
 
 After Janua **and** runtime callback secrets are provisioned (see `docs/PRODUCTION_DEPLOYMENT.md`):
 
@@ -149,6 +161,8 @@ OAuth callback **must** use `app.ceq.lol`, not `ceq.lol`.
 
 ## Related docs
 
+- [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md) — capped GA demo scope, Tier B checklist, timeline
+- [`JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md) — complete handoff for Janua-side agents
 - `docs/CEQ_STABILITY_ROADMAP.md` — Phase 0 acceptance + full stability gates
 - `docs/PRODUCTION_DEPLOYMENT.md` — secrets, deploy checklist, smoke runner
 - `apps/studio/e2e/auth.spec.ts` — CI auth regression (mocked Janua)

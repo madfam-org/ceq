@@ -248,7 +248,9 @@ bridge for the current direct API client.
 |----------|-------------|
 | [docs/PRD.md](./docs/PRD.md) | Product requirements & manifesto |
 | [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md) | Production deployment guide |
+| [docs/GA_DEMO_DEFINITION.md](./docs/GA_DEMO_DEFINITION.md) | Capped GA demo scope, readiness scorecard, acceptance |
 | [docs/JANUA_OPERATOR.md](./docs/JANUA_OPERATOR.md) | Janua OAuth registration & login unblock checklist |
+| [docs/JANUA_AGENT_HANDOFF.md](./docs/JANUA_AGENT_HANDOFF.md) | Complete handoff for Janua-side agents |
 | [docs/CEQ_STABILITY_ROADMAP.md](./docs/CEQ_STABILITY_ROADMAP.md) | Stabilization record and remaining roadmap |
 | [apps/api/README.md](./apps/api/README.md) | API documentation (incl. `/v1/render/*` contract) |
 | [apps/workers/README.md](./apps/workers/README.md) | GPU worker documentation |

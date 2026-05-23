@@ -66,7 +66,9 @@ vim infra/terraform/terraform.tfvars
 
 ### 3. Register OAuth Client in Janua (Action Required)
 
-> **Operator runbook:** See [`docs/JANUA_OPERATOR.md`](./JANUA_OPERATOR.md) for the full checklist, verification commands, and acceptance gates.
+> **Operator runbook:** See [`docs/JANUA_OPERATOR.md`](./JANUA_OPERATOR.md) for the full checklist, verification commands, and acceptance gates.  
+> **Janua agent handoff:** [`docs/JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md)  
+> **Capped GA demo:** [`docs/GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md)
 
 The Studio uses Janua's OIDC discovery endpoints:
 
@@ -492,7 +494,9 @@ stringData:
 | CEQ Agent Instructions | [/CLAUDE.md](../CLAUDE.md) |
 | CEQ PRD | [/docs/PRD.md](./PRD.md) |
 | CEQ Stability Roadmap | [/docs/CEQ_STABILITY_ROADMAP.md](./CEQ_STABILITY_ROADMAP.md) |
+| Capped GA Demo Definition | [/docs/GA_DEMO_DEFINITION.md](./GA_DEMO_DEFINITION.md) |
 | Janua Operator Guide | [/docs/JANUA_OPERATOR.md](./JANUA_OPERATOR.md) |
+| Janua Agent Handoff | [/docs/JANUA_AGENT_HANDOFF.md](./JANUA_AGENT_HANDOFF.md) |
 | Enclii Deployment | [/path/to/enclii/CLAUDE.md](../../enclii/CLAUDE.md) |
 | Port Allocation | [solarpunk-foundry/PORT_ALLOCATION.md](https://github.com/madfam-io/solarpunk-foundry/blob/main/docs/PORT_ALLOCATION.md) |
 

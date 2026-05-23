@@ -408,6 +408,10 @@ kubectl logs -n ceq deployment/cloudflared
 - [README.md](./README.md) - Project overview and quick start
 - [docs/PRD.md](./docs/PRD.md) - Full product requirements
 - [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md) - Deployment checklist
+- [docs/GA_DEMO_DEFINITION.md](./docs/GA_DEMO_DEFINITION.md) - Capped GA demo scope and acceptance
+- [docs/CEQ_STABILITY_ROADMAP.md](./docs/CEQ_STABILITY_ROADMAP.md) - Stabilization phases and smoke matrix
+- [docs/JANUA_OPERATOR.md](./docs/JANUA_OPERATOR.md) - CEQ-side Janua operator checklist
+- [docs/JANUA_AGENT_HANDOFF.md](./docs/JANUA_AGENT_HANDOFF.md) - Janua-side agent handoff
 - [Enclii CLAUDE.md](../enclii/CLAUDE.md) - Platform infrastructure
 
 ## Known Issues — Audit 2026-04-23

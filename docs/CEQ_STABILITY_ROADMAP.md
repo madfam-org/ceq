@@ -1,7 +1,9 @@
 # CEQ Stability Roadmap and Remediation Plan
 
-> **Last updated:** 2026-05-22  
-> **Status:** Implementation in progress — Phase 4 engineering gates landing; P0 operator actions open  
+> **Last updated:** 2026-05-23  
+> **Status:** Implementation in progress — Phase 4 engineering gates landed; P0 operator actions open  
+> **Capped GA demo:** [`docs/GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md)  
+> **Janua handoff:** [`docs/JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md)  
 > **Canonical smoke runner:** `scripts/production-smoke.sh`  
 > **Studio Docker smoke:** `scripts/studio-docker-smoke.sh`  
 > **Production ops:** Enclii-first (web, API, CLI). Raw `kubectl`/SSH is break-glass only.
@@ -73,9 +75,11 @@ latent chaos → shipped content.
 
 ### Verdict
 
-**Infra-stable, user-incomplete.** The public edge and API are live; runtime
-contracts are closed in the local test matrix; **full stability is not declared**
-because production acceptance gates remain open.
+**Infra-stable, user-incomplete (~65% to capped GA demo).** The public edge and
+API are live; runtime contracts are closed in the local test matrix; **full
+stability is not declared** because production acceptance gates remain open.
+See [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md) for demo tiers and
+acceptance checklists.
 
 ### Live production evidence
 
@@ -209,6 +213,7 @@ client and a real browser session reaches the Studio shell.
 **Owner:** Janua operator + `apps/studio`  
 **Duration:** ~1–2 days  
 **Operator runbook:** [`docs/JANUA_OPERATOR.md`](./JANUA_OPERATOR.md)  
+**Janua agent handoff:** [`docs/JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md)  
 **Enclii-first:** Register client via Janua admin or Enclii secrets adapter.
 Record adapter gap if raw Janua admin is used.
 
