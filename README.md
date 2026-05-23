@@ -248,6 +248,7 @@ bridge for the current direct API client.
 |----------|-------------|
 | [docs/PRD.md](./docs/PRD.md) | Product requirements & manifesto |
 | [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md) | Production deployment guide |
+| [docs/CEQ_IDENTITY_AND_DEMO_WRAPUP.md](./docs/CEQ_IDENTITY_AND_DEMO_WRAPUP.md) | **Start here** — session wrap-up, doc index, operator gates |
 | [docs/GA_DEMO_DEFINITION.md](./docs/GA_DEMO_DEFINITION.md) | Capped GA demo scope, readiness scorecard, acceptance |
 | [docs/JANUA_OPERATOR.md](./docs/JANUA_OPERATOR.md) | Janua OAuth registration & login unblock checklist |
 | [docs/JANUA_AGENT_HANDOFF.md](./docs/JANUA_AGENT_HANDOFF.md) | Complete handoff for Janua-side agents |

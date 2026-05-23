@@ -2,7 +2,7 @@
 
 > **Last updated:** 2026-05-23  
 > **Audience:** Product, engineering, operators, demo presenters  
-> **Related:** [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md), [`JANUA_OPERATOR.md`](./JANUA_OPERATOR.md), [`JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md)
+> **Related:** [`CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md), [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md), [`JANUA_OPERATOR.md`](./JANUA_OPERATOR.md), [`JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md), [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md)
 
 ---
 
@@ -271,7 +271,7 @@ Playwright uses mocked Janua; it guards regressions but does not replace live
 Janua registration.
 
 **What’s the fastest unblock?**  
-Complete [`JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md) and CEQ secret mount.
+Dispatch [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md) — Vault sync (Agent 1) then K8s rollout (Agent 2).
 
 ---
 

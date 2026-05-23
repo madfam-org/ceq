@@ -490,6 +490,7 @@ stringData:
 | CEQ README | [/README.md](../README.md) |
 | CEQ Agent Instructions | [/CLAUDE.md](../CLAUDE.md) |
 | CEQ PRD | [/docs/PRD.md](./PRD.md) |
+| CEQ Identity & Demo Wrap-Up | [/docs/CEQ_IDENTITY_AND_DEMO_WRAPUP.md](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md) |
 | CEQ Stability Roadmap | [/docs/CEQ_STABILITY_ROADMAP.md](./CEQ_STABILITY_ROADMAP.md) |
 | Capped GA Demo Definition | [/docs/GA_DEMO_DEFINITION.md](./GA_DEMO_DEFINITION.md) |
 | Janua Operator Guide | [/docs/JANUA_OPERATOR.md](./JANUA_OPERATOR.md) |

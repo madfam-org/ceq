@@ -212,6 +212,7 @@ endpoint. Track as P1 — not a blocker for capped GA demo login.
 
 ## Related docs
 
+- [`CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md) — session wrap-up and doc index
 - [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md) — capped GA demo scope, Tier B checklist, timeline
 - [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md) — orchestrator + platform agent prompts
 - `docs/CEQ_STABILITY_ROADMAP.md` — Phase 0 acceptance + full stability gates

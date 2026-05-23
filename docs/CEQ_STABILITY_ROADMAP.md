@@ -1,9 +1,11 @@
 # CEQ Stability Roadmap and Remediation Plan
 
 > **Last updated:** 2026-05-23  
-> **Status:** Implementation in progress — Phase 4 engineering gates landed; P0 operator actions open  
+> **Status:** Engineering complete for identity wiring; P0 operator gates open (Vault sync + browser proof)  
+> **Session wrap-up:** [`docs/CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md)  
 > **Capped GA demo:** [`docs/GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md)  
 > **Janua handoff:** [`docs/JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md)  
+> **Platform agents:** [`docs/PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md)  
 > **Canonical smoke runner:** `scripts/production-smoke.sh`  
 > **Studio Docker smoke:** `scripts/studio-docker-smoke.sh`  
 > **Production ops:** Enclii-first (web, API, CLI). Raw `kubectl`/SSH is break-glass only.
@@ -158,6 +160,17 @@ Engineering work landed in-repo (operator-only P0 items remain open):
 | **Phase 4** | Studio Docker regression CI gate | ✅ Closed 2026-05-22 |
 | **Phase 4** | GitHub branch protection on `main` | ⏳ Org admin |
 | **Phase 4** | Playwright auth E2E in CI | ✅ 6/6 green locally (`mock-janua-server` + `next dev`; middleware allows `127.0.0.1`) |
+
+### 2026-05-23 session close
+
+| Item | Status |
+|------|--------|
+| Janua OAuth P0 | ✅ Registered; authorize 302 |
+| K8s `JANUA_CLIENT_SECRET` mount | ✅ Manifest on `main` |
+| CI (API/workers ruff + Studio gates) | ✅ Green |
+| Vault sync → Studio rollout | ⏳ Operator — Agent 1–2 in [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md) |
+| Browser login acceptance | ⏳ Operator — Agent 3 |
+| Session wrap-up doc | ✅ [`CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md) |
 
 ## Definition of done — full stability
 

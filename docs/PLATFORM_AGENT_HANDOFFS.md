@@ -293,6 +293,7 @@ Confirm ArgoCD ceq-services Healthy after digest commit lands.
 | [`JANUA_OPERATOR.md`](./JANUA_OPERATOR.md) | CEQ operator checklist |
 | [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md) | Tier B demo acceptance |
 | [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md) | Full stability program |
+| [`CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md) | Session wrap-up and doc index |
 | [`PRODUCTION_DEPLOYMENT.md`](./PRODUCTION_DEPLOYMENT.md) | Deploy + secrets |
 
 ---

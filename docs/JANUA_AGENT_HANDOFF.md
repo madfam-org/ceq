@@ -5,6 +5,8 @@
 > **To:** Janua agent / Janua operator / Enclii identity adapter owner  
 > **Priority:** P0 — blocks all authenticated CEQ value and capped GA demo  
 > **CEQ operator mirror:** [`JANUA_OPERATOR.md`](./JANUA_OPERATOR.md)  
+> **Platform agents:** [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md)  
+> **Session wrap-up:** [`CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md)  
 > **Demo context:** [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md)
 
 ---
@@ -443,6 +445,7 @@ If break-glass Janua admin was used:
 
 | Document | Role |
 |----------|------|
+| [`CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md) | Session wrap-up and doc index |
 | [`JANUA_OPERATOR.md`](./JANUA_OPERATOR.md) | CEQ operator checklist after Janua delivers |
 | [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md) | Capped GA demo scope and Tier B acceptance |
 | [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md) | Phase 0–7 program plan |
