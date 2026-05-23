@@ -78,7 +78,7 @@ Regenerate or repair these files with
 | app.ceq.lol (studio) | Live + auth-gated | No-cookie gate verified; Janua client registration/rotation required |
 | api.ceq.lol (api) | Live | 2 pods Running |
 | `/v1/render/*` pipeline | Shipped | Card renderer + R2 cache + @ceq/sdk (62fcfe9) |
-| Janua OAuth Client | Action required | `invalid_client` for `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`; register/rotate |
+| Janua OAuth Client | Registered 2026-05-23 | Sync `JANUA_CLIENT_SECRET` Vault → Studio; browser proof pending |
 | Cloudflare R2 Bucket | Live | `ceq-assets` — render cache under `render/{template}/{hash}.{ext}` |
 | Cloudflare Tunnel | Configured | Routes for ceq.lol, api.ceq.lol, ws.ceq.lol |
 
@@ -197,10 +197,10 @@ bash scripts/studio-docker-smoke.sh ceq-studio:local
 | **Scopes** | openid, profile, email |
 | **Redirect URIs** | `https://app.ceq.lol/auth/callback`, `http://localhost:5801/auth/callback` |
 
-Live Janua verification on 2026-05-14 returned
-`invalid_client: Unknown client_id` for the documented client ID. Register that
-client again or rotate CEQ to a new client ID/secret before declaring Studio
-login healthy.
+Live Janua verification on 2026-05-23: OAuth client `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`
+is registered (authorize 302). CEQ operators must sync `JANUA_CLIENT_SECRET`
+to Vault and roll Studio before declaring browser login healthy. See
+`docs/JANUA_OPERATOR.md`.
 
 ### Usage in Code
 
@@ -432,7 +432,7 @@ A multi-hour stabilization run on 2026-05-04 closed several ceq-side ArgoCD-sync
 - ~~**🟠 ImagePullBackOff on private dash-form image**~~ — Closed 2026-05-04 via ceq#26. Migration Job didn't carry `imagePullSecrets: [ghcr-credentials]` so the GHCR pull returned 401. Studio + API deployments already had this; migration Job inherited the same secret.
 - ~~**🟠 ceq.lol 502 after pods running**~~ — Closed 2026-05-04 via ceq#28. The `ceq` namespace had `default-deny-egress` + `default-deny-ingress` from the enclii onboarding bundle but no allow rules for cloudflared → ceq pods. Added 4 NPs: `allow-cloudflared-ingress` (ports 80, 5800, 5801, 8000), `allow-intra-namespace`, `allow-https-egress`, `allow-data-egress`. ceq.lol responded 200 within seconds.
 - ~~**🟠 ArgoCD ceq-services Degraded — Service ports + worker SC**~~ — Closed 2026-05-04 via ceq#29. Live cluster ran `port: 80 → targetPort: 5800/5801` (manually patched during the cloudflared work) but source declared `port: 5800/5801`. ArgoCD's client-side-apply migration choked on `spec.ports[0].name: Required value`. Source aligned with live shape (`name: http, port: 80, targetPort: 5800/5801, protocol: TCP`). ceq-worker had no securityContext at all → Kyverno `restrict-capabilities` rejected every apply. Added pod-level `runAsNonRoot:true, runAsUser:1001, fsGroup:1001, seccompProfile`, container-level `privileged:false, allowPrivilegeEscalation:false, capabilities.drop:[ALL]`, explicit `ports: []`, and uppercase `REDIS_URL` (matches the migration Job pattern).
-- **🟡 ceq OAuth client unregistered in Janua** — `app.ceq.lol` sign-in remains blocked because Janua returns `invalid_client: Unknown client_id` for `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk` (verified 2026-05-14). Studio code now sends users to Janua's current OIDC `/api/v1/oauth/*` endpoints and reserves `ceq.lol` for landing/demo traffic, but an operator still must re-register that client OR rotate to a new client_id/secret with `https://app.ceq.lol/auth/callback`.
+- **🟡 ceq Studio login — Vault sync pending** — Janua OAuth client registered 2026-05-23 (`jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`; authorize 302). `app.ceq.lol` browser login requires `JANUA_CLIENT_SECRET` in Vault → `ceq-secrets` → Studio deployment (manifest landed; ArgoCD rollout + acceptance pending). Janua `GET /logout` returns 404 (P1, non-blocking for login). See `docs/JANUA_OPERATOR.md`.
 - ~~**🔴 ceq.lol returning 502 cluster-wide for ~7 h**~~ — Closed 2026-05-04 ~08:00 UTC via ceq#31. The `kustomization.yaml` used legacy `commonLabels:` which propagated into `Service.spec.selector` AND `Deployment.spec.selector.matchLabels`, but pod template labels (carrying `app.kubernetes.io/name=ceq-studio` / `part-of=ceq`) overrode commonLabels at the pod level. Net: selector required 4 labels, pods only had 3 with conflicting values → endpoints empty → cloudflared got connection-refused → 502 across `ceq.lol` / `app.ceq.lol` / `api.ceq.lol` for ~7 hours after the prior session's apply triggered the mismatch. **Live mitigation**: kubectl patched the Service selectors to drop the 3 commonLabels keys (HTTP 200 returned within seconds). **Permanent fix**: switched to `labels: [{ includeSelectors: false, pairs: ... }]` so metadata labels still tag every resource for dashboards but selectors stay untouched. Pattern to avoid in other repos: any kustomization that mixes `commonLabels` with Deployment templates that already declare their own `app.kubernetes.io/name` / `part-of` will eventually mismatch.
 
 ---

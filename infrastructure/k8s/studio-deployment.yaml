@@ -37,6 +37,15 @@ spec:
               value: "https://api.ceq.lol"
             - name: NEXT_PUBLIC_WS_URL
               value: "wss://ws.ceq.lol"
+            - name: NEXT_PUBLIC_JANUA_URL
+              value: "https://auth.madfam.io"
+            - name: NEXT_PUBLIC_JANUA_CLIENT_ID
+              value: "jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk"
+            - name: JANUA_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: JANUA_CLIENT_SECRET
           resources:
             requests:
               memory: "128Mi"

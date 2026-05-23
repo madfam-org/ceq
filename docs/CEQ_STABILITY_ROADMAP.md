@@ -75,11 +75,9 @@ latent chaos → shipped content.
 
 ### Verdict
 
-**Infra-stable, user-incomplete (~65% to capped GA demo).** The public edge and
-API are live; runtime contracts are closed in the local test matrix; **full
-stability is not declared** because production acceptance gates remain open.
-See [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md) for demo tiers and
-acceptance checklists.
+**Infra-stable, user-incomplete (~72% to capped GA demo).** Janua OAuth client
+is registered; CEQ must sync `JANUA_CLIENT_SECRET` to Vault and roll Studio
+before browser login is declared healthy.
 
 ### Live production evidence
 
@@ -91,7 +89,7 @@ acceptance checklists.
 | `https://app.ceq.lol/login` | HTTP 200 | Studio login surface |
 | `https://api.ceq.lol/docs` | HTTP 404 | OpenAPI not exposed in prod |
 | `POST /v1/render/card` (no auth) | 401 | Render pillar auth-gated |
-| Janua OAuth for documented client | `invalid_client` | Blocks real Studio login |
+| Janua OAuth for documented client | 302 → login (registered 2026-05-23) |
 
 ### What is working
 
@@ -133,7 +131,7 @@ historical record.
 
 ### What blocks full stability
 
-1. Janua OAuth client unregistered (`invalid_client` for documented client ID)
+1. ~~Janua OAuth client unregistered~~ → **CEQ-side:** sync `JANUA_CLIENT_SECRET` to Vault + roll Studio (Janua registered 2026-05-23)
 2. Production runtime secrets not verified live (`JOB_COMPLETION_CALLBACK_TOKEN`,
    `JOB_WEBHOOK_SECRET`)
 3. Authenticated GPU E2E, cancellation, and multi-modal smoke not proven in prod
@@ -153,7 +151,8 @@ Engineering work landed in-repo (operator-only P0 items remain open):
 | **Phase 4** | Deploy waits for CI + Studio smoke before push | ✅ `.github/workflows/deploy.yaml` |
 | **Phase 5** | WebSocket auth via session bootstrap | ✅ `resolveStreamAuthToken()` + async `subscribeToJob()` |
 | **Phase 6** | `ECOSYSTEM.md` drift fix | ✅ Ports, render status, Janua auth note |
-| **Phase 0** | Janua OAuth client registration | ⏳ Operator — see `docs/JANUA_OPERATOR.md` |
+| **Phase 0** | Janua OAuth client registration | ✅ Janua registered 2026-05-23; CEQ secret mount in `studio-deployment.yaml` |
+| **Phase 0** | Vault sync + Studio rollout + browser proof | ⏳ Operator — [`JANUA_OPERATOR.md`](./JANUA_OPERATOR.md) §1–4 |
 | **Phase 1** | Production callback/webhook secrets | ⏳ Operator — verify via `operations/status` |
 | **Phase 2** | Authenticated GPU smokes | ⏳ Blocked on Phase 0 + 1 |
 | **Phase 4** | Studio Docker regression CI gate | ✅ Closed 2026-05-22 |

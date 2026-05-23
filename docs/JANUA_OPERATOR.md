@@ -10,16 +10,38 @@
 
 ## Current blocker
 
-CEQ Studio production login is **blocked** because Janua rejects the documented OAuth client:
+### Janua-side (resolved 2026-05-23)
+
+OAuth client **`jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`** is registered in production
+Janua. Authorize returns **302** to login (not `invalid_client`).
+
+| Check | Status |
+|-------|--------|
+| §9.1 authorize | ✅ 302 |
+| §9.2 token (bogus code) | ✅ `invalid_grant` (client accepted) |
+| §9.4 JWKS / issuer | ✅ `https://auth.madfam.io` |
+| §9.5 GET `/logout` | ⚠️ 404 — non-blocking for login; see [Logout follow-up](#logout-follow-up) |
+
+### CEQ-side (operator action required)
+
+Studio token exchange requires **`JANUA_CLIENT_SECRET` at runtime**. As of
+2026-05-23:
+
+- GitHub Actions repo secret `JANUA_CLIENT_SECRET` is set (`madfam-org/ceq`)
+- **Vault** path `secret/ceq` must include property `JANUA_CLIENT_SECRET`
+  (ExternalSecret syncs to `ceq-secrets`)
+- **`studio-deployment.yaml`** mounts the secret (landed in repo; ArgoCD must roll pods)
+
+Until Vault sync + ArgoCD rollout complete, browser login may fail at token
+exchange even though Janua authorize succeeds.
+
+**Previous symptom (resolved on authorize path):**
 
 | Symptom | Value |
 |---------|-------|
-| Error | `invalid_client: Unknown client_id` |
+| Error | ~~`invalid_client: Unknown client_id`~~ |
 | Documented client ID | `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk` |
 | Production redirect URI | `https://app.ceq.lol/auth/callback` |
-| Last verified | 2026-05-14 (still open as of 2026-05-22) |
-
-Until this client is registered (or rotated), **no real user can complete browser login** on `app.ceq.lol`, and authenticated production smokes cannot run.
 
 Local/CI auth behavior is covered by **mocked Janua** Playwright tests (`apps/studio/e2e/auth.spec.ts`). Those tests do **not** replace live Janua registration.
 
@@ -72,22 +94,40 @@ Studio uses these for browser login, token exchange (`/api/auth/token`), refresh
 
 ## Operator checklist
 
-### 1. Register or rotate the client
+### 1. Sync `JANUA_CLIENT_SECRET` to Vault (Enclii-first)
 
-- [ ] Client exists in Janua admin (`https://auth.madfam.io/admin`) or Enclii identity adapter
-- [ ] Redirect URI `https://app.ceq.lol/auth/callback` is exact (no trailing slash mismatch)
-- [ ] Grant types include `authorization_code` and `refresh_token`
-- [ ] Client secret generated and stored in production secrets (not committed to git)
+The client secret lives in GitHub Actions (`gh secret list --repo madfam-org/ceq`).
+**Do not commit it.** Copy into Vault at `secret/ceq` property `JANUA_CLIENT_SECRET`
+so ExternalSecret can sync to K8s `ceq-secrets`.
 
-### 2. Wire Studio runtime secret (required after Janua delivers)
+```bash
+# Verify GitHub secret exists (name only — never print the value)
+gh secret list --repo madfam-org/ceq | rg JANUA_CLIENT_SECRET
 
-Studio token exchange requires `JANUA_CLIENT_SECRET` at **runtime**. Confirm
-`infrastructure/k8s/studio-deployment.yaml` mounts it from `ceq-secrets`
-(see [`JANUA_AGENT_HANDOFF.md` §8.2](./JANUA_AGENT_HANDOFF.md)).
+# Enclii-first: use Enclii secrets UI/CLI when adapter supports Vault sync.
+# Break-glass: write to Vault path secret/ceq → property JANUA_CLIENT_SECRET
+# Then confirm ExternalSecret reconciled:
+# kubectl -n ceq get externalsecret ceq-secrets
+# kubectl -n ceq get secret ceq-secrets -o jsonpath='{.data.JANUA_CLIENT_SECRET}' | wc -c
+# (expect non-zero byte length; do not decode in shared logs)
+```
 
-- [ ] `JANUA_CLIENT_SECRET` in vault / `ceq-secrets`
-- [ ] Studio Deployment env or `envFrom` references the secret
-- [ ] ArgoCD rolled Studio pods after secret mount
+Record Enclii adapter gap if Vault write required raw operator access.
+
+Janua client registration (complete 2026-05-23):
+
+- [x] Client `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk` registered (`ceq-studio`)
+- [x] Redirect URIs and grant types configured
+- [ ] Vault `JANUA_CLIENT_SECRET` synced → `ceq-secrets` → Studio pods rolled
+
+### 2. Confirm Studio runtime secret mount (in-repo; verify in cluster)
+
+`infrastructure/k8s/studio-deployment.yaml` mounts `JANUA_CLIENT_SECRET` from
+`ceq-secrets`. After Vault sync + ArgoCD reconcile:
+
+- [ ] `kubectl -n ceq get pods -l app=ceq-studio` — all Running
+- [ ] Studio pod has env `JANUA_CLIENT_SECRET` (verify presence only — do not log value)
+- [ ] `POST /api/auth/token` succeeds after browser OAuth callback
 
 ### 3. Verify Janua accepts the client (no browser required)
 
@@ -144,6 +184,15 @@ scripts/production-smoke.sh
 | `ws.ceq.lol` | Job WebSocket streams (token query param today) |
 
 OAuth callback **must** use `app.ceq.lol`, not `ceq.lol`.
+
+---
+
+## Logout follow-up
+
+Janua returns **404** for `GET https://auth.madfam.io/logout?client_id=…&post_logout_redirect_uri=…`.
+Login and token exchange are unblocked; sign-out may fail to redirect cleanly until
+Janua exposes the logout route or CEQ switches to the documented OIDC end-session
+endpoint. Track as P1 — not a blocker for capped GA demo login.
 
 ---
 

@@ -10,22 +10,22 @@
 
 CEQ is **infra-stable and partially demoable in production today**. A **capped,
 prod-quality GA demo** (real login, one golden GPU path, deterministic render
-API, InterestGate caps) is approximately **65% complete**.
+API, InterestGate caps) is approximately **72% complete**.
 
 | Milestone | Readiness | Blocker |
 |-----------|-----------|---------|
 | Public marketing + API edge | **~90%** | None |
 | Asset pillar (`/v1/render/*`, `@ceq/sdk`) | **~90%** | Needs Janua JWT for live call |
-| Authenticated Studio (`app.ceq.lol`) | **~20%** | Janua OAuth client not registered |
+| Authenticated Studio (`app.ceq.lol`) | **~50%** | Janua registered; CEQ secret mount + browser proof pending |
 | End-to-end GPU job in prod | **~10%** | Janua + runtime secrets + prod smokes |
 | Capped monetization (InterestGate) | **~40%** | Code shipped; Tulana pricing low confidence |
 | GA ops (strict smoke, alerts, branch protection) | **~30%** | Operator + org-admin actions |
 
-**Critical path:** Janua OAuth registration → CEQ wires `JANUA_CLIENT_SECRET` →
-runtime secrets verified → one authenticated GPU smoke green.
+**Critical path:** ~~Janua OAuth registration~~ ✅ (2026-05-23) → **CEQ Vault sync +
+Studio rollout** → runtime secrets verified → one authenticated GPU smoke green.
 
-**Estimated calendar time after Janua unblocks:** **~1–2 weeks** for capped GA
-demo; **~2–3 weeks** for full stability declaration per roadmap.
+**Estimated calendar time after Vault sync + Studio rollout:** **~1 week** for
+capped GA demo; **~2 weeks** for full stability declaration per roadmap.
 
 ---
 
@@ -36,7 +36,7 @@ external stakeholders **without** claiming full PRD breadth. Caps are intentiona
 
 | Cap type | Mechanism | Status |
 |----------|-----------|--------|
-| **Identity** | Janua SSO; demo accounts only | Blocked until Phase 0 |
+| **Identity** | Janua SSO; demo accounts only | Janua registered; CEQ secret sync pending |
 | **GPU throughput** | Single “golden” template + Vast.ai capacity | Not prod-proven |
 | **Templates** | 6 seeded workflows; demo uses 1 image path | Seeded; smoke TBD |
 | **Monetization** | InterestGate on pro/premium tags (not checkout) | Shipped in code |
@@ -78,7 +78,7 @@ GA ops (alerts, strict smoke)   ██████░░░░░░░░░░
 | `https://api.ceq.lol/health` | `status: ok` |
 | `https://app.ceq.lol/` (no session) | 307 → login |
 | `POST /v1/render/card` (no auth) | 401 |
-| Janua authorize for documented client | `invalid_client` (open) |
+| Janua authorize for documented client | 302 → login (registered 2026-05-23) |
 
 ### Engineering gates landed (2026-05-22 commit `b47cca8`)
 
@@ -118,7 +118,7 @@ GA ops (alerts, strict smoke)   ██████░░░░░░░░░░
 
 **Prerequisites:**
 
-1. Phase 0 — Janua OAuth client live ([`JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md))
+1. Phase 0 — Janua OAuth client live ✅ (2026-05-23) + CEQ Vault sync + Studio rollout
 2. CEQ wires `JANUA_CLIENT_SECRET` into Studio deployment (see handoff § CEQ follow-up)
 3. Phase 1 — `operations/status` green (callback + webhook secrets)
 4. Phase 2 — one `CEQ_STRICT_SMOKE` golden path
@@ -151,8 +151,8 @@ See [`CEQ_STABILITY_ROADMAP.md` § Definition of done](./CEQ_STABILITY_ROADMAP.m
 
 ### Identity (Phase 0)
 
-- [ ] Janua returns no `invalid_client` for `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`
-- [ ] Browser login on `app.ceq.lol` completes OAuth callback
+- [x] Janua returns no `invalid_client` for `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk` (302 authorize, 2026-05-23)
+- [ ] Browser login on `app.ceq.lol` completes OAuth callback (needs Vault secret + Studio rollout)
 - [ ] `GET /api/auth/session` returns `user` + `access_token` with session cookies
 - [ ] Logout clears CEQ cookies and completes Janua post-logout redirect
 - [ ] Studio `env`: `JANUA_CLIENT_SECRET` mounted at runtime (not only at build)
@@ -218,8 +218,8 @@ Full matrix: [`CEQ_STABILITY_ROADMAP.md` § Smoke matrix](./CEQ_STABILITY_ROADMA
 
 | Day | Focus | Exit |
 |-----|-------|------|
-| D0 | Janua agent completes OAuth client | `invalid_client` gone |
-| D0–1 | CEQ: mount `JANUA_CLIENT_SECRET`, redeploy Studio | Token exchange 200 |
+| D0 | CEQ: Vault sync + ArgoCD Studio rollout | Token exchange 200 |
+| D1 | Browser acceptance + `CEQ_AUTH_TOKEN` smoke | Tier B identity ✅ |
 | D1 | Phase 1 secrets + `operations/status` | Callback/webhook green |
 | D2–4 | Phase 2 golden GPU smoke | Gallery output in prod |
 | D5 | Tier B demo rehearsal + InterestGate check | Capped GA demo ready |

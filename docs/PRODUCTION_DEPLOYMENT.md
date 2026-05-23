@@ -23,7 +23,7 @@
 
 | Step | Status | Notes |
 |------|--------|-------|
-| Janua OAuth Client | Action required | Active client currently rejected by Janua; register/rotate for `app.ceq.lol` |
+| Janua OAuth Client | Done (2026-05-23) | Client registered; sync `JANUA_CLIENT_SECRET` to Vault + roll Studio |
 | Cloudflare Tunnel Routes | Done | ceq.lol, app.ceq.lol, api.ceq.lol, ws.ceq.lol |
 | R2 Bucket + Token | Done | `ceq-assets` with Object Read & Write |
 | secrets.local.yaml | Done | R2 + OAuth done, DB/Redis configured |
@@ -64,11 +64,11 @@ vim infra/terraform/terraform.tfvars
 # 4. Note the connection details
 ```
 
-### 3. Register OAuth Client in Janua (Action Required)
+### 3. Janua OAuth client + Studio secret sync
 
-> **Operator runbook:** See [`docs/JANUA_OPERATOR.md`](./JANUA_OPERATOR.md) for the full checklist, verification commands, and acceptance gates.  
-> **Janua agent handoff:** [`docs/JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md)  
-> **Capped GA demo:** [`docs/GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md)
+> **Status (2026-05-23):** Janua client `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk` is
+> registered. Authorize returns 302. **Next:** sync `JANUA_CLIENT_SECRET` from
+> GitHub Actions repo secret to Vault → `ceq-secrets` → Studio pods.
 
 The Studio uses Janua's OIDC discovery endpoints:
 
@@ -76,10 +76,7 @@ The Studio uses Janua's OIDC discovery endpoints:
 - Token: `https://auth.madfam.io/api/v1/oauth/token`
 - UserInfo: `https://auth.madfam.io/api/v1/oauth/userinfo`
 
-As of 2026-05-14, live Janua returns `invalid_client: Unknown client_id` for
-`jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`. Register that client again or rotate
-CEQ to a new client and update `NEXT_PUBLIC_JANUA_CLIENT_ID` plus
-`JANUA_CLIENT_SECRET` before declaring Studio login healthy.
+See [`docs/JANUA_OPERATOR.md`](./JANUA_OPERATOR.md) for Vault sync and browser acceptance.
 
 The Studio route is now server-gated with CEQ session cookies:
 

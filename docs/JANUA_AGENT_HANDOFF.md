@@ -9,6 +9,17 @@
 
 ---
 
+## Janua-side completion (2026-05-23)
+
+Janua P0 is **complete**. OAuth client `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`
+is registered. CEQ-side wiring (Vault → ExternalSecret → Studio deployment)
+is tracked in [`JANUA_OPERATOR.md`](./JANUA_OPERATOR.md).
+
+**Known follow-up (non-blocking for login):** `GET /logout` on `auth.madfam.io`
+returns 404 — sign-out redirect may need Janua route fix (P1).
+
+---
+
 ## 1. Mission for the Janua-side agent
 
 Register and verify an OAuth 2.0 / OIDC **confidential or public+secret**
@@ -269,37 +280,20 @@ NEXT_PUBLIC_JANUA_CLIENT_ID=jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk
 **Janua agent:** Register **`jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`** as the
 OAuth client ID. CEQ may align the API secret key name separately.
 
-### 8.2 Studio runtime secret mount (CEQ follow-up — not Janua)
+### 8.2 Studio runtime secret mount (CEQ — in repo; operator must sync Vault)
 
-`infrastructure/k8s/studio-deployment.yaml` currently does **not** mount
-`JANUA_CLIENT_SECRET` from `ceq-secrets`. Build args set public Janua URL/ID
-only.
+**Updated 2026-05-23:** Manifests wired in CEQ repo:
 
-**After Janua generates `client_secret`, CEQ operators must:**
+- `external-secret.yaml` — `JANUA_CLIENT_SECRET` from Vault `secret/ceq`
+- `studio-deployment.yaml` — `secretKeyRef` → `JANUA_CLIENT_SECRET`
 
-1. Store `JANUA_CLIENT_SECRET` in `ceq-secrets` (ExternalSecret / vault).
-2. Add to `studio-deployment.yaml`:
+**Operator remaining steps:**
 
-   ```yaml
-   envFrom:
-     - secretRef:
-         name: ceq-secrets
-   ```
+1. Copy `JANUA_CLIENT_SECRET` from GitHub Actions repo secret to Vault (never git).
+2. Confirm ExternalSecret reconciled and Studio pods rolled via ArgoCD.
+3. Run browser acceptance ([`JANUA_OPERATOR.md` §4](./JANUA_OPERATOR.md)).
 
-   Or explicit:
-
-   ```yaml
-   - name: JANUA_CLIENT_SECRET
-     valueFrom:
-       secretKeyRef:
-         name: ceq-secrets
-         key: JANUA_CLIENT_SECRET
-   ```
-
-3. Redeploy Studio via ArgoCD.
-
-Without this, authorize may succeed but **token exchange will fail** if Janua
-requires `client_secret`.
+Without Vault sync, authorize succeeds but token exchange fails (empty secret).
 
 ---
 
