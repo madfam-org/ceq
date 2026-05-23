@@ -629,7 +629,7 @@ class TestQueryPatterns:
         await db_session.commit()
 
         result = await db_session.execute(
-            select(Workflow).where(not Workflow.is_deleted)
+            select(Workflow).where(Workflow.is_deleted.is_(False))
         )
         active_workflows = result.scalars().all()
         assert len(active_workflows) == 2
