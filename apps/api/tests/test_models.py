@@ -1,8 +1,9 @@
 """Tests for SQLAlchemy models."""
 
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
+
+import pytest
 
 from ceq_api.models import (
     Asset,
@@ -34,7 +35,7 @@ class TestWorkflowModel:
         await db_session.flush()
 
         assert workflow.name == "Test Workflow"
-        assert workflow.is_deleted == False
+        assert not workflow.is_deleted
         assert workflow.tags == ["test"]
         assert workflow.id is not None
 
@@ -55,8 +56,8 @@ class TestWorkflowModel:
 
         assert workflow.input_schema == {}
         assert workflow.tags == []
-        assert workflow.is_public == False
-        assert workflow.is_deleted == False
+        assert not workflow.is_public
+        assert not workflow.is_deleted
 
 
 class TestTemplateModel:
@@ -129,7 +130,7 @@ class TestJobModel:
         db_session.add(workflow)
         await db_session.flush()
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         job = Job(
             workflow_id=workflow.id,
             user_id=workflow.user_id,
@@ -187,7 +188,7 @@ class TestOutputModel:
             input_params={},
             output_metadata={},
             priority=0,
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
             gpu_seconds=0.0,
             cold_start_ms=0,
         )
@@ -236,7 +237,7 @@ class TestOutputModel:
             input_params={},
             output_metadata={},
             priority=0,
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
             gpu_seconds=0.0,
             cold_start_ms=0,
         )
@@ -283,8 +284,8 @@ class TestAssetModel:
 
         assert asset.name == "test-model.safetensors"
         assert asset.asset_type == "checkpoint"
-        assert asset.is_public == False
-        assert asset.is_deleted == False
+        assert not asset.is_public
+        assert not asset.is_deleted
 
     def test_asset_types(self):
         """Test valid asset types can be set."""

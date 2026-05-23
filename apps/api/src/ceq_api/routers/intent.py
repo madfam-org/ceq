@@ -177,12 +177,12 @@ async def route_intent(
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Upstream {platform} returned {exc.response.status_code}: {exc.response.text[:200]}",
-            )
+            ) from exc
         except httpx.RequestError as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Could not reach {platform} at {upstream_url}: {exc}",
-            )
+            ) from exc
 
     return IntentRouteResponse(
         query=data.query,

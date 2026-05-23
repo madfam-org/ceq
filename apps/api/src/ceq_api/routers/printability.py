@@ -13,7 +13,6 @@ POST /v1/printability/analyze
 
 import logging
 import math
-from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -238,7 +237,7 @@ async def analyze_printability(
             raise HTTPException(
                 status_code=status.HTTP_424_FAILED_DEPENDENCY,
                 detail=f"Could not reach geometry URL: {exc}",
-            )
+            ) from exc
 
     assert metrics is not None
     return _heuristic_score(data, metrics)

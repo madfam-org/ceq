@@ -1,9 +1,8 @@
 """Tests for workflow endpoints."""
 
-import pytest
 from uuid import uuid4
 
-import pytest_asyncio
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -135,7 +134,7 @@ class TestWorkflowEndpoints:
 
         # Verify it's soft deleted
         await db_session.refresh(workflow)
-        assert workflow.is_deleted == True
+        assert workflow.is_deleted
 
     @pytest.mark.asyncio
     async def test_create_workflow_validation(self, async_client: AsyncClient):

@@ -11,7 +11,7 @@ POST /v1/synthesis/from_query
 import logging
 from datetime import UTC, datetime
 from typing import Annotated, Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field

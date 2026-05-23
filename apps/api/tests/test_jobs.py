@@ -3,7 +3,7 @@
 import hashlib
 import hmac
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -50,7 +50,7 @@ class TestListJobs:
             status=JobStatus.QUEUED.value,
             progress=0.0,
             input_params={"prompt": "test"},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.commit()
@@ -123,7 +123,7 @@ class TestGetJob:
             current_node="KSampler",
             input_params={"prompt": "test"},
             output_metadata={"cancel_requested_at": "2026-05-14T00:00:00+00:00"},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.flush()
@@ -179,7 +179,7 @@ class TestGetJob:
             status=JobStatus.QUEUED.value,
             progress=0.0,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.commit()
@@ -213,7 +213,7 @@ class TestPollJobStatus:
             status=JobStatus.RUNNING.value,
             progress=0.5,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.commit()
@@ -256,7 +256,7 @@ class TestCancelJob:
             status=JobStatus.QUEUED.value,
             progress=0.0,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.commit()
@@ -315,8 +315,8 @@ class TestCancelJob:
             status=JobStatus.RUNNING.value,
             progress=0.72,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
-            started_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
+            started_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.commit()
@@ -365,8 +365,8 @@ class TestCancelJob:
             status=JobStatus.COMPLETED.value,
             progress=1.0,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
-            completed_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.commit()
@@ -445,6 +445,7 @@ class TestJobCompletionReport:
     ):
         """Worker callback should persist final job status and outputs."""
         from sqlalchemy import select
+
         from ceq_api.models.output import Output
         from ceq_api.models.workflow import Workflow
         from ceq_api.routers import jobs as jobs_router
@@ -471,7 +472,7 @@ class TestJobCompletionReport:
             status=JobStatus.RUNNING.value,
             progress=0.5,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.commit()
@@ -529,6 +530,7 @@ class TestJobCompletionReport:
     ):
         """Terminal worker callbacks should deliver signed user webhooks."""
         from sqlalchemy import select
+
         from ceq_api.models.workflow import Workflow
         from ceq_api.routers import jobs as jobs_router
 
@@ -555,7 +557,7 @@ class TestJobCompletionReport:
             status=JobStatus.RUNNING.value,
             progress=0.5,
             input_params={"prompt": "test"},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
             webhook_url="https://hooks.example.com/ceq",
         )
         db_session.add(job)
@@ -615,6 +617,7 @@ class TestJobCompletionReport:
     ):
         """5xx webhook responses should retry before recording success."""
         from sqlalchemy import select
+
         from ceq_api.models.workflow import Workflow
         from ceq_api.routers import jobs as jobs_router
 
@@ -647,7 +650,7 @@ class TestJobCompletionReport:
             status=JobStatus.RUNNING.value,
             progress=0.5,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
             webhook_url="https://hooks.example.com/ceq",
         )
         db_session.add(job)
@@ -676,6 +679,7 @@ class TestJobCompletionReport:
     ):
         """Permanent 4xx webhook responses should not retry."""
         from sqlalchemy import select
+
         from ceq_api.models.workflow import Workflow
         from ceq_api.routers import jobs as jobs_router
 
@@ -706,7 +710,7 @@ class TestJobCompletionReport:
             status=JobStatus.RUNNING.value,
             progress=0.5,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
             webhook_url="https://hooks.example.com/ceq",
         )
         db_session.add(job)
@@ -737,6 +741,7 @@ class TestJobCompletionReport:
     ):
         """Webhook URLs should not be delivered unsigned."""
         from sqlalchemy import select
+
         from ceq_api.models.workflow import Workflow
         from ceq_api.routers import jobs as jobs_router
         from ceq_api.services import job_webhooks
@@ -768,7 +773,7 @@ class TestJobCompletionReport:
             status=JobStatus.RUNNING.value,
             progress=0.5,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
             webhook_url="https://hooks.example.com/ceq",
         )
         db_session.add(job)
@@ -797,6 +802,7 @@ class TestJobCompletionReport:
     ):
         """Webhook transport errors should retry and persist failure metadata."""
         from sqlalchemy import select
+
         from ceq_api.models.workflow import Workflow
         from ceq_api.routers import jobs as jobs_router
 
@@ -828,7 +834,7 @@ class TestJobCompletionReport:
             status=JobStatus.RUNNING.value,
             progress=0.5,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
             webhook_url="https://hooks.example.com/ceq",
         )
         db_session.add(job)
@@ -858,6 +864,7 @@ class TestJobCompletionReport:
     ):
         """Repeated callback for the same storage URI should update, not duplicate."""
         from sqlalchemy import select
+
         from ceq_api.models.output import Output
         from ceq_api.models.workflow import Workflow
         from ceq_api.routers import jobs as jobs_router
@@ -884,7 +891,7 @@ class TestJobCompletionReport:
             status=JobStatus.RUNNING.value,
             progress=0.5,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.commit()
@@ -924,6 +931,7 @@ class TestJobCompletionReport:
     ):
         """Late worker success reports should not overwrite API-side cancellation."""
         from sqlalchemy import select
+
         from ceq_api.models.output import Output
         from ceq_api.models.workflow import Workflow
         from ceq_api.routers import jobs as jobs_router
@@ -950,8 +958,8 @@ class TestJobCompletionReport:
             status=JobStatus.CANCELLED.value,
             progress=0.0,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
-            completed_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.commit()
@@ -1018,7 +1026,7 @@ class TestJobCompletionReport:
             status=JobStatus.RUNNING.value,
             progress=0.5,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.commit()
@@ -1063,7 +1071,7 @@ class TestListJobOutputs:
             status=JobStatus.COMPLETED.value,
             progress=1.0,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.commit()
@@ -1076,8 +1084,8 @@ class TestListJobOutputs:
     @pytest.mark.asyncio
     async def test_list_outputs_with_data(self, async_client, db_session, mock_user):
         """Should return outputs for completed job."""
-        from ceq_api.models.workflow import Workflow
         from ceq_api.models.output import Output
+        from ceq_api.models.workflow import Workflow
 
         workflow = Workflow(
             name="Test Workflow",
@@ -1095,7 +1103,7 @@ class TestListJobOutputs:
             status=JobStatus.COMPLETED.value,
             progress=1.0,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.flush()

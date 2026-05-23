@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
-from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 

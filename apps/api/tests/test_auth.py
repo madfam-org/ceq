@@ -10,30 +10,28 @@ Covers:
 """
 
 import time
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
-from uuid import uuid4, UUID
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID, uuid4
 
 import httpx
 import jwt as pyjwt
-from jwt import PyJWKClientError
-from cryptography.hazmat.primitives.asymmetric import rsa
+import pytest
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import HTTPException
+from jwt import PyJWKClientError
 
 from ceq_api.auth.janua import (
     JanuaUser,
     JWKSCircuitBreaker,
-    validate_token,
+    _jwks_breaker,
+    _validate_token_introspection,
+    _validate_token_local,
     get_current_user,
     get_optional_user,
-    require_auth,
     require_admin,
-    _validate_token_local,
-    _validate_token_introspection,
-    _jwks_breaker,
+    validate_token,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures: RSA key pair for signing test JWTs
@@ -450,7 +448,7 @@ class TestValidateToken:
         mock_jwks = MagicMock()
         mock_jwks.get_signing_key.side_effect = PyJWKClientError("JWKS down")
 
-        expected_user = JanuaUser(
+        JanuaUser(
             id=UUID(user_id),
             email="fallback@madfam.io",
             roles=["user"],

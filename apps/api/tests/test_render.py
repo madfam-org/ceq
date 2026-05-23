@@ -10,7 +10,6 @@ from ceq_api.render.hash import render_hash
 from ceq_api.render.renderers import registry
 from ceq_api.render.renderers.card import CardStandardRenderer
 
-
 # ---------- hash ----------
 
 

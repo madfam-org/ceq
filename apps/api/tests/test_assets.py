@@ -1,15 +1,13 @@
 """Tests for asset management endpoints."""
 
 import io
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 from fastapi import status
 
 from ceq_api.models.asset import Asset
-from ceq_api.routers.assets import sanitize_filename, ASSET_TYPES
+from ceq_api.routers.assets import ASSET_TYPES, sanitize_filename
 
 
 class TestSanitizeFilename:

@@ -1,6 +1,6 @@
 """Tests for output management endpoints."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -34,7 +34,7 @@ class TestOutputModel:
             status=JobStatus.COMPLETED.value,
             progress=1.0,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.flush()
@@ -76,7 +76,7 @@ class TestOutputModel:
             status=JobStatus.COMPLETED.value,
             progress=1.0,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.flush()
@@ -122,7 +122,7 @@ class TestOutputRetrieval:
             status=JobStatus.COMPLETED.value,
             progress=1.0,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.flush()
@@ -168,7 +168,7 @@ class TestOutputRetrieval:
             status=JobStatus.COMPLETED.value,
             progress=1.0,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.flush()
@@ -212,7 +212,7 @@ class TestOutputRetrieval:
             status=JobStatus.COMPLETED.value,
             progress=1.0,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.flush()
@@ -266,7 +266,7 @@ class TestOutputRetrieval:
             status=JobStatus.COMPLETED.value,
             progress=1.0,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.commit()
@@ -316,7 +316,7 @@ class TestOutputAccessControl:
             status=JobStatus.COMPLETED.value,
             progress=1.0,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.flush()
@@ -361,7 +361,7 @@ class TestOutputTypes:
             status=JobStatus.COMPLETED.value,
             progress=1.0,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.flush()
@@ -402,7 +402,7 @@ class TestOutputTypes:
             status=JobStatus.COMPLETED.value,
             progress=1.0,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.flush()
@@ -443,7 +443,7 @@ class TestOutputTypes:
             status=JobStatus.COMPLETED.value,
             progress=1.0,
             input_params={},
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
         )
         db_session.add(job)
         await db_session.flush()

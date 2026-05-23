@@ -4,12 +4,9 @@ Unit tests for the three CEQ Intelligence Layer routers:
   - POST /v1/printability/analyze
   - POST /v1/intent/route
 """
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
-from ceq_api.routers.printability import GeometryMetrics, PrintabilityRequest, _heuristic_score
 from ceq_api.routers.intent import _classify_intent
-
+from ceq_api.routers.printability import GeometryMetrics, PrintabilityRequest, _heuristic_score
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 1. Printability Heuristic Scorer (pure unit tests — no DB/HTTP required)
@@ -19,19 +16,19 @@ from ceq_api.routers.intent import _classify_intent
 class TestPrintabilityHeuristics:
 
     def _req(self, **overrides) -> PrintabilityRequest:
-        defaults = dict(material="PLA", layer_height_mm=0.2, support_enabled=False)
+        defaults = {"material": "PLA", "layer_height_mm": 0.2, "support_enabled": False}
         defaults.update(overrides)
         return PrintabilityRequest(**defaults)
 
     def _metrics(self, **overrides) -> GeometryMetrics:
-        defaults = dict(
-            is_watertight=True,
-            max_overhang_deg=30.0,
-            min_wall_thickness_mm=1.6,
-            bounding_box_mm=[50.0, 50.0, 30.0],
-            volume_cm3=40.0,
-            surface_area_cm2=100.0,
-        )
+        defaults = {
+            "is_watertight": True,
+            "max_overhang_deg": 30.0,
+            "min_wall_thickness_mm": 1.6,
+            "bounding_box_mm": [50.0, 50.0, 30.0],
+            "volume_cm3": 40.0,
+            "surface_area_cm2": 100.0,
+        }
         defaults.update(overrides)
         return GeometryMetrics(**defaults)
 

@@ -1,8 +1,9 @@
 """Tests for resilience patterns (circuit breakers, retry logic)."""
 
 import asyncio
+import contextlib
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from ceq_api.resilience import (
     CircuitBreaker,
@@ -10,8 +11,8 @@ from ceq_api.resilience import (
     CircuitBreakerError,
     CircuitState,
     RetryConfig,
-    retry_with_backoff,
     graceful_degradation,
+    retry_with_backoff,
 )
 
 
@@ -157,10 +158,8 @@ class TestCircuitBreaker:
         await circuit.call(success)
         await circuit.call(success)
 
-        try:
+        with contextlib.suppress(ConnectionError):
             await circuit.call(failure)
-        except ConnectionError:
-            pass
 
         stats = circuit.get_stats()
         assert stats["name"] == circuit.name
@@ -170,8 +169,8 @@ class TestCircuitBreaker:
 
     def test_circuit_registry(self):
         """All circuits should be registered."""
-        circuit1 = CircuitBreaker("registry-test-1", CircuitBreakerConfig())
-        circuit2 = CircuitBreaker("registry-test-2", CircuitBreakerConfig())
+        CircuitBreaker("registry-test-1", CircuitBreakerConfig())
+        CircuitBreaker("registry-test-2", CircuitBreakerConfig())
 
         all_stats = CircuitBreaker.get_all_stats()
 

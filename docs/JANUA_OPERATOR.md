@@ -105,7 +105,8 @@ so ExternalSecret can sync to K8s `ceq-secrets`.
 gh secret list --repo madfam-org/ceq | rg JANUA_CLIENT_SECRET
 
 # Enclii-first: use Enclii secrets UI/CLI when adapter supports Vault sync.
-# Break-glass: write to Vault path secret/ceq → property JANUA_CLIENT_SECRET
+# Break-glass: scripts/sync-janua-client-secret-to-vault.sh (prompts for secret)
+# Or write manually to Vault path secret/ceq → property JANUA_CLIENT_SECRET
 # Then confirm ExternalSecret reconciled:
 # kubectl -n ceq get externalsecret ceq-secrets
 # kubectl -n ceq get secret ceq-secrets -o jsonpath='{.data.JANUA_CLIENT_SECRET}' | wc -c

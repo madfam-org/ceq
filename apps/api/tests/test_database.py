@@ -1,10 +1,10 @@
 """Comprehensive database tests for schema validation and relationships."""
 
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import select, inspect
+import pytest
+from sqlalchemy import inspect, select
 from sqlalchemy.exc import IntegrityError
 
 from ceq_api.models import (
@@ -134,7 +134,7 @@ class TestWorkflowModel:
             input_params={},
             output_metadata={},
             priority=0,
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
             gpu_seconds=0.0,
             cold_start_ms=0,
         )
@@ -203,7 +203,7 @@ class TestJobModel:
             input_params={},
             output_metadata={},
             priority=0,
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
             gpu_seconds=0.0,
             cold_start_ms=0,
         )
@@ -239,7 +239,7 @@ class TestJobModel:
                 input_params={},
                 output_metadata={},
                 priority=0,
-                queued_at=datetime.now(timezone.utc),
+                queued_at=datetime.now(UTC),
                 gpu_seconds=0.0,
                 cold_start_ms=0,
             )
@@ -270,7 +270,7 @@ class TestJobModel:
             input_params={},
             output_metadata={},
             priority=0,
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
             gpu_seconds=10.0,
             cold_start_ms=0,
         )
@@ -316,7 +316,7 @@ class TestJobModel:
             input_params={},
             output_metadata={},
             priority=0,
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
             gpu_seconds=0.0,
             cold_start_ms=0,
         )
@@ -356,7 +356,7 @@ class TestOutputModel:
             input_params={},
             output_metadata={},
             priority=0,
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
             gpu_seconds=0.0,
             cold_start_ms=0,
         )
@@ -404,7 +404,7 @@ class TestOutputModel:
             input_params={},
             output_metadata={},
             priority=0,
-            queued_at=datetime.now(timezone.utc),
+            queued_at=datetime.now(UTC),
             gpu_seconds=0.0,
             cold_start_ms=0,
         )
@@ -604,7 +604,7 @@ class TestQueryPatterns:
         await db_session.commit()
 
         result = await db_session.execute(
-            select(Workflow).where(Workflow.is_public == True)
+            select(Workflow).where(Workflow.is_public)
         )
         public_workflows = result.scalars().all()
         assert len(public_workflows) == 2
@@ -629,7 +629,7 @@ class TestQueryPatterns:
         await db_session.commit()
 
         result = await db_session.execute(
-            select(Workflow).where(Workflow.is_deleted == False)
+            select(Workflow).where(not Workflow.is_deleted)
         )
         active_workflows = result.scalars().all()
         assert len(active_workflows) == 2
@@ -660,7 +660,7 @@ class TestQueryPatterns:
                 input_params={},
                 output_metadata={},
                 priority=0,
-                queued_at=datetime.now(timezone.utc),
+                queued_at=datetime.now(UTC),
                 gpu_seconds=0.0,
                 cold_start_ms=0,
             )
@@ -696,7 +696,7 @@ class TestTimestamps:
 
         assert workflow.created_at is not None
         # Verify it's a recent timestamp (within last minute)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # Handle both timezone-aware and naive datetimes
         if workflow.created_at.tzinfo is None:
             created_naive = workflow.created_at
