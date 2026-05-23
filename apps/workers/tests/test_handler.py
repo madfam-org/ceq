@@ -1,7 +1,8 @@
 """Tests for workflow handler."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 class TestWorkflowHandler:
@@ -16,8 +17,8 @@ class TestWorkflowHandler:
     @pytest.mark.asyncio
     async def test_handler_initialization(self):
         """Test handler initializes with executor and storage."""
-        with patch("ceq_worker.handler.ComfyUIExecutor") as mock_executor, \
-             patch("ceq_worker.handler.StorageClient") as mock_storage:
+        with patch("ceq_worker.handler.ComfyUIExecutor"), \
+             patch("ceq_worker.handler.StorageClient"):
             from ceq_worker.handler import WorkflowHandler
 
             handler = WorkflowHandler()
@@ -145,8 +146,8 @@ class TestHandlerEvent:
         with patch("ceq_worker.handler.ComfyUIExecutor") as mock_executor_class, \
              patch("ceq_worker.handler.StorageClient"), \
              patch("ceq_worker.handler.redis"):
-            from ceq_worker.handler import WorkflowHandler
             from ceq_worker.comfyui import ExecutionResult
+            from ceq_worker.handler import WorkflowHandler
 
             mock_executor = MagicMock()
             mock_executor.execute = AsyncMock(return_value=ExecutionResult(
@@ -167,7 +168,7 @@ class TestHandlerEvent:
                 }
             }
 
-            result = await handler.handler(event)
+            await handler.handler(event)
 
             # Executor should have been called
             mock_executor.execute.assert_called_once()
@@ -183,8 +184,8 @@ class TestHandlerEvent:
         with patch("ceq_worker.handler.ComfyUIExecutor") as mock_executor_class, \
              patch("ceq_worker.handler.StorageClient"), \
              patch("ceq_worker.handler.redis"):
-            from ceq_worker.handler import WorkflowHandler
             from ceq_worker.comfyui import ExecutionResult
+            from ceq_worker.handler import WorkflowHandler
 
             mock_executor = MagicMock()
             mock_executor.execute = AsyncMock(return_value=ExecutionResult(

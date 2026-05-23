@@ -1,8 +1,9 @@
 """Tests for model caching."""
 
-import pytest
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
+
+import pytest
 
 
 class TestModelCache:
@@ -60,8 +61,9 @@ class TestModelDownload:
     @pytest.mark.asyncio
     async def test_get_model_cached(self):
         """Test get_model returns path when model is cached."""
-        from ceq_worker.model_cache import ModelCache, CachedModel
         from datetime import datetime
+
+        from ceq_worker.model_cache import CachedModel, ModelCache
 
         cache = ModelCache(cache_dir=Path("/tmp/models"))
 
@@ -132,8 +134,9 @@ class TestCacheEviction:
     @pytest.mark.asyncio
     async def test_ensure_space_triggers_eviction(self):
         """Test _ensure_space evicts old models when needed."""
-        from ceq_worker.model_cache import ModelCache, CachedModel
         from datetime import datetime, timedelta
+
+        from ceq_worker.model_cache import CachedModel, ModelCache
 
         cache = ModelCache(
             cache_dir=Path("/tmp/models"),
@@ -239,8 +242,9 @@ class TestWorkerAffinity:
     @pytest.mark.asyncio
     async def test_get_worker_affinity(self):
         """Test getting worker's cached models for affinity."""
-        from ceq_worker.model_cache import ModelCache, CachedModel
         from datetime import datetime
+
+        from ceq_worker.model_cache import CachedModel, ModelCache
 
         cache = ModelCache(cache_dir=Path("/tmp/models"))
 
@@ -267,8 +271,9 @@ class TestWorkerAffinity:
     @pytest.mark.asyncio
     async def test_register_affinity(self):
         """Test registering affinity to Redis."""
-        from ceq_worker.model_cache import ModelCache, CachedModel
         from datetime import datetime
+
+        from ceq_worker.model_cache import CachedModel, ModelCache
 
         cache = ModelCache(cache_dir=Path("/tmp/models"))
         cache._redis = AsyncMock()
@@ -292,8 +297,9 @@ class TestCacheLifecycle:
     @pytest.mark.asyncio
     async def test_shutdown(self):
         """Test shutdown cleans up resources."""
-        from ceq_worker.model_cache import ModelCache
         import asyncio
+
+        from ceq_worker.model_cache import ModelCache
 
         cache = ModelCache(cache_dir=Path("/tmp/models"))
         cache._redis = AsyncMock()

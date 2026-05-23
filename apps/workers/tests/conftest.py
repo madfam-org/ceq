@@ -2,10 +2,9 @@
 
 import asyncio
 from collections.abc import Generator
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-import pytest_asyncio
 
 
 @pytest.fixture(scope="session")
