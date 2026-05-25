@@ -44,7 +44,7 @@ spec:
             - name: JANUA_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: ceq-secrets
+                  name: ceq-janua-client-secret
                   key: JANUA_CLIENT_SECRET
           resources:
             requests:
