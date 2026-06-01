@@ -1,9 +1,9 @@
 # CEQ Identity & Capped GA Demo — Session Wrap-Up
 
-> **Last updated:** 2026-05-23  
+> **Last updated:** 2026-06-01
 > **Audience:** Engineering, operators, platform agents, stakeholders  
-> **Status:** Engineering complete for identity wiring; operator gates open for Vault sync + browser proof  
-> **Readiness:** ~72% to capped GA demo ([`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md))
+> **Status:** Identity wiring deployed; Studio token route accepts Janua client secret; browser credential proof still pending
+> **Readiness:** Partially demoable; Tier B still needs browser login and GPU golden-path proof ([`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md))
 
 This document consolidates the 2026-05-22/23 stabilization session: what was
 built, what Janua delivered, what operators must still run, and where every
@@ -19,9 +19,17 @@ E2E are green. **Janua OAuth P0 is complete** — authorize returns 302 for clie
 `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`. **CEQ engineering wired K8s** to mount
 `JANUA_CLIENT_SECRET` at runtime.
 
-**Single remaining P0 for browser login:** sync `JANUA_CLIENT_SECRET` from
-GitHub Actions repo secret → Vault `secret/ceq` → ExternalSecret → `ceq-studio`
-pods, then verify login on `app.ceq.lol`.
+The 2026-06-01 audit verified `POST https://app.ceq.lol/api/auth/token` with a
+bogus code returns Janua `invalid_grant`, not `invalid_client`, so the deployed
+Studio token route has a client secret accepted by Janua. The remaining P0 is
+operator browser proof with real credentials on `app.ceq.lol`.
+
+Public prod smoke was revalidated on 2026-06-01 with
+`CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` and stored in
+[`ops/evidence/2026-06-01-public-prod-smoke.md`](../ops/evidence/2026-06-01-public-prod-smoke.md).
+The full unauthenticated endpoint matrix from that date is maintained separately in
+`ops/evidence/2026-06-01b-prod-endpoints.csv`; the intermediate re-run capture
+is stale due transient DNS/connectivity in this environment.
 
 After login works: Phase 1 runtime secrets → Phase 2 GPU golden-path smoke → Tier B
 demo declaration.
@@ -35,6 +43,8 @@ demo declaration.
 | **[This file](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md)** | Session wrap-up, doc map, status | Everyone |
 | [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md) | Full P0–P7 program, smoke matrix, historical record | Eng + ops |
 | [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md) | Capped GA demo tiers (A/B/C), scorecard, acceptance | Product + demo |
+| [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md) | Paid launch gates, remediation tracks, commercial GA declaration | Product + eng + ops |
+| [`COMMERCIAL_LAUNCH_READINESS_PACK.md`](./COMMERCIAL_LAUNCH_READINESS_PACK.md) | Commercial launch evidence pack: support macros, alert routing, legal/commercial docs | Product + ops |
 | [`JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md) | Janua OAuth contract (**P0 done**) | Janua agents |
 | [`JANUA_OPERATOR.md`](./JANUA_OPERATOR.md) | CEQ-side operator checklist (Vault, browser, smokes) | CEQ on-call |
 | [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md) | Copy-paste prompts: Vault, K8s, acceptance, deploy | Platform agents |
@@ -60,8 +70,8 @@ demo declaration.
 
 | Item | Location |
 |------|----------|
-| Studio `JANUA_CLIENT_SECRET` secretKeyRef | `infrastructure/k8s/studio-deployment.yaml` |
-| ExternalSecret Vault mapping | `infrastructure/k8s/external-secret.yaml` |
+| Studio `JANUA_CLIENT_SECRET` secretKeyRef | `infrastructure/k8s/studio-deployment.yaml` (`ceq-janua-client-secret`) |
+| ExternalSecret Vault mapping | `infrastructure/k8s/external-secret.yaml` (`secret/ceq.JANUA_CLIENT_SECRET`) |
 | Secret template + client ID alignment | `infrastructure/k8s/secrets.yaml` |
 | Vault sync helper script | `scripts/sync-janua-client-secret-to-vault.sh` |
 
@@ -114,19 +124,21 @@ demo declaration.
 
 Execute in order. Full prompts: [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md).
 
-| # | Agent | Action | Blocker for | 2026-05-23 status |
+| # | Agent | Action | Blocker for | 2026-06-01 status |
 |---|-------|--------|-------------|-------------------|
-| 1 | Enclii/Vault | Write `JANUA_CLIENT_SECRET` to Vault `secret/ceq` | Token exchange | ❌ **Not synced** — key absent from `ceq-secrets` |
-| 2 | Platform/K8s | ExternalSecret sync + `ceq-studio` rollout | Pod env | ⏸ After Agent 1 |
-| 3 | CEQ acceptance | Browser login + `production-smoke.sh` with JWT | Tier B demo | ⏸ Public smoke only |
+| 1 | Enclii/Vault | Write `JANUA_CLIENT_SECRET` to Vault `secret/ceq` | Token exchange | ✅ Runtime token route accepts secret (2026-06-01) |
+| 2 | Platform/K8s | ExternalSecret sync + `ceq-studio` rollout | Pod env | ✅ Inferred from live token route; verify cluster directly if changing secrets |
+| 3 | CEQ acceptance | Browser login + `production-smoke.sh` with JWT | Tier B demo | ⏳ Browser credentials proof pending |
 | 4 | Janua (P1) | Deploy `GET /logout` fix | Sign-out redirect | 🔧 Code in `janua`; prod 404 |
 | 5 | CEQ deploy | Monitor GitOps digest deploy | Latest images | Ongoing |
 | 6 | Phase 1 secrets | `JOB_COMPLETION_CALLBACK_TOKEN`, webhook secret | GPU smoke | Open |
-| 7 | GitHub org | Branch protection on `main` | CI governance | Open |
+| 7 | GitHub org | Branch protection on `main` | CI governance | ✅ Verified (6 CEQ checks + review/stale/admin guards) |
 
-**Coordinator run (2026-05-23):** Confirmed GitHub repo secret exists; Vault property not
-materialized in cluster; `CEQ_PUBLIC_ONLY=true` production smoke green; Janua authorize 302.
-See [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md) § Coordinator session outcomes.
+**Coordinator run (2026-05-23):** Confirmed GitHub repo secret exists; Vault property was not
+materialized in cluster then; `CEQ_PUBLIC_ONLY=true` production smoke green; Janua authorize 302.
+**Repo/prod audit (2026-06-01):** public smoke remains green and Studio token exchange
+with a bogus code reaches Janua as an accepted client (`invalid_grant`). See
+[`DOCS_EVIDENCE_AUDIT_2026-06-01.md`](./DOCS_EVIDENCE_AUDIT_2026-06-01.md).
 
 ### Quick operator commands
 
@@ -135,7 +147,7 @@ See [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md) § Coordinator 
 scripts/sync-janua-client-secret-to-vault.sh
 
 # 2. K8s verify (break-glass)
-kubectl -n ceq get externalsecret ceq-secrets
+kubectl -n ceq get externalsecret ceq-janua-client-secret
 kubectl -n ceq rollout restart deployment/ceq-studio
 kubectl -n ceq rollout status deployment/ceq-studio --timeout=300s
 
@@ -154,7 +166,7 @@ CEQ_RUN_OPERATIONS_STATUS=true scripts/production-smoke.sh
 ```mermaid
 flowchart TD
   A[Janua OAuth registered] --> B[Vault JANUA_CLIENT_SECRET]
-  B --> C[ExternalSecret → ceq-secrets]
+  B --> C[ExternalSecret → ceq-janua-client-secret]
   C --> D[ceq-studio rollout]
   D --> E[Browser login app.ceq.lol]
   E --> F[CEQ_AUTH_TOKEN smoke]
@@ -200,8 +212,8 @@ OAuth callback **must** be `https://app.ceq.lol/auth/callback` (not `ceq.lol`).
 - [x] Janua authorize 302 for documented client
 - [x] K8s manifests wire `JANUA_CLIENT_SECRET`
 - [x] CI green (unit + Playwright mock + Docker smoke)
-- [ ] Vault `secret/ceq.JANUA_CLIENT_SECRET` synced
-- [ ] `ceq-studio` pods have secret env
+- [x] Studio token route accepts mounted Janua client secret
+- [x] `ceq-studio` has effective `JANUA_CLIENT_SECRET` at runtime (inferred from token route)
 - [ ] Real browser login on `app.ceq.lol`
 - [ ] `CEQ_AUTH_TOKEN` production smoke green
 - [ ] Tier B checklist in `GA_DEMO_DEFINITION.md` ticked

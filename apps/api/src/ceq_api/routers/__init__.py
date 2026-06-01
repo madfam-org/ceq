@@ -2,6 +2,7 @@
 
 from ceq_api.routers import (
     assets,
+    credits,
     health,
     intent,
     interest,
@@ -17,6 +18,7 @@ from ceq_api.routers import (
 
 __all__ = [
     "assets",
+    "credits",
     "health",
     "intent",
     "interest",

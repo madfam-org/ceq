@@ -9,6 +9,8 @@ from sqlalchemy.exc import IntegrityError
 
 from ceq_api.models import (
     Asset,
+    CreditLedgerEntry,
+    CreditLedgerType,
     Job,
     JobStatus,
     Output,
@@ -32,9 +34,44 @@ class TestSchemaIntegrity:
             lambda sync_session: get_tables(sync_session.get_bind())
         )
 
-        expected_tables = ["workflows", "templates", "jobs", "outputs", "assets"]
+        expected_tables = [
+            "workflows",
+            "templates",
+            "jobs",
+            "outputs",
+            "assets",
+            "credit_ledger_entries",
+        ]
         for table in expected_tables:
             assert table in tables, f"Missing table: {table}"
+
+    @pytest.mark.asyncio
+    async def test_credit_ledger_unique_idempotency_key(self, db_session):
+        """Credit ledger must prevent duplicate grants/debits."""
+        user_id = uuid4()
+        first = CreditLedgerEntry(
+            user_id=user_id,
+            amount=100,
+            transaction_type=CreditLedgerType.GRANT.value,
+            reason="test grant",
+            idempotency_key="test-ledger-key",
+            ledger_metadata={},
+        )
+        duplicate = CreditLedgerEntry(
+            user_id=user_id,
+            amount=100,
+            transaction_type=CreditLedgerType.GRANT.value,
+            reason="test grant",
+            idempotency_key="test-ledger-key",
+            ledger_metadata={},
+        )
+
+        db_session.add(first)
+        await db_session.flush()
+        db_session.add(duplicate)
+
+        with pytest.raises(IntegrityError):
+            await db_session.flush()
 
     @pytest.mark.asyncio
     async def test_workflow_table_columns(self, db_session):

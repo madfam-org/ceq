@@ -11,13 +11,19 @@ from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from ceq_api.auth import JanuaUser, get_current_user
+from ceq_api.config import get_settings
 from ceq_api.db import get_db
 from ceq_api.db.redis import enqueue_job
+from ceq_api.entitlements import require_template_entitlement
+from ceq_api.job_billing import debit_gpu_job_credits
 from ceq_api.models import Job, Workflow
+from ceq_api.quotas import active_job_limit_for_user, require_active_job_quota
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 router = APIRouter()
 
@@ -190,9 +196,13 @@ async def get_workflow(
 
     Retrieve a specific entropy pattern.
     """
-    query = select(Workflow).where(
-        Workflow.id == workflow_id,
-        Workflow.is_deleted == False,  # noqa: E712
+    query = (
+        select(Workflow)
+        .options(selectinload(Workflow.template))
+        .where(
+            Workflow.id == workflow_id,
+            Workflow.is_deleted == False,  # noqa: E712
+        )
     )
     result = await db.execute(query)
     workflow = result.scalar_one_or_none()
@@ -297,9 +307,13 @@ async def run_workflow(
     Use the returned job_id to track progress via /v1/jobs/{job_id}.
     """
     # Get workflow
-    query = select(Workflow).where(
-        Workflow.id == workflow_id,
-        Workflow.is_deleted == False,  # noqa: E712
+    query = (
+        select(Workflow)
+        .options(selectinload(Workflow.template))
+        .where(
+            Workflow.id == workflow_id,
+            Workflow.is_deleted == False,  # noqa: E712
+        )
     )
     result = await db.execute(query)
     workflow = result.scalar_one_or_none()
@@ -316,6 +330,15 @@ async def run_workflow(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied. This entropy pattern is private.",
         )
+
+    if workflow.template is not None:
+        require_template_entitlement(workflow.template, user)
+
+    await require_active_job_quota(
+        db,
+        user_id=user.id,
+        max_active_jobs=active_job_limit_for_user(user, settings),
+    )
 
     # Validate params against input_schema
     if workflow.input_schema:
@@ -353,6 +376,14 @@ async def run_workflow(
     db.add(job)
     await db.flush()
     await db.refresh(job)
+    await debit_gpu_job_credits(
+        db,
+        settings,
+        job,
+        user,
+        category=workflow.template.category if workflow.template else None,
+        template_id=workflow.template_id,
+    )
 
     # Queue job for processing
     job_data = {

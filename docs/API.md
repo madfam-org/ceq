@@ -7,7 +7,9 @@ API documentation for CEQ — Creative Entropy Quantized.
 
 ## Authentication
 
-All API requests require a valid JWT token from Janua:
+Most user-scoped and mutating API requests require a valid JWT token from Janua.
+Public exceptions include health checks and template discovery (`GET
+/v1/templates`, `GET /v1/templates/{id}`, `GET /v1/templates/categories`).
 
 ```bash
 curl https://api.ceq.lol/v1/workflows \
@@ -27,8 +29,88 @@ Returns API health status.
 **Response:**
 ```json
 {
-  "status": "healthy",
+  "status": "ok",
+  "service": "ceq-api",
   "version": "0.1.0"
+}
+```
+
+### Readiness
+
+```http
+GET /ready
+```
+
+Dependency-aware readiness check for DB/Redis and key runtime dependencies.
+
+**Response:**
+```json
+{
+  "status": "ready",
+  "message": "Entropy containment stable. All systems operational.",
+  "database": "ok",
+  "redis": "ok"
+}
+```
+
+### Circuits
+
+```http
+GET /circuits
+```
+
+Returns circuit-breaker health for runtime stability monitoring.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "open_circuits": [],
+  "circuits": {
+    "redis": {
+      "state": "closed",
+      "fail_count": 0
+    }
+  }
+}
+```
+
+---
+
+## Render Assets
+
+The render API is deterministic and content-addressed. In production it
+requires a Janua bearer token; unauthenticated requests return `401`.
+
+| Method | Endpoint | Output |
+|--------|----------|--------|
+| `POST` | `/v1/render/card` | `card-standard` PNG, 512x768 |
+| `POST` | `/v1/render/thumbnail` | Generic registered thumbnail template |
+| `POST` | `/v1/render/audio` | `tone-beep` WAV, 16-bit PCM at 22.05kHz |
+| `POST` | `/v1/render/3d` | `card-plate` GLB |
+| `GET` | `/v1/render/templates` | Registered render templates |
+
+Request:
+```json
+{
+  "template": "card-standard",
+  "data": {
+    "title": "Smoke",
+    "accent": "#FF5A3C"
+  }
+}
+```
+
+Response:
+```json
+{
+  "url": "https://...",
+  "storage_uri": "r2://ceq-assets/render/card-standard/<hash>.png",
+  "hash": "<sha256>",
+  "template": "card-standard",
+  "template_version": "1",
+  "content_type": "image/png",
+  "cached": true
 }
 ```
 
@@ -49,8 +131,9 @@ Returns all workflows for the authenticated user.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `limit` | int | Max results (default: 50) |
-| `offset` | int | Pagination offset |
+| `skip` | int | Pagination offset |
 | `tag` | string | Filter by tag |
+| `public_only` | bool | Return only public workflows |
 
 **Response:**
 ```json
@@ -145,6 +228,12 @@ POST /v1/workflows/{id}/run
 
 Executes a workflow and returns a job ID.
 
+New job submissions are capped across queued and running jobs. Free/default
+users use `MAX_ACTIVE_JOBS_PER_USER`; `pro`/`premium`, `studio`, and `admin`
+roles use `MAX_ACTIVE_JOBS_PRO`, `MAX_ACTIVE_JOBS_STUDIO`, and
+`MAX_ACTIVE_JOBS_ADMIN` respectively. `0` disables a cap. When the authenticated
+user is at the cap, this endpoint returns `429`.
+
 **Request Body:**
 ```json
 {
@@ -160,7 +249,7 @@ Executes a workflow and returns a job ID.
 {
   "job_id": "uuid",
   "status": "queued",
-  "queue_position": 3
+  "message": "In the crucible... Your transmutation is queued."
 }
 ```
 
@@ -180,9 +269,9 @@ Returns all jobs for the authenticated user.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `status` | string | Filter: queued, running, completed, failed |
+| `status_filter` | string | Filter: queued, running, completed, failed, cancelled |
 | `limit` | int | Max results (default: 50) |
-| `offset` | int | Pagination offset |
+| `skip` | int | Pagination offset |
 
 **Response:**
 ```json
@@ -245,6 +334,40 @@ Returns job details including outputs if complete.
   "worker_id": "ceq-worker-0",
   "brand_message": "Materialized. ✨"
 }
+```
+
+### Poll Job
+
+```http
+GET /v1/jobs/{id}/poll
+```
+
+Compatibility polling endpoint; returns the same shape as
+`GET /v1/jobs/{id}`.
+
+### Get Job Outputs
+
+```http
+GET /v1/jobs/{job_id}/outputs
+```
+
+Returns outputs for a specific job.
+
+```json
+[
+  {
+    "id": "uuid",
+    "filename": "output.png",
+    "storage_uri": "r2://ceq-assets/outputs/job/output.png",
+    "public_url": "https://...",
+    "file_type": "image/png",
+    "file_size_bytes": 524288,
+    "width": 512,
+    "height": 768,
+    "duration_seconds": null,
+    "preview_url": "https://..."
+  }
+]
 ```
 
 ### Cancel Job
@@ -311,6 +434,7 @@ Returns available workflow templates.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `category` | string | Filter: social, video, 3d, utility |
+| `tag` | string | Filter by tag name |
 
 **Response:**
 ```json
@@ -337,6 +461,25 @@ GET /v1/templates/{id}
 
 Returns template details.
 
+### List Template Categories
+
+```http
+GET /v1/templates/categories
+```
+
+Returns unique template categories from seeded templates.
+
+```json
+{
+  "categories": [
+    "social",
+    "video",
+    "3d",
+    "utility"
+  ]
+}
+```
+
 ### Fork Template
 
 ```http
@@ -353,6 +496,100 @@ Creates a new workflow from a template.
 ```
 
 **Response:** New workflow object.
+
+### Run Template
+
+```http
+POST /v1/templates/{id}/run
+```
+
+Runs a template directly and returns a queued job.
+
+Templates tagged `pro` or `premium` require a paid/admin Janua role before
+`fork` or `run`. The same entitlement check is applied when running a workflow
+derived from a premium template, so direct API callers cannot bypass the Studio
+InterestGate by forking first.
+
+Template runs use the same per-user active job cap as workflow runs.
+
+Unentitled response:
+
+```json
+{
+  "detail": {
+    "message": "Template requires Pro or Studio access.",
+    "required_entitlement": "paid_template",
+    "template_id": "uuid",
+    "template_tags": ["premium"]
+  }
+}
+```
+
+---
+
+## Credits
+
+Credit ledger endpoints are authenticated and append-only. Positive amounts
+grant/refund credits; negative amounts consume credits. Each ledger entry
+requires an `idempotency_key` so retries do not double-apply commercial events.
+
+Render debit enforcement exists behind `RENDER_CREDIT_DEBITS_ENABLED=false` by
+default. When enabled, `/v1/render/*` cache misses require enough balance,
+append one debit after successful R2 cache write, and return `402` when the user
+does not have enough credits. Cache hits do not debit credits.
+
+GPU job debit/refund enforcement exists behind
+`GPU_JOB_CREDIT_DEBITS_ENABLED=false` by default. When enabled,
+workflow/template/synthesis submissions require enough balance, append one debit
+for the queued job, and refund once when the API cancels the job or a worker
+reports `failed`/`cancelled`.
+
+### Get Balance
+
+```http
+GET /v1/credits/balance
+```
+
+Returns the authenticated user's current credit balance.
+
+```json
+{
+  "user_id": "uuid",
+  "org_id": "uuid",
+  "balance": 375
+}
+```
+
+### List Ledger
+
+```http
+GET /v1/credits/ledger
+```
+
+Returns paginated ledger entries for the authenticated user.
+
+### Grant Credits
+
+```http
+POST /v1/credits/grants
+```
+
+Admin-only endpoint for pilot grants and support adjustments. Reusing the same
+`idempotency_key` with the same payload returns the existing entry; reusing it
+with a different payload returns `409`.
+
+```json
+{
+  "user_id": "uuid",
+  "org_id": "uuid",
+  "amount": 250,
+  "reason": "pilot grant",
+  "idempotency_key": "pilot-grant-001",
+  "metadata": {
+    "source": "support"
+  }
+}
+```
 
 ---
 
@@ -403,6 +640,38 @@ GET /v1/assets/{id}
 
 Returns asset details.
 
+### List Asset Types
+
+```http
+GET /v1/assets/types
+```
+
+Returns available asset type labels.
+
+### Presigned Upload URL
+
+```http
+POST /v1/assets/presigned-url
+```
+
+Create a presigned upload URL for direct browser uploads.
+
+### Confirm Asset
+
+```http
+POST /v1/assets/{asset_id}/confirm
+```
+
+Finalize or confirm a direct upload and return the final asset record.
+
+### Delete Asset
+
+```http
+DELETE /v1/assets/{id}
+```
+
+Deletes an existing asset.
+
 ---
 
 ## Outputs
@@ -437,6 +706,83 @@ Returns generated outputs.
   ]
 }
 ```
+
+### Get Output
+
+```http
+GET /v1/outputs/{id}
+```
+
+Returns output details.
+
+### Download Output
+
+```http
+GET /v1/outputs/{id}/download
+```
+
+Returns a short-lived download link for output binary bytes.
+
+### Publish Output
+
+```http
+POST /v1/outputs/{id}/publish
+```
+
+Publish output to a channel.
+
+**Request Body:**
+```json
+{
+  "channel": "webhook",
+  "options": {
+    "url": "https://hooks.example.com/ceq/callback",
+    "caption": "Check out this cosmic nebula!"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "channel": "webhook",
+  "url": "https://hooks.example.com/ceq/callback",
+  "message": "Creation broadcasted via webhook. ✨"
+}
+```
+
+### List Channels
+
+```http
+GET /v1/outputs/channels
+```
+
+Returns configured output publishing channels and their availability.
+
+### Upload URL for External Asset
+
+```http
+POST /v1/outputs/upload-url
+```
+
+Issue an upload URL for direct output upload workflows.
+
+### Register Output
+
+```http
+POST /v1/outputs/register
+```
+
+Register an output already uploaded by an external producer.
+
+### Delete Output
+
+```http
+DELETE /v1/outputs/{id}
+```
+
+Deletes an existing output and attempts to remove associated storage object.
 
 ### Worker Completion Report
 
@@ -546,6 +892,8 @@ Returns production acceptance signals without raw cluster access: environment,
 app version, R2/auth/secret readiness, current Alembic revision when readable,
 and Redis queue/dead-letter lengths.
 
+Requires an authenticated Janua user with the `admin` role.
+
 Example response:
 
 ```json
@@ -579,75 +927,105 @@ stored callback URL with the configured `JOB_COMPLETION_CALLBACK_TOKEN`, or
 discard a payload after manual handling. Successful replay removes the exact
 Redis list item and marks the job Redis hash with `callback_replayed_at`.
 
-### Get Output
-
-```http
-GET /v1/outputs/{id}
-```
-
-Returns output details.
-
-### Publish Output
-
-```http
-POST /v1/outputs/{id}/publish
-```
-
-Publish output to a channel.
-
-**Request Body:**
-```json
-{
-  "channel": "twitter",
-  "caption": "Check out this cosmic nebula!"
-}
-```
-
-**Response:**
-```json
-{
-  "published_url": "https://twitter.com/madfam/status/..."
-}
-```
-
 ---
+
+## Auxiliary and Intelligence APIs
+
+### Register Interest
+
+```http
+POST /v1/interest/
+```
+
+Captures gated feature interest and optional wishlist data.
+
+**Response (first registration):**
+
+```json
+{
+  "status": "registered"
+}
+```
+
+**Response (duplicate):**
+
+```json
+{
+  "status": "already_registered"
+}
+```
+
+### Synthesize From Query
+
+```http
+POST /v1/synthesis/from_query
+```
+
+Enqueues a text-to-3D synthesis job for zero-results downstream flows.
+
+```json
+{
+  "job_id": "uuid",
+  "status": "queued",
+  "prompt": "A sculptural table",
+  "source_query": "sculptural table",
+  "message": "Synthesis queued. CEQ is generating a royalty-free 3D asset from your prompt.",
+  "estimated_seconds": 45
+}
+```
+
+### Analyze Printability
+
+```http
+POST /v1/printability/analyze
+```
+
+Returns heuristic printability scores and risk flags for upload or geometry metadata.
+
+### Route User Intent
+
+```http
+POST /v1/intent/route
+```
+
+Classifies user intent and optionally forwards to a downstream ecosystem service.
 
 ## Error Responses
 
-All errors follow this format:
+Errors are returned as FastAPI/JWT/Jose `detail` payloads (string or structured
+object) plus standard HTTP status codes.
+
+```json
+{"detail": "Invalid credentials. Signal corrupted."}
+```
 
 ```json
 {
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Invalid input parameters",
-    "details": {
-      "prompt": "Required field"
-    }
+  "detail": {
+    "message": "Template requires Pro or Studio access.",
+    "required_entitlement": "paid_template"
   }
 }
 ```
 
-### Error Codes
+```json
+{"detail": "Signal lost. Authentication required."}
+```
 
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| `UNAUTHORIZED` | 401 | Invalid or missing token |
-| `FORBIDDEN` | 403 | Insufficient permissions |
-| `NOT_FOUND` | 404 | Resource not found |
-| `VALIDATION_ERROR` | 422 | Invalid input |
-| `RATE_LIMITED` | 429 | Too many requests |
-| `INTERNAL_ERROR` | 500 | Server error |
+Typical statuses are `400`, `401`, `403`, `404`, `409`, `413`, `422`, `429`, and
+`500`, depending on the endpoint and error path.
 
 ---
 
 ## Rate Limits
 
-| Tier | Requests/minute | Concurrent jobs |
-|------|-----------------|-----------------|
-| Free | 60 | 2 |
-| Pro | 300 | 10 |
-| Enterprise | Unlimited | Unlimited |
+Current limits are configured by middleware in `apps/api/src/ceq_api/middleware.py`
+and `apps/api/src/ceq_api/routers/interest.py`:
+
+- Default production request limit: `100/minute`.
+- `/v1/interest/` has an explicit limiter of `10/hour`.
+- Active job concurrency is controlled by `MAX_ACTIVE_JOBS_*` settings (`0` means
+  no cap).
 
 ---
 
@@ -695,4 +1073,5 @@ console.log(result.outputUrls);
 
 ---
 
-*For more details, see the [OpenAPI spec](/v1/openapi.json).*
+For more details, see the [OpenAPI spec](/openapi.json) (when docs are enabled in
+non-production). Production disables OpenAPI docs and `/docs`.

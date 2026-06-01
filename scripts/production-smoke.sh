@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # CEQ production smoke check.
 #
-# Public checks need no credentials. Full runtime proof uses public APIs only:
+# Public checks need no credentials. Authenticated checks use:
 #   CEQ_AUTH_TOKEN=<Janua JWT>
 #   CEQ_TEMPLATE_ID=<template UUID>
 #
@@ -10,6 +10,8 @@
 #   CEQ_TEMPLATE_SMOKES_JSON='[{"label":"image","template_id":"...","params":{}}]'
 #   CEQ_EXPECT_MAX_COMPLETION_DEAD_LETTERS=0
 #   CEQ_RUN_CANCEL_SMOKE=true CEQ_CANCEL_TEMPLATE_ID=<long-running template UUID>
+#   CEQ_REQUIRE_TEMPLATE_SEEDING=true
+#   CEQ_REQUIRE_CREDITS_ROUTE=true
 #   CEQ_PUBLIC_ONLY=true
 #   CEQ_STRICT_SMOKE=true
 
@@ -36,17 +38,11 @@ EXPECT_MAX_COMPLETION_DEAD_LETTERS="${CEQ_EXPECT_MAX_COMPLETION_DEAD_LETTERS:-}"
 RUN_CANCEL_SMOKE="${CEQ_RUN_CANCEL_SMOKE:-false}"
 REQUIRE_CANCEL_SMOKE="${CEQ_REQUIRE_CANCEL_SMOKE:-false}"
 EXPECT_APP_AUTH_REDIRECT="${CEQ_EXPECT_APP_AUTH_REDIRECT:-true}"
+CREDITS_ROUTE_AUTH_REQUIREMENT="${CEQ_REQUIRE_CREDITS_ROUTE:-false}"
+REQUIRE_TEMPLATE_SEEDING="${CEQ_REQUIRE_TEMPLATE_SEEDING:-false}"
 CANCEL_TEMPLATE_ID="${CEQ_CANCEL_TEMPLATE_ID:-$TEMPLATE_ID}"
 CANCEL_TEMPLATE_PARAMS_JSON="${CEQ_CANCEL_TEMPLATE_PARAMS_JSON:-$TEMPLATE_PARAMS_JSON}"
 CANCEL_AFTER_SECONDS="${CEQ_CANCEL_AFTER_SECONDS:-10}"
-
-if [[ "$STRICT_SMOKE" == "true" ]]; then
-  log "Strict smoke enabled via CEQ_STRICT_SMOKE=true"
-  RUN_OPERATIONS_STATUS="true"
-  REQUIRE_OPERATIONS_STATUS="true"
-  RUN_CANCEL_SMOKE="true"
-  REQUIRE_CANCEL_SMOKE="true"
-fi
 
 log() {
   printf '[ceq-smoke] %s\n' "$*" >&2
@@ -60,6 +56,21 @@ fail() {
 need() {
   command -v "$1" >/dev/null 2>&1 || fail "Missing required command: $1"
 }
+
+log "Configuration:"
+log "  API URL: ${API_URL}"
+log "  Studio URL: ${STUDIO_URL}"
+log "  App URL: ${APP_URL}"
+
+if [[ "$STRICT_SMOKE" == "true" ]]; then
+  log "Strict smoke enabled via CEQ_STRICT_SMOKE=true"
+  RUN_OPERATIONS_STATUS="true"
+  REQUIRE_OPERATIONS_STATUS="true"
+  RUN_CANCEL_SMOKE="true"
+  REQUIRE_CANCEL_SMOKE="true"
+  REQUIRE_TEMPLATE_SEEDING="true"
+  CREDITS_ROUTE_AUTH_REQUIREMENT="true"
+fi
 
 curl_json_with_token() {
   local token="$1"
@@ -348,6 +359,44 @@ run_cancel_smoke() {
   fail "Timed out waiting for cancel smoke job ${job_id} to become cancelled."
 }
 
+check_template_seed() {
+  if [[ "$REQUIRE_TEMPLATE_SEEDING" != "true" ]]; then
+    return
+  fi
+
+  local template_json
+  local template_total
+  template_json="$(curl_json GET "${API_URL}/v1/templates/")"
+  template_total="$(jq -r '.total // 0' <<<"$template_json")"
+
+  [[ "$template_total" =~ ^[0-9]+$ ]] || fail "Template list response missing a numeric total: ${template_total}"
+  if (( template_total == 0 )); then
+    fail "Template catalog is empty. Run database seed job for workflow templates before declaring production launch readiness."
+  fi
+
+  log "Template catalog check passed: total=${template_total}"
+}
+
+check_credits_route() {
+  if [[ "$CREDITS_ROUTE_AUTH_REQUIREMENT" != "true" ]]; then
+    return
+  fi
+
+  local credits_code
+  credits_code="$(http_status "${API_URL}/v1/credits/balance")"
+  case "$credits_code" in
+    401|403)
+      log "Credits route auth check passed: /v1/credits/balance returns ${credits_code}."
+      ;;
+    404)
+      fail "Credits route missing in production: /v1/credits/balance returned 404. Deploy with credits-aware API image."
+      ;;
+    *)
+      fail "Credits route returned unexpected status ${credits_code}; expected 401/403 in prod when unauthenticated."
+      ;;
+  esac
+}
+
 need curl
 need jq
 
@@ -390,5 +439,8 @@ assert_json "CEQ_TEMPLATE_PARAMS_JSON" "$TEMPLATE_PARAMS_JSON"
 run_operations_status
 run_template_smokes
 run_cancel_smoke
+
+check_template_seed
+check_credits_route
 
 log "Full production smoke passed."

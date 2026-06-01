@@ -12,11 +12,16 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ceq_api.auth import JanuaUser, get_current_user
+from ceq_api.config import get_settings
 from ceq_api.db import get_db
 from ceq_api.db.redis import enqueue_job
+from ceq_api.entitlements import require_template_entitlement
+from ceq_api.job_billing import debit_gpu_job_credits
 from ceq_api.models import Job, Template, Workflow
+from ceq_api.quotas import active_job_limit_for_user, require_active_job_quota
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 router = APIRouter()
 
@@ -228,6 +233,8 @@ async def fork_template(
             detail="Template not found in the grimoire.",
         )
 
+    require_template_entitlement(template, user)
+
     # Create workflow from template
     workflow_name = data.name or f"{template.name} (forked)"
     workflow = Workflow(
@@ -281,6 +288,13 @@ async def run_template(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Template not found in the grimoire.",
         )
+
+    require_template_entitlement(template, user)
+    await require_active_job_quota(
+        db,
+        user_id=user.id,
+        max_active_jobs=active_job_limit_for_user(user, settings),
+    )
 
     # Validate params against input_schema
     if template.input_schema:
@@ -341,6 +355,14 @@ async def run_template(
 
     await db.flush()
     await db.refresh(job)
+    await debit_gpu_job_credits(
+        db,
+        settings,
+        job,
+        user,
+        category=template.category,
+        template_id=template.id,
+    )
 
     # Queue job for processing
     job_data = {

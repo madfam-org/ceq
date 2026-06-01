@@ -77,11 +77,29 @@ export interface PaginatedResponse<T> {
 export class APIError extends Error {
   constructor(
     public status: number,
-    public detail: string
+    public detail: string,
+    public rawDetail?: unknown
   ) {
     super(detail);
     this.name = "APIError";
   }
+}
+
+function normalizeErrorDetail(detail: unknown): string {
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (
+    detail &&
+    typeof detail === "object" &&
+    "message" in detail &&
+    typeof detail.message === "string"
+  ) {
+    return detail.message;
+  }
+
+  return "Chaos in the signal. Retry? [↻]";
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -89,7 +107,11 @@ async function handleResponse<T>(response: Response): Promise<T> {
     const error = await response.json().catch(() => ({
       detail: "Chaos in the signal. Retry? [↻]",
     }));
-    throw new APIError(response.status, error.detail);
+    const rawDetail =
+      error && typeof error === "object" && "detail" in error
+        ? error.detail
+        : error;
+    throw new APIError(response.status, normalizeErrorDetail(rawDetail), rawDetail);
   }
   return response.json();
 }
@@ -350,6 +372,18 @@ export async function forkTemplate(id: string): Promise<Workflow> {
   return apiFetch(`/v1/templates/${id}/fork`, {
     method: "POST",
   });
+}
+
+// Credits
+
+export interface CreditBalance {
+  user_id: string;
+  org_id: string | null;
+  balance: number;
+}
+
+export async function getCreditBalance(): Promise<CreditBalance> {
+  return apiFetch("/v1/credits/balance");
 }
 
 // Health check

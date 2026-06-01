@@ -75,10 +75,10 @@ Regenerate or repair these files with
 | Component | Status | Notes |
 |-----------|--------|-------|
 | ceq.lol (landing/demo) | Live | 2 pods Running in `ceq` namespace |
-| app.ceq.lol (studio) | Live + auth-gated | No-cookie gate verified; Janua client registration/rotation required |
+| app.ceq.lol (studio) | Live + auth-gated | No-cookie gate verified; Janua registered; token route accepts client secret; browser proof pending |
 | api.ceq.lol (api) | Live | 2 pods Running |
 | `/v1/render/*` pipeline | Shipped | Card renderer + R2 cache + @ceq/sdk (62fcfe9) |
-| Janua OAuth Client | Registered 2026-05-23 | Sync `JANUA_CLIENT_SECRET` Vault → Studio; browser proof pending |
+| Janua OAuth Client | Registered 2026-05-23 | Studio token route accepted client secret on 2026-06-01; browser proof pending |
 | Cloudflare R2 Bucket | Live | `ceq-assets` — render cache under `render/{template}/{hash}.{ext}` |
 | Cloudflare Tunnel | Configured | Routes for ceq.lol, api.ceq.lol, ws.ceq.lol |
 
@@ -147,8 +147,8 @@ ceq/
 | Service | Purpose | Status |
 |---------|---------|--------|
 | Cloudflare R2 | Asset and output storage | Ready (`ceq-assets`) |
-| Redis Sentinel | Job queue and caching (DB 14) | Pending infra deploy |
-| PostgreSQL | Metadata storage | Pending (Ubicloud) |
+| Redis | Job queue and caching (DB 14) | Live (`/ready` reports `redis: ok` on 2026-06-01) |
+| PostgreSQL | Metadata storage | Live (`/ready` reports `database: ok` on 2026-06-01) |
 | Vast.ai | GPU workers (current) | API key required |
 
 ## Development Commands
@@ -198,9 +198,10 @@ bash scripts/studio-docker-smoke.sh ceq-studio:local
 | **Redirect URIs** | `https://app.ceq.lol/auth/callback`, `http://localhost:5801/auth/callback` |
 
 Live Janua verification on 2026-05-23: OAuth client `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`
-is registered (authorize 302). CEQ operators must sync `JANUA_CLIENT_SECRET`
-to Vault and roll Studio before declaring browser login healthy. See
-`docs/JANUA_OPERATOR.md`.
+is registered (authorize 302). Repo/prod audit on 2026-06-01 confirmed the
+Studio token route reaches Janua as an accepted client (`invalid_grant` for a
+bogus code). CEQ operators still need real browser login proof before declaring
+login healthy. See `docs/JANUA_OPERATOR.md`.
 
 ### Usage in Code
 
@@ -410,6 +411,7 @@ kubectl logs -n ceq deployment/cloudflared
 - [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md) - Deployment checklist
 - [docs/CEQ_IDENTITY_AND_DEMO_WRAPUP.md](./docs/CEQ_IDENTITY_AND_DEMO_WRAPUP.md) - Session wrap-up and doc index
 - [docs/GA_DEMO_DEFINITION.md](./docs/GA_DEMO_DEFINITION.md) - Capped GA demo scope and acceptance
+- [docs/COMMERCIAL_GA_REMEDIATION_PLAN.md](./docs/COMMERCIAL_GA_REMEDIATION_PLAN.md) - Commercial GA remediation tracks and paid launch gates
 - [docs/CEQ_STABILITY_ROADMAP.md](./docs/CEQ_STABILITY_ROADMAP.md) - Stabilization phases and smoke matrix
 - [docs/JANUA_OPERATOR.md](./docs/JANUA_OPERATOR.md) - CEQ-side Janua operator checklist
 - [docs/JANUA_AGENT_HANDOFF.md](./docs/JANUA_AGENT_HANDOFF.md) - Janua-side agent handoff
@@ -433,7 +435,7 @@ A multi-hour stabilization run on 2026-05-04 closed several ceq-side ArgoCD-sync
 - ~~**🟠 ImagePullBackOff on private dash-form image**~~ — Closed 2026-05-04 via ceq#26. Migration Job didn't carry `imagePullSecrets: [ghcr-credentials]` so the GHCR pull returned 401. Studio + API deployments already had this; migration Job inherited the same secret.
 - ~~**🟠 ceq.lol 502 after pods running**~~ — Closed 2026-05-04 via ceq#28. The `ceq` namespace had `default-deny-egress` + `default-deny-ingress` from the enclii onboarding bundle but no allow rules for cloudflared → ceq pods. Added 4 NPs: `allow-cloudflared-ingress` (ports 80, 5800, 5801, 8000), `allow-intra-namespace`, `allow-https-egress`, `allow-data-egress`. ceq.lol responded 200 within seconds.
 - ~~**🟠 ArgoCD ceq-services Degraded — Service ports + worker SC**~~ — Closed 2026-05-04 via ceq#29. Live cluster ran `port: 80 → targetPort: 5800/5801` (manually patched during the cloudflared work) but source declared `port: 5800/5801`. ArgoCD's client-side-apply migration choked on `spec.ports[0].name: Required value`. Source aligned with live shape (`name: http, port: 80, targetPort: 5800/5801, protocol: TCP`). ceq-worker had no securityContext at all → Kyverno `restrict-capabilities` rejected every apply. Added pod-level `runAsNonRoot:true, runAsUser:1001, fsGroup:1001, seccompProfile`, container-level `privileged:false, allowPrivilegeEscalation:false, capabilities.drop:[ALL]`, explicit `ports: []`, and uppercase `REDIS_URL` (matches the migration Job pattern).
-- **🟡 ceq Studio login — Vault sync pending** — Janua OAuth client registered 2026-05-23 (`jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`; authorize 302). `app.ceq.lol` browser login requires `JANUA_CLIENT_SECRET` in Vault → `ceq-secrets` → Studio deployment (manifest landed; ArgoCD rollout + acceptance pending). Janua `GET /logout` returns 404 (P1, non-blocking for login). See `docs/JANUA_OPERATOR.md`.
+- **🟡 ceq Studio login — browser proof pending** — Janua OAuth client registered 2026-05-23 (`jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`; authorize 302). The 2026-06-01 audit verified `app.ceq.lol` token exchange reaches Janua as an accepted client (`invalid_grant` for a bogus code), so the deployed Studio has an effective `JANUA_CLIENT_SECRET` via `ceq-janua-client-secret`. Real browser login with credentials and post-login smoke remain pending. Janua `GET /logout` returns 404 (P1, non-blocking for login). See `docs/JANUA_OPERATOR.md`.
 - ~~**🔴 ceq.lol returning 502 cluster-wide for ~7 h**~~ — Closed 2026-05-04 ~08:00 UTC via ceq#31. The `kustomization.yaml` used legacy `commonLabels:` which propagated into `Service.spec.selector` AND `Deployment.spec.selector.matchLabels`, but pod template labels (carrying `app.kubernetes.io/name=ceq-studio` / `part-of=ceq`) overrode commonLabels at the pod level. Net: selector required 4 labels, pods only had 3 with conflicting values → endpoints empty → cloudflared got connection-refused → 502 across `ceq.lol` / `app.ceq.lol` / `api.ceq.lol` for ~7 hours after the prior session's apply triggered the mismatch. **Live mitigation**: kubectl patched the Service selectors to drop the 3 commonLabels keys (HTTP 200 returned within seconds). **Permanent fix**: switched to `labels: [{ includeSelectors: false, pairs: ... }]` so metadata labels still tag every resource for dashboards but selectors stay untouched. Pattern to avoid in other repos: any kustomization that mixes `commonLabels` with Deployment templates that already declare their own `app.kubernetes.io/name` / `part-of` will eventually mismatch.
 
 ---

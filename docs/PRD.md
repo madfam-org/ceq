@@ -5,10 +5,18 @@
 ---
 
 > **Version**: 0.1.0  
-> **Status**: Draft  
+> **Status**: Historical draft / product intent, not live-status source of truth
 > **Domain**: ceq.lol  
 > **Created**: 2025-12-10  
 > **Philosophy**: *Wrestling order from the chaos of latent space*
+
+> For current production evidence, deployment state, and remaining gates, use
+> [`DOCS_EVIDENCE_AUDIT_2026-06-01.md`](./DOCS_EVIDENCE_AUDIT_2026-06-01.md),
+> [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md), and
+> [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md). For paid launch scope and
+> commercial GA gates, use
+> [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md) plus
+> [`COMMERCIAL_LAUNCH_READINESS_PACK.md`](./COMMERCIAL_LAUNCH_READINESS_PACK.md).
 
 ---
 
@@ -493,8 +501,8 @@ export function AuthProvider({ children }) {
   return (
     <JanuaProvider 
       domain="auth.madfam.io"
-      clientId="ceq-studio"
-      redirectUri="https://ceq.lol/callback"
+      clientId="jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk"
+      redirectUri="https://app.ceq.lol/auth/callback"
     >
       {children}
     </JanuaProvider>

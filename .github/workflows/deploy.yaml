@@ -266,6 +266,9 @@ jobs:
       # since acecfd5 (75s × 5 retries, then exit 1).
       digest: ${{ steps.build.outputs.digest }}
 
+    outputs:
+      digest: ${{ steps.digest.outputs.digest }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -387,7 +390,7 @@ jobs:
               exit 0
             fi
             git commit -m "deploy(ceq): update digests to ${GITHUB_SHA::8}"
-            if git push origin main; then
+            if git push origin HEAD:main; then
               echo "Pushed deploy commit on attempt ${ATTEMPT}"
               exit 0
             fi

@@ -12,7 +12,7 @@ CEQ is a content generation platform that wraps [ComfyUI](https://github.com/com
 - **Streamlined templates** for common workflows
 - **Keyboard-first UX** for maximum flow
 - **Real-time job monitoring** via WebSocket
-- **Direct publishing** to your channels
+- **Output publishing API** (currently webhook + selected channels; many social channels remain `coming_soon`)
 
 ## Quick Tour
 
@@ -38,7 +38,7 @@ For custom work, the visual editor gives you:
 ### 3. Queue Monitor
 
 Track your jobs in real-time:
-- See queue position and ETA
+- See job status and progress
 - Watch progress updates
 - Review execution logs
 - Retry failed jobs
@@ -48,7 +48,7 @@ Track your jobs in real-time:
 All your generated content in one place:
 - Browse by workflow or date
 - View metadata and settings
-- One-click publish to channels
+- Publish via the output API (supported surfaces vary by channel)
 - Download originals
 
 ## Keyboard Shortcuts
@@ -71,7 +71,7 @@ All your generated content in one place:
 3. **Run it**: Press `Cmd + Enter`
 4. **Watch the magic**: Monitor progress in real-time
 5. **Review & iterate**: Tweak and re-run until perfect
-6. **Ship it**: Publish directly to your channel
+6. **Ship it**: Export outputs or publish via supported channels
 
 ## Brand Voice
 
@@ -89,8 +89,8 @@ CEQ has personality. You'll see messages like:
 
 Your workflows run on dedicated GPU instances:
 
-- **Auto-scaling**: Workers spin up when you have jobs
-- **Cost control**: Idle workers automatically terminate
+- **Provider-managed scaling**: Worker lifecycle is controlled by configured worker/provider orchestration.
+- **Cost control**: Lifecycle policy is provider-specific and managed outside CEQ defaults.
 - **Model caching**: Common models are pre-loaded
 
 ## Authentication
@@ -101,8 +101,9 @@ public demo/landing experience, then log in to Studio at
 are protected by CEQ session cookies; unauthenticated visitors are redirected
 to Janua through `/login`.
 
-If Janua returns `invalid_client`, the CEQ OAuth client still needs operator
-registration or rotation with `https://app.ceq.lol/auth/callback`.
+If Janua returns `invalid_client`, treat it as configuration drift: the CEQ
+OAuth client is registered in production, and the 2026-06-01 audit verified the
+Studio token route is accepted by Janua.
 
 ## Need Help?
 

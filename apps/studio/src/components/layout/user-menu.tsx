@@ -7,8 +7,9 @@
  * Shows login button when not authenticated.
  */
 
-import { User, LogOut, Settings, Terminal } from "lucide-react";
+import { Coins, User, LogOut, Settings, Terminal } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
+import { useCreditBalance } from "@/lib/hooks";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,6 +29,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export function UserMenu() {
   const { user, isAuthenticated, isLoading, login, logout } = useAuth();
+  const creditBalance = useCreditBalance(isAuthenticated && !!user);
+  const creditsLabel =
+    creditBalance.data
+      ? Intl.NumberFormat("en-US").format(creditBalance.data.balance)
+      : creditBalance.isLoading || creditBalance.isFetching
+        ? "..."
+        : "--";
 
   // Loading state
   if (isLoading) {
@@ -102,6 +110,16 @@ export function UserMenu() {
             </p>
           </div>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+
+        <div className="flex items-center gap-2 px-2 py-1.5 text-sm">
+          <Coins className="h-4 w-4 text-muted-foreground" />
+          <span>Credits</span>
+          <span className="ml-auto tabular-nums text-muted-foreground">
+            {creditsLabel}
+          </span>
+        </div>
+
         <DropdownMenuSeparator />
 
         <DropdownMenuItem className="cursor-pointer" disabled>

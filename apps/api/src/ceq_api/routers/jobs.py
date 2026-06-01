@@ -28,6 +28,7 @@ from ceq_api.auth.janua import JanuaUser, get_current_user, validate_token
 from ceq_api.config import get_settings
 from ceq_api.db.redis import get_redis, publish_job_update
 from ceq_api.db.session import get_db
+from ceq_api.job_billing import refund_gpu_job_credits
 from ceq_api.logging import audit_logger
 from ceq_api.metrics import record_job_cancellation, record_worker_completion_report
 from ceq_api.models.job import Job
@@ -451,6 +452,14 @@ async def report_job_outputs(
         "worker_callback_reported_at": now.isoformat(),
     }
 
+    if data.status in {JobStatusEnum.FAILED.value, JobStatusEnum.CANCELLED.value}:
+        await refund_gpu_job_credits(
+            db,
+            settings,
+            job,
+            reason=data.status,
+        )
+
     outputs_persisted = 0
     persisted_outputs: list[Output] = []
     for output_report in data.outputs:
@@ -584,6 +593,12 @@ async def cancel_job(
         "cancel_requested_at": cancelled_at.isoformat(),
         "cancel_requested_from_status": prior_status,
     }
+    await refund_gpu_job_credits(
+        db,
+        settings,
+        job,
+        reason="api-cancelled",
+    )
 
     # Audit log the cancellation
     audit_logger.log_job_operation(

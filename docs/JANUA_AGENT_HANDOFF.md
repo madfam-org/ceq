@@ -9,6 +9,11 @@
 > **Session wrap-up:** [`CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md)  
 > **Demo context:** [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md)
 
+> **2026-06-01 audit update:** Janua registration remains good. Live Studio
+> token exchange with a bogus code returns Janua `invalid_grant`, not
+> `invalid_client`, which means the deployed CEQ Studio has a client secret
+> accepted by Janua. Remaining CEQ proof is real browser login with credentials.
+
 ---
 
 ## Janua-side completion (2026-05-23)
@@ -112,7 +117,8 @@ client and return to CEQ:
 - Confirmation of redirect URIs above
 
 CEQ will update `CEQ_PUBLIC_JANUA_CLIENT_ID` (GitHub var), Docker build args,
-and `JANUA_CLIENT_SECRET` in `ceq-secrets`, then redeploy Studio via GitOps.
+and `JANUA_CLIENT_SECRET` in `ceq-janua-client-secret`, then redeploy Studio via
+GitOps.
 
 ---
 
@@ -282,20 +288,20 @@ NEXT_PUBLIC_JANUA_CLIENT_ID=jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk
 **Janua agent:** Register **`jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`** as the
 OAuth client ID. CEQ may align the API secret key name separately.
 
-### 8.2 Studio runtime secret mount (CEQ — in repo; operator must sync Vault)
+### 8.2 Studio runtime secret mount (CEQ)
 
-**Updated 2026-05-23:** Manifests wired in CEQ repo:
+**Updated 2026-06-01:** Manifests wired in CEQ repo:
 
-- `external-secret.yaml` — `JANUA_CLIENT_SECRET` from Vault `secret/ceq`
+- `external-secret.yaml` — `JANUA_CLIENT_SECRET` from Vault `secret/ceq` into `ceq-janua-client-secret`
 - `studio-deployment.yaml` — `secretKeyRef` → `JANUA_CLIENT_SECRET`
 
 **Operator remaining steps:**
 
-1. Copy `JANUA_CLIENT_SECRET` from GitHub Actions repo secret to Vault (never git).
-2. Confirm ExternalSecret reconciled and Studio pods rolled via ArgoCD.
-3. Run browser acceptance ([`JANUA_OPERATOR.md` §4](./JANUA_OPERATOR.md)).
+1. Confirm ExternalSecret and Studio rollout before any secret rotation.
+2. Run browser acceptance ([`JANUA_OPERATOR.md` §4](./JANUA_OPERATOR.md)).
 
-Without Vault sync, authorize succeeds but token exchange fails (empty secret).
+Live token-route proof on 2026-06-01 indicates the deployed Studio currently
+has a client secret accepted by Janua.
 
 ---
 

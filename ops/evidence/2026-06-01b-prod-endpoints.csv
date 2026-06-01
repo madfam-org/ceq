@@ -1,0 +1,12 @@
+check,timestamp,url
+health_ok,2026-06-01T19:57:04Z,https://api.ceq.lol/health
+ready_ok,2026-06-01T19:57:05Z,https://api.ceq.lol/ready
+docs_not_found,2026-06-01T19:57:05Z,https://api.ceq.lol/docs
+jobs_redirects_to_trailing_slash,2026-06-01T19:57:06Z,https://api.ceq.lol/v1/jobs
+jobs_list_auth_required,2026-06-01T19:57:07Z,https://api.ceq.lol/v1/jobs/
+render_card_method_check,2026-06-01T19:57:07Z,https://api.ceq.lol/v1/render/card
+credits_balance_not_found,2026-06-01T19:57:08Z,https://api.ceq.lol/v1/credits/balance
+operations_status_auth_required,2026-06-01T19:57:09Z,https://api.ceq.lol/v1/operations/status
+app_root_auth_gate,2026-06-01T19:57:10Z,https://app.ceq.lol/
+app_login_ok,2026-06-01T19:57:11Z,https://app.ceq.lol/login
+session_auth_required,2026-06-01T19:57:11Z,https://app.ceq.lol/api/auth/session

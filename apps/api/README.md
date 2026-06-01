@@ -64,6 +64,12 @@ uvicorn ceq_api.main:app --port 5800 --reload
 | `GET` | `/v1/templates` | List templates |
 | `GET` | `/v1/templates/{id}` | Get template |
 | `POST` | `/v1/templates/{id}/fork` | Fork to workflow |
+| `POST` | `/v1/templates/{id}/run` | Run template directly |
+
+Templates tagged `pro` or `premium` require a paid Janua role (`pro`,
+`premium`, `studio`, or CEQ/plan/tier-prefixed variants) or `admin` before
+`fork`/`run`. Workflows derived from premium templates enforce the same check
+on `/v1/workflows/{id}/run`, so fork-then-run cannot bypass the gate.
 
 ### Assets
 
@@ -80,6 +86,24 @@ uvicorn ceq_api.main:app --port 5800 --reload
 | `GET` | `/v1/outputs` | List outputs |
 | `GET` | `/v1/outputs/{id}` | Get output |
 | `POST` | `/v1/outputs/{id}/publish` | Publish to channel |
+
+### Credits
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/v1/credits/balance` | user | Current authenticated user's credit balance |
+| `GET` | `/v1/credits/ledger` | user | Paginated authenticated user's credit ledger |
+| `POST` | `/v1/credits/grants` | admin | Idempotently grant credits to a Janua user |
+
+Credit ledger entries are append-only integer amounts. Positive values grant or
+refund credits; negative values consume credits. Every entry carries an
+`idempotency_key` so retries cannot double-grant or double-charge.
+
+Render-path credit debits are implemented behind
+`RENDER_CREDIT_DEBITS_ENABLED=false` by default. When enabled, `/v1/render/*`
+cache misses require enough balance and append exactly one debit keyed by user,
+template, and render hash after a successful R2 cache write. Cache hits do not
+debit credits.
 
 ### Render (generative assets)
 
@@ -139,6 +163,7 @@ Clients should prefer the `@ceq/sdk` package (`packages/sdk`) over raw HTTP.
 | `JOB_WEBHOOK_TIMEOUT_SECONDS` | No | `5.0` | Per-attempt webhook HTTP timeout |
 | `JOB_WEBHOOK_MAX_ATTEMPTS` | No | `3` | Webhook delivery attempts for retryable failures |
 | `JOB_WEBHOOK_RETRY_BACKOFF_SECONDS` | No | `1.0` | Linear retry backoff base in seconds |
+| `MAX_ACTIVE_JOBS_PER_USER` | No | `5` | Queued/running job cap per user; set `0` to disable |
 
 Worker completion callback notes:
 
@@ -154,6 +179,9 @@ Worker completion callback notes:
 - `DELETE /v1/jobs/{job_id}` records `cancel_requested=true` in Redis and
   publishes a per-job cancel control message for active workers.
 - Late non-cancelled worker reports cannot overwrite an already-cancelled job.
+- New GPU job submissions fail with `429` when the user reaches the active
+  queued/running job cap. Free/default users use `MAX_ACTIVE_JOBS_PER_USER`;
+  pro, studio, and admin roles use their plan-specific cap variables.
 - `outputs` has a DB-level uniqueness guard on `(job_id, storage_uri)`.
 - `/metrics` includes CEQ counters for worker completion reports, output
   persistence, cancellations, dead-letter replay outcomes, and user webhook
@@ -236,12 +264,17 @@ JWT tokens are validated against Janua's JWKS endpoint.
 
 ## Monetization gating (InterestGate)
 
-CEQ is in pre-monetization mode. Instead of a real paywall in front of "Pro"
-features, the studio uses the **InterestGate** pattern: gated UI is wrapped
-in `<InterestGate featureKey="..." variant="overlay">` (see
+CEQ is still pre-checkout, but premium template execution now has an API-side
+guard. Templates tagged `pro` or `premium` require a paid/admin Janua role for
+direct template `fork`/`run`, synthesis-selected premium templates, and
+premium-origin workflow runs.
+
+The studio still uses the **InterestGate** pattern for demand capture: gated UI
+is wrapped in `<InterestGate featureKey="..." variant="overlay">` (see
 `apps/studio/src/components/InterestGate.tsx`), which shows an email-capture
-form. Free `/v1/render/*` endpoints stay open for evaluators — only the
-studio surface gates "Pro" templates today.
+form. InterestGate does not add checkout to `/v1/render/*`, but the render API
+itself is still Janua-authenticated in production. Live public checks on
+2026-06-01 returned 401 for unauthenticated `/v1/render/card`.
 
 ### Endpoint
 
@@ -307,6 +340,18 @@ assert request.headers["X-Webhook-Signature"] == f"sha256={expected}"
 | `CRM_WEBHOOK_URL` | `""` | e.g. `https://crm.madfam.io/api/webhooks/ceq`. Empty = no-op |
 | `CRM_WEBHOOK_SECRET` | `""` | 32-byte hex secret shared with Phynd-CRM. Empty = no-op |
 | `CRM_WEBHOOK_TIMEOUT_SECONDS` | `5.0` | Per-request HTTP timeout |
+| `RENDER_CREDIT_DEBITS_ENABLED` | `false` | Enable credit debit enforcement on `/v1/render/*` cache misses |
+| `RENDER_CREDIT_COST_CARD` | `5` | Credit cost for card/thumbnail cache misses |
+| `RENDER_CREDIT_COST_AUDIO` | `3` | Credit cost for audio cache misses |
+| `RENDER_CREDIT_COST_3D` | `10` | Credit cost for 3D cache misses |
+| `GPU_JOB_CREDIT_DEBITS_ENABLED` | `false` | Enable credit debit/refund enforcement for GPU job submissions |
+| `GPU_JOB_CREDIT_COST_IMAGE` | `25` | Credit cost for image/social GPU jobs |
+| `GPU_JOB_CREDIT_COST_VIDEO` | `75` | Credit cost for video GPU jobs |
+| `GPU_JOB_CREDIT_COST_3D` | `50` | Credit cost for 3D/synthesis GPU jobs |
+| `GPU_JOB_CREDIT_COST_DEFAULT` | `25` | Fallback GPU job credit cost |
+| `MAX_ACTIVE_JOBS_PRO` | `10` | Active queued/running GPU jobs for `pro`/`premium` roles |
+| `MAX_ACTIVE_JOBS_STUDIO` | `25` | Active queued/running GPU jobs for `studio` roles |
+| `MAX_ACTIVE_JOBS_ADMIN` | `0` | Admin active-job cap; `0` disables the cap |
 
 ### Flipping to paid checkout later
 
@@ -314,17 +359,19 @@ When WTP signal is sufficient and billing is wired up:
 
 1. Replace `<InterestGate>` wrappers in the studio with a real checkout/tier
    gate (e.g. a `<TierGate>` similar to tezca's pattern).
-2. Keep `POST /v1/interest/` available as a **fallback** for "not ready to
+2. Connect Dhanam checkout to the credit ledger, fund balances, and enable
+   render/GPU debit flags for paid cohorts.
+3. Keep `POST /v1/interest/` available as a **fallback** for "not ready to
    buy" users — it's still useful WTP signal post-launch.
-3. Migrate the existing `feature_interest` rows into the CRM as a warm
+4. Migrate the existing `feature_interest` rows into the CRM as a warm
    waitlist; email them announcing checkout availability.
-4. Add a deprecation log line to `register_interest` when the feature_key
+5. Add a deprecation log line to `register_interest` when the feature_key
    has a paid SKU available, so we can spot rows that should have hit
    checkout instead.
 
-The existing free `/v1/render/*` endpoints stay open under all gating
-strategies — they're the public evaluation surface and the contract Rondelio
-+ other internal consumers depend on (see `@ceq/sdk`).
+The existing `/v1/render/*` endpoints remain stable under all gating
+strategies. They are an authenticated evaluation/integration surface and the
+contract Rondelio + other internal consumers depend on (see `@ceq/sdk`).
 
 ## Development
 
@@ -357,16 +404,15 @@ docker run -p 5800:5800 --env-file .env ceq-api:latest
 
 ## Production Deployment
 
-The API is deployed to Kubernetes via GitHub Actions. See [docs/PRODUCTION_DEPLOYMENT.md](../../docs/PRODUCTION_DEPLOYMENT.md).
+The API is deployed through the CEQ GitOps workflow: GitHub Actions builds
+images, commits immutable digests to `infrastructure/k8s/kustomization.yaml`,
+and ArgoCD reconciles production. Routine production operations are Enclii-first.
+See [docs/PRODUCTION_DEPLOYMENT.md](../../docs/PRODUCTION_DEPLOYMENT.md).
 
 ```bash
-# Check deployment
+# Break-glass only if Enclii or the operations API is unavailable:
 kubectl get pods -n ceq -l app=ceq-api
-
-# View logs
 kubectl logs -n ceq deployment/ceq-api
-
-# Port forward for debugging
 kubectl port-forward -n ceq deployment/ceq-api 5800:5800
 ```
 
