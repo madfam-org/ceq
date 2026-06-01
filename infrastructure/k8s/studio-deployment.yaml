@@ -41,6 +41,10 @@ spec:
               value: "https://auth.madfam.io"
             - name: NEXT_PUBLIC_JANUA_CLIENT_ID
               value: "jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk"
+            - name: NEXT_PUBLIC_DHANAM_BILLING_URL
+              value: "https://api.dhan.am"
+            - name: NEXT_PUBLIC_CEQ_CHECKOUT_ENABLED
+              value: "false"
             - name: JANUA_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:

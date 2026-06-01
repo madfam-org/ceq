@@ -45,6 +45,7 @@ describe("Studio middleware helpers", () => {
     expect(isPublicAppPath("/login")).toBe(true);
     expect(isPublicAppPath("/login/reset")).toBe(true);
     expect(isPublicAppPath("/auth/callback")).toBe(true);
+    expect(isPublicAppPath("/legal/terms")).toBe(true);
     expect(isPublicAppPath("/api/auth/session")).toBe(true);
     expect(isPublicAppPath("/workflows")).toBe(false);
   });

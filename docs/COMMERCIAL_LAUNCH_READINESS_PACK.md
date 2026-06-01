@@ -43,6 +43,7 @@ Before commercial GA, collect and archive the following:
 - `POST /v1/render/*` cache-miss billing semantics are coherent for the paid flow.
 - `/v1/credits/*` endpoints are available in production and produce expected auth-aware responses when used in the paid flow.
 - Cancel smoke passes in production and no stale failed completion replay without explicit action.
+- `/billing` checkout buttons are enabled only after Dhanam catalog, entitlement, and paid-run evidence is captured.
 
 Use one date-stamped checklist row for each production run:
 
@@ -71,6 +72,7 @@ Minimum evidence gates for GA-adjacent launch:
 - Browser login on `app.ceq.lol` persists session cookies and loads Studio shell
 - `operations/status` shows callback token configured and alembic revision
 - One authenticated GPU golden path with queue completion + output in gallery
+- Dhanam checkout uses product `ceq` with tiers `pro_artist` and `studio`; `NEXT_PUBLIC_CEQ_CHECKOUT_ENABLED=true` is allowed only after entitlement source proof.
 
 ### Documents and contracts
 
@@ -175,6 +177,14 @@ Add or confirm links in customer-facing flows for:
 - Acceptable use policy
 - Retention policy for generated media
 - Refund and support terms
+
+Current Studio routes:
+
+- `/legal/terms`
+- `/legal/privacy`
+- `/legal/acceptable-use`
+- `/legal/retention`
+- `/legal/refunds`
 
 No customer-facing launch should proceed without these links in Studio shell or
 support paths.
