@@ -2,7 +2,7 @@
 
 > **Last updated:** 2026-06-01
 > **Audience:** Product, engineering, operators, demo presenters  
-> **Related:** [`CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md), [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md), [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md), [`JANUA_OPERATOR.md`](./JANUA_OPERATOR.md), [`JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md), [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md)
+> **Related:** [`CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md), [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md), [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md), [`COMMERCIAL_LAUNCH_READINESS_PACK.md`](./COMMERCIAL_LAUNCH_READINESS_PACK.md), [`JANUA_OPERATOR.md`](./JANUA_OPERATOR.md), [`JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md), [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md)
 
 ---
 
@@ -40,7 +40,7 @@ external stakeholders **without** claiming full PRD breadth. Caps are intentiona
 |----------|-----------|--------|
 | **Identity** | Janua SSO; demo accounts only | Janua registered; Studio token route accepts client secret; browser proof pending |
 | **GPU throughput** | Single “golden” template + Vast.ai capacity | Not prod-proven |
-| **Templates** | 6 seeded workflows; demo uses 1 image path | Seeded; smoke TBD |
+| **Templates** | 13 seeded workflow templates in repo code; production needs seed verification | Repo-seeded; prod `/v1/templates/` currently returns `{"templates":[]...}` in public check |
 | **Monetization** | InterestGate on pro/premium tags plus API-side premium guard (not checkout) | Shipped in code |
 | **Render API** | Auth-gated; deterministic R2 cache | Shipped |
 | **Publishing** | Webhook only; social channels `coming_soon` | Out of demo scope |
@@ -63,7 +63,8 @@ shown on production infrastructure with tight scope; it does **not** prove that
 CEQ can be sold broadly. Paid launch requires server-side credits, API
 entitlements, billing/checkout, quotas, support, legal/commercial docs, and
 launch signoff. Track that work in
-[`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md).
+[`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md) and
+[`COMMERCIAL_LAUNCH_READINESS_PACK.md`](./COMMERCIAL_LAUNCH_READINESS_PACK.md).
 
 ---
 
@@ -305,6 +306,7 @@ Run browser acceptance from [`JANUA_OPERATOR.md`](./JANUA_OPERATOR.md), then run
 |----------|---------|
 | [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md) | Full P0–P7 phases and stability declaration |
 | [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md) | Paid launch gates, remediation tracks, commercial GA declaration |
+| [`COMMERCIAL_LAUNCH_READINESS_PACK.md`](./COMMERCIAL_LAUNCH_READINESS_PACK.md) | Launch readiness evidence, support macros, and alert/compliance checks |
 | [`JANUA_OPERATOR.md`](./JANUA_OPERATOR.md) | CEQ-side operator checklist |
 | [`JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md) | Janua-repo agent complete handoff |
 | [`PRODUCTION_DEPLOYMENT.md`](./PRODUCTION_DEPLOYMENT.md) | Deploy and secrets |

@@ -689,6 +689,8 @@ Returns production acceptance signals without raw cluster access: environment,
 app version, R2/auth/secret readiness, current Alembic revision when readable,
 and Redis queue/dead-letter lengths.
 
+Requires an authenticated Janua user with the `admin` role.
+
 Example response:
 
 ```json
@@ -757,40 +759,40 @@ Publish output to a channel.
 
 ## Error Responses
 
-All errors follow this format:
+Errors are returned as FastAPI/JWT/Jose `detail` payloads (string or structured
+object) plus standard HTTP status codes.
+
+```json
+{"detail": "Invalid credentials. Signal corrupted."}
+```
 
 ```json
 {
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Invalid input parameters",
-    "details": {
-      "prompt": "Required field"
-    }
+  "detail": {
+    "message": "Template requires Pro or Studio access.",
+    "required_entitlement": "paid_template"
   }
 }
 ```
 
-### Error Codes
+```json
+{"detail": "Signal lost. Authentication required."}
+```
 
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| `UNAUTHORIZED` | 401 | Invalid or missing token |
-| `FORBIDDEN` | 403 | Insufficient permissions |
-| `NOT_FOUND` | 404 | Resource not found |
-| `VALIDATION_ERROR` | 422 | Invalid input |
-| `RATE_LIMITED` | 429 | Too many requests |
-| `INTERNAL_ERROR` | 500 | Server error |
+Typical statuses are `400`, `401`, `403`, `404`, `409`, `413`, `422`, `429`, and
+`500`, depending on the endpoint and error path.
 
 ---
 
 ## Rate Limits
 
-| Tier | Requests/minute | Concurrent jobs |
-|------|-----------------|-----------------|
-| Free | 60 | 2 |
-| Pro | 300 | 10 |
-| Enterprise | Unlimited | Unlimited |
+Current limits are configured by middleware in `apps/api/src/ceq_api/middleware.py`
+and `apps/api/src/ceq_api/routers/interest.py`:
+
+- Default production request limit: `100/minute`.
+- `/v1/interest/` has an explicit limiter of `10/hour`.
+- Active job concurrency is controlled by `MAX_ACTIVE_JOBS_*` settings (`0` means
+  no cap).
 
 ---
 

@@ -54,20 +54,22 @@ Use `--force` to update existing rows from source definitions:
 python -m ceq_api.scripts.seed_db --force
 ```
 
+> Production note: the public check `GET /v1/templates/` is currently returning
+> an empty list (`total: 0`), so a confirmed seed run in the target environment
+> is required before claiming workflow demo availability on production.
+
 ## API Usage
 
-List templates:
+List templates (no auth required):
 
 ```bash
-curl https://api.ceq.lol/v1/templates \
-  -H "Authorization: Bearer <janua-jwt>"
+curl https://api.ceq.lol/v1/templates
 ```
 
 Get a template:
 
 ```bash
-curl https://api.ceq.lol/v1/templates/<template-id> \
-  -H "Authorization: Bearer <janua-jwt>"
+curl https://api.ceq.lol/v1/templates/<template-id>
 ```
 
 Fork a template into a workflow:

@@ -37,6 +37,7 @@ demo declaration.
 | [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md) | Full P0–P7 program, smoke matrix, historical record | Eng + ops |
 | [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md) | Capped GA demo tiers (A/B/C), scorecard, acceptance | Product + demo |
 | [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md) | Paid launch gates, remediation tracks, commercial GA declaration | Product + eng + ops |
+| [`COMMERCIAL_LAUNCH_READINESS_PACK.md`](./COMMERCIAL_LAUNCH_READINESS_PACK.md) | Commercial launch evidence pack: support macros, alert routing, legal/commercial docs | Product + ops |
 | [`JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md) | Janua OAuth contract (**P0 done**) | Janua agents |
 | [`JANUA_OPERATOR.md`](./JANUA_OPERATOR.md) | CEQ-side operator checklist (Vault, browser, smokes) | CEQ on-call |
 | [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md) | Copy-paste prompts: Vault, K8s, acceptance, deploy | Platform agents |
@@ -124,7 +125,7 @@ Execute in order. Full prompts: [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_
 | 4 | Janua (P1) | Deploy `GET /logout` fix | Sign-out redirect | 🔧 Code in `janua`; prod 404 |
 | 5 | CEQ deploy | Monitor GitOps digest deploy | Latest images | Ongoing |
 | 6 | Phase 1 secrets | `JOB_COMPLETION_CALLBACK_TOKEN`, webhook secret | GPU smoke | Open |
-| 7 | GitHub org | Branch protection on `main` | CI governance | Open |
+| 7 | GitHub org | Branch protection on `main` | CI governance | ✅ Verified (6 CEQ checks + review/stale/admin guards) |
 
 **Coordinator run (2026-05-23):** Confirmed GitHub repo secret exists; Vault property was not
 materialized in cluster then; `CEQ_PUBLIC_ONLY=true` production smoke green; Janua authorize 302.

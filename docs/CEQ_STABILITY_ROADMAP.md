@@ -5,6 +5,7 @@
 > **Session wrap-up:** [`docs/CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md)  
 > **Capped GA demo:** [`docs/GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md)  
 > **Commercial GA:** [`docs/COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md)
+> **Commercial launch pack:** [`docs/COMMERCIAL_LAUNCH_READINESS_PACK.md`](./COMMERCIAL_LAUNCH_READINESS_PACK.md)
 > **Janua handoff:** [`docs/JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md)  
 > **Platform agents:** [`docs/PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md)  
 > **Canonical smoke runner:** `scripts/production-smoke.sh`  
@@ -81,8 +82,8 @@ latent chaos → shipped content.
 
 **Infra-stable, user-incomplete.** Janua OAuth client is registered and the
 deployed Studio token route accepts the Janua client secret. Browser login with
-real credentials and GPU production smokes still need operator proof before
-CEQ can be declared fully healthy.
+real credentials, template seeding, and GPU production smokes still need operator
+proof before CEQ can be declared fully healthy.
 
 ### Live production evidence
 
@@ -96,6 +97,9 @@ CEQ can be declared fully healthy.
 | `https://api.ceq.lol/docs` | HTTP 404 | OpenAPI not exposed in prod |
 | `POST /v1/render/card` (no auth) | 401 | Render pillar auth-gated |
 | Janua OAuth for documented client | 302 → login (registered 2026-05-23) |
+| `GET /v1/templates/` | 200 JSON | `{"templates": [], "total": 0, "skip": 0, "limit": 50}` |
+| `GET /v1/credits/balance` (no auth) | 404 | Route not currently routable in public prod check |
+| `GET /v1/operations/status` (no auth) | 401 | Expected for admin-only endpoint |
 | `POST app.ceq.lol/api/auth/token` with bogus code | Janua `invalid_grant` | Client secret accepted; browser proof still pending |
 
 ### What is working
@@ -148,7 +152,8 @@ Commercial GA has additional blockers beyond full stability: Dhanam-backed
 billing or an approved pilot bridge, server-side credit/entitlement enforcement,
 quota/rate/spend controls, support readiness, customer-facing legal/commercial
 docs, and launch signoff. Track those in
-[`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md).
+[`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md) and
+[`COMMERCIAL_LAUNCH_READINESS_PACK.md`](./COMMERCIAL_LAUNCH_READINESS_PACK.md).
 
 ### 2026-05-22 implementation progress
 
@@ -215,7 +220,7 @@ Current planning estimate:
 | Milestone | Readiness | Notes |
 |-----------|-----------|-------|
 | Public technical demo | Ready now | Public edge and API evidence are green |
-| Capped GA demo | ~60-70% | Browser login and one GPU golden path remain open |
+| Capped GA demo | ~50-60% | Browser login, template seeding, and one GPU golden path remain open |
 | Full stability | ~50-60% | Strict smoke, alert routing, and governance remain open |
 | Limited commercial pilot | ~50-60% | Credit/entitlement/queue/metering primitives landed; needs funded balances, GPU proof, support workflow |
 | Commercial GA | ~45-55% | Needs Dhanam billing, prod GPU proof, alert/support/legal launch pack |
@@ -236,7 +241,8 @@ Commercial GA gates:
 | Launch signoff | Product, engineering, platform, and support sign off with evidence links |
 
 Primary remediation plan:
-[`docs/COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md).
+[`docs/COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md) plus the
+[`docs/COMMERCIAL_LAUNCH_READINESS_PACK.md`](./COMMERCIAL_LAUNCH_READINESS_PACK.md).
 
 Target windows after browser login proof:
 
@@ -684,7 +690,7 @@ gates pass.
 
 | Item | Owner | Notes |
 |------|-------|-------|
-| Template catalog expansion | Product + eng | 6 workflows exist; PRD lists dozens — prioritize social + video MVP |
+| Template catalog expansion | Product + eng | 6 checked-in workflow JSON files + 13 seeded DB templates; PRD lists dozens — prioritize social + video MVP |
 | Publishing channels | `apps/api` outputs | Twitter/Instagram/LinkedIn/Discord `coming_soon`; webhook only live |
 | Monetization | Product + Dhanam + API + Studio | InterestGate exists; initial API-side premium guard, credit ledger, role-derived active-job caps, Studio account balance, and feature-flagged render/GPU debits landed 2026-06-01; commercial GA still requires Dhanam checkout, billing reconciliation, Dhanam-backed quotas, and full Studio billing UX per [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md) |
 | Landing conversion | Studio landing | Self-contained demo on `ceq.lol`; funnel instrumentation |
@@ -803,7 +809,8 @@ When all P0/P1 gates pass, add this section to the top of this document:
 
 Remaining product debt tracked in Phase 7 backlog.
 Commercial launch work tracked in
-[`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md).
+[`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md) and
+[`COMMERCIAL_LAUNCH_READINESS_PACK.md`](./COMMERCIAL_LAUNCH_READINESS_PACK.md).
 ```
 
 ---
@@ -813,7 +820,8 @@ Commercial launch work tracked in
 See [Phase 7](#phase-7--product-backlog-post-stability-p2p3) for the full
 backlog table. Do not start Phase 7 work until the stability declaration
 template above is filled in. Paid launch work has its own acceptance gates in
-[`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md).
+[`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md) and
+[`COMMERCIAL_LAUNCH_READINESS_PACK.md`](./COMMERCIAL_LAUNCH_READINESS_PACK.md).
 
 ---
 

@@ -301,6 +301,7 @@ Confirm ArgoCD ceq-services Healthy after digest commit lands.
 | [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md) | Full stability program |
 | [`CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md) | Session wrap-up and doc index |
 | [`PRODUCTION_DEPLOYMENT.md`](./PRODUCTION_DEPLOYMENT.md) | Deploy + secrets |
+| [`COMMERCIAL_LAUNCH_READINESS_PACK.md`](./COMMERCIAL_LAUNCH_READINESS_PACK.md) | Commercial launch evidence and support macros |
 
 ---
 

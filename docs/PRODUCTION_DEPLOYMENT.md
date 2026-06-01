@@ -37,7 +37,9 @@
 Commercial GA is not declared by this deployment checklist. Paid launch still
 requires billing, credits, server-side entitlements, quotas, support, and launch
 signoff per
-[`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md).
+[`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md) and
+the readiness evidence pack at
+[`COMMERCIAL_LAUNCH_READINESS_PACK.md`](./COMMERCIAL_LAUNCH_READINESS_PACK.md).
 
 ## Deployment Checklist
 
@@ -293,8 +295,13 @@ CEQ_REQUIRE_WEBHOOK_SECRET=true \
 CEQ_EXPECT_MAX_COMPLETION_DEAD_LETTERS=0 \
 CEQ_EXPECT_ALEMBIC_REVISION="20260514_outputs_job_storage_unique" \
 CEQ_TEMPLATE_ID="<template-uuid>" \
+CEQ_REQUIRE_CREDITS_ROUTE=true \
+CEQ_REQUIRE_TEMPLATE_SEEDING=true \
 scripts/production-smoke.sh
 ```
+
+`CEQ_REQUIRE_CREDITS_ROUTE` can be replaced with `CEQ_STRICT_SMOKE=true` to
+run the strict gate set end-to-end.
 
 Multi-modal and cancellation acceptance can be run without raw Redis or pod
 access:
@@ -505,6 +512,7 @@ The Studio deployment reads `JANUA_CLIENT_SECRET` from the dedicated
 | CEQ Identity & Demo Wrap-Up | [/docs/CEQ_IDENTITY_AND_DEMO_WRAPUP.md](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md) |
 | CEQ Stability Roadmap | [/docs/CEQ_STABILITY_ROADMAP.md](./CEQ_STABILITY_ROADMAP.md) |
 | Capped GA Demo Definition | [/docs/GA_DEMO_DEFINITION.md](./GA_DEMO_DEFINITION.md) |
+| Commercial Launch Readiness Pack | [/docs/COMMERCIAL_LAUNCH_READINESS_PACK.md](./COMMERCIAL_LAUNCH_READINESS_PACK.md) |
 | Janua Operator Guide | [/docs/JANUA_OPERATOR.md](./JANUA_OPERATOR.md) |
 | Janua Agent Handoff | [/docs/JANUA_AGENT_HANDOFF.md](./JANUA_AGENT_HANDOFF.md) |
 | Enclii Deployment | [/path/to/enclii/CLAUDE.md](../../enclii/CLAUDE.md) |

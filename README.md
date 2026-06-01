@@ -259,6 +259,7 @@ account to complete the acceptance checklist.
 | [docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md](./docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md) | Repo/prod evidence audit and remaining unverified claims |
 | [docs/GA_DEMO_DEFINITION.md](./docs/GA_DEMO_DEFINITION.md) | Capped GA demo scope, readiness scorecard, acceptance |
 | [docs/COMMERCIAL_GA_REMEDIATION_PLAN.md](./docs/COMMERCIAL_GA_REMEDIATION_PLAN.md) | Commercial GA gates, remediation tracks, pilot/launch plan |
+| [docs/COMMERCIAL_LAUNCH_READINESS_PACK.md](./docs/COMMERCIAL_LAUNCH_READINESS_PACK.md) | Commercial launch evidence, support macros, alert/compliance readiness |
 | [docs/JANUA_OPERATOR.md](./docs/JANUA_OPERATOR.md) | Janua OAuth registration & login unblock checklist |
 | [docs/JANUA_AGENT_HANDOFF.md](./docs/JANUA_AGENT_HANDOFF.md) | Complete handoff for Janua-side agents |
 | [docs/PLATFORM_AGENT_HANDOFFS.md](./docs/PLATFORM_AGENT_HANDOFFS.md) | Copy-paste prompts for Vault/K8s/acceptance agents |

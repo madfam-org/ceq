@@ -14,7 +14,9 @@ credentials.
 | `https://app.ceq.lol/` without cookies | 307 | Redirects to `https://app.ceq.lol/login?returnTo=%2F` |
 | `https://app.ceq.lol/login` | 200 | Login surface reachable |
 | `https://api.ceq.lol/docs` | 404 | OpenAPI disabled in production |
+| unauthenticated `GET /v1/templates/` | 200 JSON | `{ "templates": [], "total": 0, "skip": 0, "limit": 50 }` (catalog appears unseeded in this public check) |
 | unauthenticated `POST /v1/render/card` | 401 | Render API is auth-gated in prod |
+| unauthenticated `GET /v1/credits/balance` | 404 | Credits API is not currently routable in production |
 | Janua authorize for CEQ client | 302 | Redirects to Janua login, client name `ceq-studio` |
 | `https://app.ceq.lol/api/auth/session` without cookies | 401 | Session endpoint correctly rejects no-cookie requests |
 | `POST /api/auth/token` with bogus code | 400 `invalid_grant` | Janua accepts the client secret; code is invalid as expected |
@@ -41,7 +43,7 @@ credentials.
 | Checked-in workflow files total 6 | `templates/` |
 | Studio token exchange uses server-side `JANUA_CLIENT_SECRET` | `apps/studio/src/app/api/auth/token/route.ts` |
 | Studio manifest reads `JANUA_CLIENT_SECRET` from `ceq-janua-client-secret` | `infrastructure/k8s/studio-deployment.yaml` |
-| Credit ledger and metering primitives exist | `apps/api/src/ceq_api/models/credit.py`, `credit_ledger.py`, `job_billing.py` |
+| Credit ledger and metering primitives exist in code | `apps/api/src/ceq_api/models/credit.py`, `credit_ledger.py`, `job_billing.py` |
 | Plan-aware active-job caps exist | `apps/api/src/ceq_api/quotas.py` |
 
 ## Corrections Made
@@ -54,6 +56,7 @@ credentials.
 | Render auth | Removed claims that `/v1/render/*` is public/free-open; it is stable but Janua-authenticated in prod. |
 | API docs | Corrected health response and added render endpoint reference. |
 | Template docs | Replaced placeholder template catalog with the actual checked-in files, 13 DB seed templates, and render templates. |
+| Template catalog in prod | Added verification row for `GET /v1/templates/`; production currently returns an empty list, indicating seeding needs re-check. |
 | Deployment docs | Replaced stale `ceq-prod` tunnel guidance with platform `enclii-prod` tunnel status. |
 | Legacy deploy script | Disabled legacy `ceq-prod` tunnel creation unless `CEQ_ALLOW_LEGACY_TUNNEL=true` is explicitly set. |
 | Digest docs | Updated current kustomization digest table in the stability roadmap. |
@@ -69,6 +72,7 @@ this public audit:
 |-------|----------------|
 | Real browser login completes and lands in Studio shell | Operator login with real Janua credentials |
 | `GET /api/auth/session` returns user + access token after login | Browser session cookies from a real login |
+| `GET /v1/credits/balance` with authenticated user | Valid Janua JWT and deployed credits route |
 | `GET /v1/operations/status` is green | Admin Janua JWT |
 | Alembic head is applied in production DB | Admin operations status or DB/ArgoCD access |
 | Worker pods or Vast.ai workers are healthy | Enclii workload status or provider dashboard |
@@ -80,4 +84,5 @@ this public audit:
 CEQ public edge, host split, API health, production OpenAPI posture, Janua client
 registration, and Studio token-route secret wiring are evidence-backed. Full
 Tier B / GA-demo readiness still depends on real browser login proof, runtime
-operations-status proof, and at least one authenticated GPU golden-path smoke.
+operations-status proof, a confirmed production credits API surface, and at least
+one authenticated GPU golden-path smoke.

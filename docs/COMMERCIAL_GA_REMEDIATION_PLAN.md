@@ -3,7 +3,7 @@
 > **Last updated:** 2026-06-01
 > **Audience:** Product, engineering, platform, operators, support
 > **Status:** Planning baseline. CEQ is not commercially GA yet.
-> **Related:** [`DOCS_EVIDENCE_AUDIT_2026-06-01.md`](./DOCS_EVIDENCE_AUDIT_2026-06-01.md), [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md), [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md)
+> **Related:** [`DOCS_EVIDENCE_AUDIT_2026-06-01.md`](./DOCS_EVIDENCE_AUDIT_2026-06-01.md), [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md), [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md), [`COMMERCIAL_LAUNCH_READINESS_PACK.md`](./COMMERCIAL_LAUNCH_READINESS_PACK.md)
 
 ---
 
@@ -12,6 +12,17 @@
 CEQ can support a technical demo today and is on track for a capped GA demo once
 browser login, runtime secrets, and one authenticated GPU golden path are proven.
 That is not the same as commercial GA.
+
+**Commercial GA distance:** approximately **47%** as of this audit.
+
+- Technical demo and infrastructure readiness: ~100% (live evidence)
+- Capped GA readiness: ~65%
+- Full stability: ~55%
+- Limited commercial pilot: ~50%
+- Commercial GA: ~45%
+
+The score is evidence-weighted against the checklist in this document, not a
+marketing estimate.
 
 **Commercial GA means CEQ can be sold, onboarded, metered, supported, and
 operated for paying users without manual exceptions.** The remaining gap is
@@ -24,7 +35,7 @@ Planning readiness as of 2026-06-01:
 | Milestone | Planning readiness | Basis |
 |-----------|--------------------|-------|
 | Public technical demo | Ready now | Public smoke green; landing/API live |
-| Capped GA demo | ~60-70% | Identity token route works; browser and GPU proof open |
+| Capped GA demo | ~55-65% | Identity token route works; browser, seeded-catalog, and GPU proof remain open |
 | Full stability | ~50-60% | Core runtime is implemented; strict prod smoke still open |
 | Limited commercial pilot | ~50-60% | Credit/entitlement/queue/metering primitives landed; needs funded balances, GPU proof, and one supportable cohort |
 | Commercial GA | ~45-55% | Needs Dhanam billing, prod GPU proof, alert/support/legal launch pack |
@@ -75,6 +86,19 @@ Re-verified 2026-06-01:
 | Studio client secret | Bogus token code returns `invalid_grant`, not `invalid_client` |
 | Public smoke | `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` passes |
 | Branch protection | `main` requires six CEQ CI checks, one review, stale-review dismissal, admin enforcement, and conversation resolution |
+| Template catalog (`/v1/templates/`) | Returns empty in public check (`{"templates": [], "total": 0}`) |
+| Production credits route | `GET /v1/credits/balance` returns 404 when unauthenticated |
+
+### Evidence-backed GA blockers
+
+| Blocker | Severity | Why it matters |
+|---------|----------|----------------|
+| Real operator browser proof on `app.ceq.lol` | P0 | Commercial product acceptance cannot start without this |
+| `GET /v1/operations/status` (admin) | P0 | Proves runtime callbacks/webhook readiness and migration state |
+| Authenticated GPU golden path in prod | P0 | Confirms core fulfillment before paid use |
+| Template catalog seeded in prod | P1 | Workflow demo paths cannot run if `/v1/templates/` is empty |
+| Dhanam plan/checkout path | P1 | Required for non-experimental paid conversion |
+| Alert routing + on-call drill | P1 | Required for paid operations confidence |
 
 Open evidence gaps:
 
@@ -83,6 +107,7 @@ Open evidence gaps:
 | Real browser login with operator credentials | Capped GA demo, any user-facing launch |
 | `operations/status` proof for callback/webhook secrets | GPU acceptance, on-call confidence |
 | Authenticated GPU golden path in prod | Demo, pilot, commercial fulfillment |
+| Template catalog remains unseeded in prod (`/v1/templates/` returns empty) | Workflow demo and premium template path availability |
 | Dhanam plan funding and entitlement source | Limited commercial pilot and commercial GA |
 | Alert receiver/on-call proof | Full stability and commercial GA |
 
@@ -93,7 +118,7 @@ Code progress since this baseline:
 | 2026-06-01 | API-side premium template guard added for `pro`/`premium` tags across template fork/run, synthesis template selection, and premium-origin workflow runs | Replace role-only paid access with Dhanam-backed plan/entitlement source |
 | 2026-06-01 | Credit ledger model/table/API added: user balance, user ledger, admin idempotent grants | Meter billable render/GPU paths with debit/refund entries and reconcile to billing |
 | 2026-06-01 | Per-user active job cap added for workflow/template/synthesis submissions via `MAX_ACTIVE_JOBS_PER_USER` | Replace the global cap with plan-aware Dhanam quotas and Studio limit UI |
-| 2026-06-01 | Studio account menu now shows authenticated user's credit balance from `/v1/credits/balance` | Add usage history, upgrade, exhausted-credit, and payment-failure states |
+| 2026-06-01 | Studio credit balance UI is wired to `/v1/credits/balance` | Confirm endpoint is live in production and add usage history, upgrade, exhausted-credit, and payment-failure states |
 | 2026-06-01 | Render cache-miss debit plumbing added behind `RENDER_CREDIT_DEBITS_ENABLED` | Fund balances from Dhanam/pilot grants, enable for pilot cohort, and add GPU job debit/refund metering |
 | 2026-06-01 | Plan-aware active-job caps added for free/pro/studio/admin roles | Replace role-derived limits with Dhanam plan state when billing source is live |
 | 2026-06-01 | GPU job debit/refund plumbing added behind `GPU_JOB_CREDIT_DEBITS_ENABLED` | Fund balances, enable for pilot cohort, and reconcile ledger to completed jobs/billing export |
@@ -213,6 +238,97 @@ Exit evidence:
 - Release notes and support macros published
 
 ---
+
+## Commercial GA Execution Priority (ROI order)
+
+### What the first wave must unblock
+
+These are not linear tickets; they are staged dependencies. The first two tracks
+can and should run in parallel once the operator can create valid test identities
+and a Janua admin session.
+
+1. **Identity proof** (P0) and **runtime secrets** (P0) close together:
+   - Browser login proof on `app.ceq.lol`
+   - Admin `operations/status` proof
+2. In parallel once 1 is complete, run production golden path proof:
+   - Single authenticated image/thumbnail GPU completion proof
+   - Output durability + gallery proof
+3. In parallel with 2 (non-blocking for initial launch signal):
+   - alert/rollback drill prep
+   - credit plan/ledger policy decision
+   - terms/privacy/AUP publish review
+
+### Priority 1 — Identity and runtime proof
+
+1. Real browser login on `app.ceq.lol`.
+2. `GET /v1/operations/status` green for callback/webhook readiness.
+3. Workflow-seed verification (`GET /v1/templates/` non-empty) or explicit seed-job evidence.
+4. One authenticated GPU golden path proving queue → worker → callback → output.
+
+### Progress snapshot for Priority 1 (2026-06-01)
+
+- [x] Studio token route accepts Janua client secret (`invalid_grant` on bogus code)
+- [ ] Browser login + callback cookie state verified in production
+- [ ] `GET /v1/operations/status` admin proof captured
+- [ ] `/v1/templates/` seeded/catalog evidence captured (non-empty IDs)
+- [ ] Authenticated job + gallery output proof captured
+
+### Priority 2 — Commercial control plane
+
+4. Integrate plans with Dhanam or approved pilot bridge.
+5. Replace role-only premium gates with Dhanam-backed entitlements.
+6. Fund balances and enable render/GPU debits for a supported cohort.
+
+### Progress snapshot for Priority 2 (2026-06-01)
+
+- [x] Credit ledger schema and `/v1/credits/*` APIs exist in code
+- [ ] Credit endpoints are not yet fully smoke-validated in production (unauthenticated `GET /v1/credits/balance` returns 404)
+- [ ] Credit balance surfacing in Studio depends on production `credits` endpoint availability
+- [x] Role-derived premium gating and per-user active-job caps landed
+- [ ] No public plan/checkout flow in CEQ yet
+- [ ] No Dhanam-backed entitlement source wired into API enforcement
+
+### Priority 3 — Reliability, support, and compliance
+
+7. Replace role-derived caps with plan-aware quota/rate/spend controls.
+8. Add/lock alert routing, runbooks, and rollback drill evidence.
+9. Publish support macros and customer-facing terms/privacy/AUP/retention.
+
+### Progress snapshot for Priority 3 (2026-06-01)
+
+- [ ] Alert routing and drill evidence
+- [ ] Support/incident runbooks linked to alert annotations
+- [x] Support macros template started in `COMMERCIAL_LAUNCH_READINESS_PACK.md`
+- [ ] Legal/commercial customer docs linked in customer-facing flows
+
+### Priority 4 — Launch operations
+
+10. Publish launch checklist, pricing/support limits, and legal links.
+11. Execute a fresh-account paid-run rehearsal and attach evidence.
+
+### Progress snapshot for Priority 4 (2026-06-01)
+
+- [x] This roadmap now captures scope, gates, and dependencies
+- [ ] No paid-run rehearsal with real credits/checkout completed
+
+## Execution Sequence (ROI + parallelism)
+
+| Sequence | Can run in parallel? | Owner(s) | Output |
+|----------|----------------------|----------|--------|
+| P0-1: Browser login proof + `operations/status` with admin JWT | No, sequential dependencies on operator credentials, but evidence capture can be parallelized across two operators | Studio/Janua/Platform | Identity readiness + runtime token readiness |
+| P0-2: Authenticated GPU smoke (production) | Yes, once `P0-1` is green | API + Workers + Platform | End-to-end fulfillment evidence |
+| P1-1: Dhanam plan contract + pilot bridge | Yes | Product + API | Billing source defined |
+| P1-2: Entitlement hardening + quota policy | No (depends on plan contract source) | API | Revenue controls in API layer |
+| P1-3: Alert + support + legal doc package | Yes | Platform + Support + Product | Operational launch posture |
+| P2: Commercial pilot and launch rehearsal | No (requires P0-2 + P1-1/2 + P1-3) | All | Public launch readiness |
+
+## GA Launch Evidence Log (to fill in on each production evidence run)
+
+Each run should include one row in this section and a link to raw output.
+
+- Date: 2026-06-01 — Public smoke evidence row completed (`CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`)
+- Date: 2026-06-01 — Open endpoint posture checks completed (health/docs/auth) with `/health`, `/ready`, `/docs`, `/v1/render/card`, `/v1/templates/`, `/v1/operations/status` (401), `/v1/credits/balance` (404), `/api/auth/session` (401)
+
 
 ## Implementation Tracks
 
