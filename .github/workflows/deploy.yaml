@@ -387,7 +387,7 @@ jobs:
               exit 0
             fi
             git commit -m "deploy(ceq): update digests to ${GITHUB_SHA::8}"
-            if git push origin main; then
+            if git push origin HEAD:main; then
               echo "Pushed deploy commit on attempt ${ATTEMPT}"
               exit 0
             fi
