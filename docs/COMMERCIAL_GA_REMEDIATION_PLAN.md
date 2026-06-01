@@ -79,6 +79,21 @@ Use this registry as the canonical closure board for GA-blocking work.
 | P1-7 | Publish fresh-account paid pilot rehearsal evidence (login, generation, invoice/receipt, output retrieval). | Product + Eng + Support | **Not started** | Not yet executed |
 | P2 | Reconcile roadmap/docs truth after each phase closure and archive evidence row IDs centrally. | Repo docs owners | **In progress** | `COMMERCIAL_GA_REMEDIATION_PLAN.md`, `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md` |
 
+### GA-closure lanes (ROI order)
+
+Track completion with these five high-impact lanes before broader closure.
+
+| Lane | Action item | Completion status |
+|------|-------------|------------------|
+| P0-1 | Get one full browser proof (`app.ceq.lol` session bootstrap + `/api/auth/session` user payload). | `Blocked` (operator credentials still required) |
+| P0-2 | Capture green `GET /v1/operations/status` with admin JWT (`callback`, `webhook`, `revision`, `dead-letter`). | `Not started` |
+| P0-3 | Restore non-empty seeded `/v1/templates/` and freeze canonical template IDs for smoke. | `Inconsistent` (public evidence still empty) |
+| P0-4 | Prove authenticated GPU production golden path (`job → callback → output → gallery`) including one cancellation check. | `Not started` |
+| P1-1 | Publish/verify credits balance + entitlement proof for paying cohort; attach paid pilot receipt/invoice evidence. | `In progress` |
+
+No lane is marked complete until evidence is captured, reproducible, and linked from
+`docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md`.
+
 ---
 
 ## Commercial GA Definition
