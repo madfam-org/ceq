@@ -628,7 +628,7 @@ class TestValidateToken:
         mock_jwks.get_signing_key.return_value = rsa_public_key
 
         introspection_user = JanuaUser(
-            id=UUID(user_id),
+            id=UUID(str(uuid4())),
             email="fallback-introspection@madfam.io",
             roles=["user"],
         )
