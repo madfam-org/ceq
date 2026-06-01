@@ -10,14 +10,14 @@
 
 CEQ is **infra-stable and partially demoable in production today**. A **capped,
 prod-quality GA demo** (real login, one golden GPU path, deterministic render
-API, InterestGate caps) is not yet declared ready because browser login proof
-and GPU golden-path proof remain open.
+API, InterestGate caps) is not yet declared ready because operations-status and
+authenticated GPU proof remain open.
 
 | Milestone | Readiness | Blocker |
 |-----------|-----------|---------|
 | Public marketing + API edge | **~90%** | None |
 | Asset pillar (`/v1/render/*`, `@ceq/sdk`) | **~90%** | Needs Janua JWT for live call |
-| Authenticated Studio (`app.ceq.lol`) | **~65%** | Janua registered; token route accepts client secret; browser proof pending |
+| Authenticated Studio (`app.ceq.lol`) | **~85%** | Janua registered; token route accepts client secret; browser proof captured |
 | End-to-end GPU job in prod | **~10%** | Janua + runtime secrets + prod smokes |
 | Capped monetization (InterestGate + API guard) | **~60%** | Interest capture, premium API guard, credit ledger, role-derived caps, feature-flagged render/GPU debits, and Studio balance readout shipped; checkout/pricing still open |
 | GA ops (strict smoke, alerts, branch protection) | **~45%** | Branch protection enabled; strict smoke and alert routing still open |
@@ -38,7 +38,7 @@ external stakeholders **without** claiming full PRD breadth. Caps are intentiona
 
 | Cap type | Mechanism | Status |
 |----------|-----------|--------|
-| **Identity** | Janua SSO; demo accounts only | Janua registered; Studio token route accepts client secret; browser proof pending |
+| **Identity** | Janua SSO; demo accounts only | Janua registered; Studio token route accepts client secret; browser proof captured |
 | **GPU throughput** | Single “golden” template + Vast.ai capacity | Not prod-proven |
 | **Templates** | 13 seeded workflow templates in repo code; production needs seed verification | Repo-seeded; prod `/v1/templates/` currently returns `{"templates":[]...}` in public check |
 | **Monetization** | InterestGate on pro/premium tags plus API-side premium guard (not checkout) | Shipped in code |
@@ -73,7 +73,7 @@ launch signoff. Track that work in
 ```
 Public / infra / render API     ████████████████████  ~90%
 CI & deploy safety              ████████████████░░░░  ~80%
-Authenticated Studio UX         █████████████░░░░░░░  ~65%
+Authenticated Studio UX         █████████████████░░░  ~85%
 End-to-end GPU in prod          ██░░░░░░░░░░░░░░░░░░  ~10%
 Capped monetization + API guard    ██████████░░░░░░  ~50%
 GA ops (alerts, strict smoke)   ██████░░░░░░░░░░░░░░  ~30%
@@ -99,6 +99,7 @@ scripts/capture-public-endpoint-matrix.sh
 | `POST /v1/render/card` (no auth) | 401 |
 | `POST app.ceq.lol/api/auth/token` with bogus code | Janua `invalid_grant` (client accepted) |
 | Janua authorize for documented client | 302 → login (registered 2026-05-23) |
+| `GET /api/auth/session` (admin credentials) | 200 with `user`, `roles`, and `access_token` payload |
 
 ### Engineering gates landed (2026-05-22 commit `b47cca8`)
 
@@ -178,8 +179,8 @@ See [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md).
 
 - [x] Janua returns no `invalid_client` for `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk` (302 authorize, 2026-05-23)
 - [x] Studio token route accepts mounted Janua client secret (`invalid_grant` for bogus code, 2026-06-01)
-- [ ] Browser login on `app.ceq.lol` completes OAuth callback with real credentials
-- [ ] `GET /api/auth/session` returns `user` + `access_token` with session cookies
+- [x] Browser login on `app.ceq.lol` completes OAuth callback with real credentials
+- [x] `GET /api/auth/session` returns `user` + `access_token` with session cookies
 - [ ] Logout clears CEQ cookies and completes Janua post-logout redirect
 - [x] Studio `env`: `JANUA_CLIENT_SECRET` mounted at runtime (inferred from token route)
 

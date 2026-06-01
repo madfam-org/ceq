@@ -1,7 +1,7 @@
 # CEQ Stability Roadmap and Remediation Plan
 
 > **Last updated:** 2026-06-01
-> **Status:** Identity wiring deployed; Studio token route accepts Janua client secret; browser proof and GPU production smokes remain open
+> **Status:** Identity wiring deployed; Studio token route accepts Janua client secret; browser proof captured, GPU production smokes remain open
 > **Session wrap-up:** [`docs/CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md)  
 > **Capped GA demo:** [`docs/GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md)  
 > **Commercial GA:** [`docs/COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md)
@@ -82,7 +82,8 @@ latent chaos → shipped content.
 
 **Infra-stable, user-incomplete.** Janua OAuth client is registered and the
 deployed Studio token route accepts the Janua client secret. Browser login with
-real credentials, template seeding, and GPU production smokes still need operator
+real credentials is now proven through `/api/auth/session` and `httpOnly`
+session cookies. Template seeding and GPU production smokes still need operator
 proof before CEQ can be declared fully healthy.
 
 Commercial GA readiness remains ~47% (evidence-weighted) and is tracked as the
@@ -105,7 +106,8 @@ Use the GA-critical board below for close-form status and the evidence audit for
 | `GET /v1/templates/` | 200 JSON | `{"templates": [], "total": 0, "skip": 0, "limit": 50}` |
 | `GET /v1/credits/balance` (no auth) | 404 | Route not currently routable in public prod check |
 | `GET /v1/operations/status` (no auth) | 401 | Expected for admin-only endpoint |
-| `POST app.ceq.lol/api/auth/token` with bogus code | Janua `invalid_grant` | Client secret accepted; browser proof still pending |
+| `POST app.ceq.lol/api/auth/token` with bogus code | Janua `invalid_grant` | Client secret accepted |
+| `GET /api/auth/session` (admin credentials) | 200 JSON | `user`, `roles`, and `access_token` returned; `ceq_access_token` / `ceq_refresh_token` cookies present |
 
 ### What is working
 
@@ -147,7 +149,7 @@ historical record.
 
 ### What blocks full stability
 
-1. ~~Janua OAuth client unregistered~~ and ~~Studio token secret missing~~ → **Remaining identity proof:** browser login with real credentials
+1. ~~Janua OAuth client unregistered~~ and ~~Studio token secret missing~~ → **Remaining identity proof:** template seeding and GPU production smokes
 2. Production runtime secrets not verified live (`JOB_COMPLETION_CALLBACK_TOKEN`,
    `JOB_WEBHOOK_SECRET`)
 3. Authenticated GPU E2E, cancellation, and multi-modal smoke not proven in prod
@@ -168,7 +170,7 @@ and `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md`.
 
 | Priority | Category | Action | Status | Evidence status |
 |----------|----------|--------|--------|----------------|
-| P0-1 | Identity | Browser login on `app.ceq.lol` with operator credentials proves Studio shell session bootstrap. | Blocked | Missing |
+| P0-1 | Identity | Browser login on `app.ceq.lol` with operator credentials proves Studio shell session bootstrap. | Complete | `/api/auth/session` user payload and `httpOnly` session cookies captured |
 | P0-2 | Runtime | `GET /v1/operations/status` passes with admin JWT (`callback`, `webhook`, `revision`, `dead-letter`) . | Not started | Not yet captured |
 | P0-3 | Runtime | Authenticated GPU smoke and gallery durability (`job → callback → output`) | Not started | Not yet captured |
 | P0-4 | Platform | Template catalog seeded (`/v1/templates/` returns non-empty IDs) | Inconsistent | Public evidence currently empty |
@@ -186,7 +188,7 @@ the commercial GA plan and evidence audit.
 
 | Priority | Action | Status | Completion rule |
 |----------|--------|--------|-----------------|
-| P0-1 | Browser login on `app.ceq.lol` with operator credentials and stable session proof. | Blocked | Login succeeds + `/api/auth/session` returns user identity |
+| P0-1 | Browser login on `app.ceq.lol` with operator credentials and stable session proof. | Complete | Login succeeds + `/api/auth/session` returns user identity |
 | P0-2 | `GET /v1/operations/status` with admin JWT returns callback/webhook readiness and migration revision. | Not started | Status includes `callback.ready=true`, `webhook.ready=true`, `revision` value |
 | P0-3 | Authenticated production GPU smoke and gallery durability check. | Not started | End-to-end output URL + callback row + PostgreSQL output row |
 | P0-4 | Seed templates + persistent template IDs in production. | Inconsistent | `GET /v1/templates/` returns non-empty templates for smoke |
@@ -206,9 +208,9 @@ Engineering work landed in-repo (operator-only P0 items remain open):
 | **Phase 5** | WebSocket auth via session bootstrap | ✅ `resolveStreamAuthToken()` + async `subscribeToJob()` |
 | **Phase 6** | `ECOSYSTEM.md` drift fix | ✅ Ports, render status, Janua auth note |
 | **Phase 0** | Janua OAuth client registration | ✅ Janua registered 2026-05-23; CEQ secret mount in `studio-deployment.yaml` |
-| **Phase 0** | Studio token secret + browser proof | ⏳ Token route proof green; browser proof still operator-owned — [`JANUA_OPERATOR.md`](./JANUA_OPERATOR.md) §1–4 |
+| **Phase 0** | Studio token secret + browser proof | ✅ Token route proof green; browser proof captured via `/api/auth/session` |
 | **Phase 1** | Production callback/webhook secrets | ⏳ Operator — verify via `operations/status` |
-| **Phase 2** | Authenticated GPU smokes | ⏳ Blocked on Phase 0 + 1 |
+| **Phase 2** | Authenticated GPU smokes | ⏳ Blocked on Phase 1 |
 | **Phase 4** | Studio Docker regression CI gate | ✅ Closed 2026-05-22 |
 | **Phase 4** | GitHub branch protection on `main` | ✅ Enabled 2026-06-01; requires six CEQ CI checks + one review |
 | **Phase 4** | Playwright auth E2E in CI | ✅ 6/6 green locally (`mock-janua-server` + `next dev`; middleware allows `127.0.0.1`) |
@@ -221,7 +223,7 @@ Engineering work landed in-repo (operator-only P0 items remain open):
 | K8s `JANUA_CLIENT_SECRET` mount | ✅ Manifest on `main` |
 | CI (API/workers ruff + Studio gates) | ✅ Green |
 | Studio token secret accepted | ✅ Live token route proof (`invalid_grant` for bogus code, 2026-06-01) |
-| Browser login acceptance | ⏳ Operator — Agent 3 |
+| Browser login acceptance | ✅ `/api/auth/session` verified with user identity and `httpOnly` cookies |
 | Session wrap-up doc | ✅ [`CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md) |
 
 ## Definition of done — full stability
@@ -354,10 +356,10 @@ Record adapter gap if raw Janua admin is used.
    - Redeploy Studio via GitOps if client ID changes
 
 3. **Browser acceptance checklist**
-   - [ ] No-cookie `https://app.ceq.lol/` → `/login?returnTo=%2F`
-   - [ ] Janua login succeeds (no `invalid_client`)
-   - [ ] `/auth/callback` sets httpOnly CEQ session cookies
-   - [ ] `GET /api/auth/session` bootstraps Studio browser state
+   - [x] No-cookie `https://app.ceq.lol/` → `/login?returnTo=%2F`
+   - [x] Janua login succeeds (no `invalid_client`)
+   - [x] `/auth/callback` sets httpOnly CEQ session cookies
+   - [x] `GET /api/auth/session` bootstraps Studio browser state
    - [ ] Token refresh rotates cookies correctly
    - [ ] Logout clears CEQ cookies before Janua logout redirect
    - [ ] Studio API calls succeed via `/api/proxy`
@@ -816,7 +818,7 @@ app gate on `app.ceq.lol`.
 
 ## Immediate next actions (this week)
 
-1. [ ] **BLOCKED** **CEQ operator:** Complete real browser login proof for `app.ceq.lol` — *critical path*
+1. [x] **DONE** **CEQ operator:** Complete real browser login proof for `app.ceq.lol` — *critical path*
 2. [ ] **BLOCKED** **Platform operator:** Provision `JOB_COMPLETION_CALLBACK_TOKEN` +
    `JOB_WEBHOOK_SECRET` via Enclii/ExternalSecret
 3. [ ] **BLOCKED** **CEQ operator:** Run `operations/status` smoke with admin JWT
