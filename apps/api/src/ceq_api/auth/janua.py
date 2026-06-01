@@ -207,30 +207,56 @@ def get_janua_client() -> httpx.AsyncClient:
 
 
 async def _validate_token_introspection(token: str) -> JanuaUser | None:
-    """Validate token via Janua introspection endpoint (GET /api/v1/auth/me).
+    """Validate token via Janua userinfo/introspection endpoints.
 
-    This is the legacy validation method. It makes a network call on every
-    request (~50-200ms). Kept as a fallback when JWKS is unavailable.
+    Janua-compatible behavior is to expose user details at
+    ``/api/v1/oauth/userinfo``. ``/api/v1/auth/me`` is retained as a
+    compatibility fallback for environments still emitting the legacy endpoint.
+
+    This fallback is network-bound (~50-200ms), so it only runs when JWKS is
+    unavailable.
     """
     client = get_janua_client()
-    response = await client.get(
-        "/api/v1/auth/me",
-        headers={"Authorization": f"Bearer {token}"},
-    )
+    headers = {"Authorization": f"Bearer {token}"}
+    endpoints = ("/api/v1/oauth/userinfo", "/api/v1/auth/me")
 
-    if response.status_code != 200:
-        logger.debug(f"Introspection validation failed: status {response.status_code}")
-        return None
+    for endpoint in endpoints:
+        response = await client.get(endpoint, headers=headers)
+        if response.status_code != 200:
+            logger.debug(
+                "Introspection endpoint %s returned status %s", endpoint, response.status_code
+            )
+            continue
 
-    data = response.json()
-    user = JanuaUser(
-        id=UUID(data["id"]),
-        email=data["email"],
-        org_id=UUID(data["org_id"]) if data.get("org_id") else None,
-        roles=data.get("roles"),
-    )
-    logger.debug(f"Token validated via introspection for user {user.email}")
-    return user
+        data = response.json()
+        user_id = data.get("id") or data.get("sub")
+        email = data.get("email")
+        if not user_id or not email:
+            logger.debug("Introspection response missing required fields: %s", data)
+            return None
+
+        roles_raw = data.get("roles")
+        if roles_raw is None:
+            roles_raw = data.get("role")
+
+        roles: list[str] | None = None
+        if roles_raw is not None:
+            if isinstance(roles_raw, list):
+                roles = roles_raw
+            elif isinstance(roles_raw, str):
+                roles = [roles_raw]
+
+        user = JanuaUser(
+            id=UUID(user_id),
+            email=email,
+            org_id=UUID(data["org_id"]) if data.get("org_id") else None,
+            roles=roles,
+        )
+        logger.debug("Token validated via introspection for user %s", user.email)
+        return user
+
+    logger.debug("Token introspection did not validate against any endpoint")
+    return None
 
 
 # ---------------------------------------------------------------------------
