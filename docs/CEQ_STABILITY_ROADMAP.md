@@ -179,6 +179,19 @@ and `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md`.
 | P1-4 | Legal/commercial | Terms, privacy, pricing, and support docs are linked in user flows | Not started | Not linked |
 | P1-5 | Launch | Paid pilot + launch signoff with incident/runbook rehearsals | Not started | Not yet executed |
 
+### Roadmap closure priority board
+
+Status is tracked here for execution planning; completion is evidence-linked in
+the commercial GA plan and evidence audit.
+
+| Priority | Action | Status | Completion rule |
+|----------|--------|--------|-----------------|
+| P0-1 | Browser login on `app.ceq.lol` with operator credentials and stable session proof. | Blocked | Login succeeds + `/api/auth/session` returns user identity |
+| P0-2 | `GET /v1/operations/status` with admin JWT returns callback/webhook readiness and migration revision. | Not started | Status includes `callback.ready=true`, `webhook.ready=true`, `revision` value |
+| P0-3 | Authenticated production GPU smoke and gallery durability check. | Not started | End-to-end output URL + callback row + PostgreSQL output row |
+| P0-4 | Seed templates + persistent template IDs in production. | Inconsistent | `GET /v1/templates/` returns non-empty templates for smoke |
+| P1-1 | Strict smoke pass (`CEQ_STRICT_SMOKE=true`), dead-letter thresholds, and rollback/alarm drill proof. | Not started | Smoke script passes with documented alert + on-call path references |
+
 ### 2026-05-22 implementation progress
 
 Engineering work landed in-repo (operator-only P0 items remain open):
