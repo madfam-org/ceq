@@ -27,8 +27,8 @@
 scripts/capture-public-endpoint-matrix.sh
 ```
 
-- Latest successful snapshot on record: `ops/evidence/2026-06-01T212236Z-public-prod-endpoints.csv`
-- Latest attempted re-run (stale): `ops/evidence/2026-06-01-public-prod-endpoints.csv`
+- Latest successful snapshot on record: `ops/evidence/2026-06-01T2200-public-prod-endpoints.csv`
+- Earlier successful snapshot: `ops/evidence/2026-06-01T212236Z-public-prod-endpoints.csv`
 
 ### Required evidence for paid launch
 

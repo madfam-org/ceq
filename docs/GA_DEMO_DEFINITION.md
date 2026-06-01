@@ -81,8 +81,11 @@ GA ops (alerts, strict smoke)   ██████░░░░░░░░░░
 
 ### Live production evidence (re-verified 2026-06-01)
 
-`CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` is green. The last successful
-full unauthenticated endpoint matrix in this session is `ops/evidence/2026-06-01T212236Z-public-prod-endpoints.csv`; a later full matrix attempt is stale in `ops/evidence/2026-06-01-public-prod-endpoints.csv` due transient connectivity.
+`CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` is green. The latest successful
+full unauthenticated endpoint matrix in this session is
+`ops/evidence/2026-06-01T2200-public-prod-endpoints.csv`; earlier successful
+attempts remain in
+`ops/evidence/2026-06-01T212236Z-public-prod-endpoints.csv`.
 
 Fresh unauth matrix capture command:
 
