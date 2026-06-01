@@ -67,7 +67,7 @@ Use this registry as the canonical closure board for GA-blocking work.
 | Priority | Action | Owner | Status | Completion signal |
 |----------|--------|-------|--------|------------------|
 | P0-1 | Capture real browser login proof on `app.ceq.lol` with authenticated session bootstrap (`/api/auth/session`, httpOnly cookies, Studio shell load). | Studio + Janua operator | **Complete** | `2026-06-01`: `GET /api/auth/session` returned `user`, `roles`, and `access_token` for `admin@madfam.io`; `ceq_access_token` + `ceq_refresh_token` cookies were present and `httpOnly`; Studio shell route was loaded. |
-| P0-2 | Run `GET /v1/operations/status` with admin JWT and capture callback/webhook/migration/dead-letter readiness. | Platform + API | **In progress** | PR #38 updates Janua introspection to probe `/api/v1/oauth/userinfo` (with `/api/v1/auth/me` fallback) and normalize user id/roles payloads. Awaiting deploy + prod green capture. |
+| P0-2 | Run `GET /v1/operations/status` with admin JWT and capture callback/webhook/migration/dead-letter readiness. | Platform + API | **In progress** | API JWKS fallback now proceeds to introspection when local JWT claims are incomplete. `POST /api/auth/session` is now proven in prod; production admin `operations/status` capture still pending. |
 | P0-3 | Seed and verify non-empty `/v1/templates/` in production; record stable template UUIDs for smoke runs. | Platform + API | **In progress** (`/v1/templates/` returns seeded catalog in latest evidence snapshot) | `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md` |
 | P0-4 | Run authenticated GPU golden path smoke (`job → callback → output → gallery`) and capture output URL trail. | API + Workers + Platform | **Not started** | Not yet captured |
 | P0-5 | Run active cancellation + multi-modal smoke under `CEQ_STRICT_SMOKE=true` with dead-letter threshold checks. | API + Workers | **Not started** | Not yet captured |
@@ -344,7 +344,7 @@ Dependency gates:
 
 - [x] Studio token route accepts Janua client secret (`invalid_grant` on bogus code)
 - [x] Browser login + callback cookie state verified in production
-- [ ] `GET /v1/operations/status` admin proof captured (currently `401 Invalid credentials. Signal corrupted.`)
+- [ ] `GET /v1/operations/status` admin proof captured (currently `401 Invalid credentials. Signal corrupted.` on the deployed endpoint)
 - [ ] `/v1/templates/` seeded/catalog evidence captured (non-empty IDs)
 - [ ] Authenticated job + gallery output proof captured
 - [ ] `POST /v1/render/card` with Janua JWT confirms debit + cache semantics for paid path

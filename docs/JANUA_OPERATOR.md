@@ -23,7 +23,7 @@ Janua. Authorize returns **302** to login (not `invalid_client`).
 | §9.4 JWKS / issuer | ✅ `https://auth.madfam.io` |
 | §9.5 GET `/logout` | ⚠️ 404 — non-blocking for login; see [Logout follow-up](#logout-follow-up) |
 
-### CEQ-side (browser proof still required)
+### CEQ-side (browser proof captured)
 
 Studio token exchange requires **`JANUA_CLIENT_SECRET` at runtime**. As of
 2026-06-01:
@@ -38,8 +38,8 @@ Studio token exchange requires **`JANUA_CLIENT_SECRET` at runtime**. As of
   returns Janua `invalid_grant`, not `invalid_client`, which proves the deployed
   Studio token route has a client secret accepted by Janua.
 
-Remaining acceptance: complete browser login with real credentials and verify
-session cookies + `/api/auth/session`.
+Remaining acceptance: browser proof has been captured with real credentials and
+`/api/auth/session`; remaining non-blocking follow-up is logout + refresh hardening.
 
 **Previous symptom (resolved on authorize path):**
 
@@ -126,7 +126,7 @@ Janua client registration (complete 2026-05-23):
 - [x] Client `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk` registered (`ceq-studio`)
 - [x] Redirect URIs and grant types configured
 - [x] Production Studio token route accepts the mounted client secret (`invalid_grant` for bogus code, 2026-06-01)
-- [ ] Real browser login proof with credentials
+- [x] Real browser login proof with credentials
 
 ### 2. Confirm Studio runtime secret mount (in-repo; verify in cluster)
 
@@ -150,10 +150,10 @@ Token exchange requires a real authorization code — use browser acceptance for
 ### 4. Browser acceptance (production)
 
 - [ ] Visit `https://app.ceq.lol/` (no cookies) → redirects to `/login?returnTo=%2F`
-- [ ] Click through to Janua — **no** `invalid_client` error
-- [ ] Complete credential login
-- [ ] Land on `https://app.ceq.lol/auth/callback` then Studio shell
-- [ ] `GET https://app.ceq.lol/api/auth/session` returns `access_token` + `user` (with session cookies)
+- [x] Click through to Janua — **no** `invalid_client` error
+- [x] Complete credential login
+- [x] Land on `https://app.ceq.lol/auth/callback` then Studio shell
+- [x] `GET https://app.ceq.lol/api/auth/session` returns `access_token` + `user` (with session cookies)
 - [ ] Studio loads workflows/queue via `/api/proxy` (requires live `api.ceq.lol` + Janua JWT)
 - [ ] Sign out clears CEQ cookies and redirects through Janua logout
 

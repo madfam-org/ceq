@@ -1,6 +1,6 @@
 # Janua Agent Handoff — CEQ Studio OAuth Integration
 
-> **Last updated:** 2026-05-23  
+> **Last updated:** 2026-06-01  
 > **From:** CEQ (`madfam-org/ceq`)  
 > **To:** Janua agent / Janua operator / Enclii identity adapter owner  
 > **Priority:** P0 — blocks all authenticated CEQ value and capped GA demo  
@@ -12,11 +12,12 @@
 > **2026-06-01 audit update:** Janua registration remains good. Live Studio
 > token exchange with a bogus code returns Janua `invalid_grant`, not
 > `invalid_client`, which means the deployed CEQ Studio has a client secret
-> accepted by Janua. Remaining CEQ proof is real browser login with credentials.
+> accepted by Janua. Browser login with real credentials and `/api/auth/session`
+> are captured; remaining proof is runtime secrets + GPU production smoke.
 
 ---
 
-## Janua-side completion (2026-05-23)
+## Janua-side completion (2026-06-01)
 
 Janua P0 is **complete**. OAuth client `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`
 is registered. CEQ-side wiring (Vault → ExternalSecret → Studio deployment)
@@ -29,22 +30,15 @@ returns 404 — sign-out redirect may need Janua route fix (P1).
 
 ## 1. Mission for the Janua-side agent
 
-Register and verify an OAuth 2.0 / OIDC **confidential or public+secret**
-client so **CEQ Studio** (`https://app.ceq.lol`) can complete the
-authorization code flow with refresh tokens. Today Janua returns:
+Track that Janua registration for CEQ Studio is complete for client ID
+`jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`, and verify that the deployed CEQ
+Studio has a valid secret mount via `invalid_grant` on bogus-code exchange (token
+route accepts the mounted secret). This handoff remains in place for rotation,
+logout/follow-up route behavior, and any future Janua-side adjustments.
 
-```json
-{
-  "error": "invalid_client",
-  "error_description": "invalid_client: Unknown client_id"
-}
-```
-
-for client ID `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`.
-
-**Success criteria:** A real user can log in on `app.ceq.lol`, receive Janua
-access/refresh tokens via CEQ server routes, and call `api.ceq.lol` with the
-issued JWT.
+**Success criteria for this handoff:** CEQ can continue to use `jnc_2EJwBz8xGVs
+...YRQw4Yk` without client-id drift, and any client rotation/change remains
+coordinated with CEQ docs/secrets/deploy manifests.
 
 ---
 

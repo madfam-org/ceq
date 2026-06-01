@@ -341,7 +341,8 @@ async def validate_token(token: str) -> JanuaUser | None:
     Strategy (ordered by preference):
       1. Local JWKS RS256 validation (<1ms, no network call)
       2. Introspection fallback (GET /api/v1/auth/me, ~50-200ms)
-         Used when JWKS is unavailable or circuit breaker is open.
+         Used when JWKS is unavailable, circuit breaker is open, or local
+         validation produces no usable user payload.
 
     The JWKS circuit breaker opens after 3 consecutive JWKS fetch failures
     and resets after 60 seconds, at which point local validation is retried.
@@ -365,14 +366,9 @@ async def validate_token(token: str) -> JanuaUser | None:
             if user is not None:
                 _jwks_breaker.record_success()
                 return user
-            # user is None means either JWKS not configured or invalid claims.
-            # If JWKS is configured, the token itself was invalid (bad claims).
-            jwks_client = _get_jwks_client()
-            if jwks_client is not None:
-                # JWKS is configured and token decoded but claims were bad
-                # -> don't fallback to introspection, the token is genuinely invalid
-                return None
-            # JWKS not configured -> fall through to introspection
+            # JWKS was configured and decoded token but did not produce a user.
+            # Fall through to introspection for claim-shape or identity
+            # normalization fallback.
         except jwt.ExpiredSignatureError:
             logger.debug("JWT expired (local validation)")
             return None

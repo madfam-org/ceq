@@ -83,8 +83,9 @@ latent chaos → shipped content.
 **Infra-stable, user-incomplete.** Janua OAuth client is registered and the
 deployed Studio token route accepts the Janua client secret. Browser login with
 real credentials is now proven through `/api/auth/session` and `httpOnly`
-session cookies. Template seeding and GPU production smokes still need operator
-proof before CEQ can be declared fully healthy.
+session cookies. Runtime secrets (`operations/status`), template seeding, and GPU
+production smokes still need operator proof before CEQ can be declared fully
+healthy.
 
 Commercial GA readiness remains ~47% (evidence-weighted) and is tracked as the
 shared execution baseline in [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md).
@@ -149,7 +150,7 @@ historical record.
 
 ### What blocks full stability
 
-1. ~~Janua OAuth client unregistered~~ and ~~Studio token secret missing~~ → **Remaining identity proof:** template seeding and GPU production smokes
+1. ~~Janua OAuth client unregistered~~ and ~~Studio token secret missing~~ → Template seeding and GPU production smokes
 2. Production runtime secrets not verified live (`JOB_COMPLETION_CALLBACK_TOKEN`,
    `JOB_WEBHOOK_SECRET`)
 3. Authenticated GPU E2E, cancellation, and multi-modal smoke not proven in prod
@@ -317,9 +318,10 @@ Limited commercial pilot
 Commercial GA declaration
 ```
 
-Browser login proof remains the **critical path blocker**. Other lanes can start
-in parallel, but CEQ cannot be marked fully functional for users until a real
-browser session reaches the Studio shell and authenticated smokes pass.
+Runtime secrets plus authenticated GPU smokes remain the **critical path blocker**.
+Other lanes can run in parallel, but CEQ cannot be marked fully functional for
+users until `operations/status` is green and authenticated production GPU smokes
+pass.
 
 ---
 
