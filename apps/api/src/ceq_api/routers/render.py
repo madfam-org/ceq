@@ -21,12 +21,17 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ceq_api.auth import JanuaUser, get_current_user
+from ceq_api.config import get_settings
+from ceq_api.credit_ledger import debit_credits, require_credit_balance
+from ceq_api.db import get_db
 from ceq_api.render import RenderCache, registry, render_hash
 from ceq_api.storage import StorageClient, get_storage
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 router = APIRouter()
 
@@ -69,11 +74,15 @@ class RenderResponse(BaseModel):
 async def render_card(
     request: RenderRequest,
     user: Annotated[JanuaUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
     storage: Annotated[StorageClient, Depends(get_storage)],
 ) -> RenderResponse:
     return await _render_asset(
         template=request.template or "card-standard",
         data=request.data,
+        render_family="card",
+        user=user,
+        db=db,
         storage=storage,
     )
 
@@ -90,11 +99,15 @@ async def render_card(
 async def render_thumbnail(
     request: RenderRequest,
     user: Annotated[JanuaUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
     storage: Annotated[StorageClient, Depends(get_storage)],
 ) -> RenderResponse:
     return await _render_asset(
         template=request.template,
         data=request.data,
+        render_family="card",
+        user=user,
+        db=db,
         storage=storage,
     )
 
@@ -142,11 +155,15 @@ async def list_templates(
 async def render_audio(
     request: RenderRequest,
     user: Annotated[JanuaUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
     storage: Annotated[StorageClient, Depends(get_storage)],
 ) -> RenderResponse:
     return await _render_asset(
         template=request.template or "tone-beep",
         data=request.data,
+        render_family="audio",
+        user=user,
+        db=db,
         storage=storage,
     )
 
@@ -169,11 +186,15 @@ async def render_audio(
 async def render_3d(
     request: RenderRequest,
     user: Annotated[JanuaUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
     storage: Annotated[StorageClient, Depends(get_storage)],
 ) -> RenderResponse:
     return await _render_asset(
         template=request.template or "card-plate",
         data=request.data,
+        render_family="3d",
+        user=user,
+        db=db,
         storage=storage,
     )
 
@@ -184,6 +205,9 @@ async def render_3d(
 async def _render_asset(
     template: str,
     data: dict[str, Any],
+    render_family: str,
+    user: JanuaUser,
+    db: AsyncSession,
     storage: StorageClient,
 ) -> RenderResponse:
     """
@@ -212,6 +236,20 @@ async def _render_asset(
 
     cached = await cache.exists(key)
     if not cached:
+        credit_cost = _render_credit_cost(render_family)
+        credit_idempotency_key = _render_credit_idempotency_key(
+            user_id=str(user.id),
+            template=template,
+            digest=digest,
+        )
+        if settings.render_credit_debits_enabled:
+            await require_credit_balance(
+                db,
+                user_id=user.id,
+                amount=credit_cost,
+                idempotency_key=credit_idempotency_key,
+            )
+
         try:
             asset_bytes = renderer.render(data)
         except ValueError as exc:
@@ -235,6 +273,24 @@ async def _render_asset(
                 detail="render failed: cache write error",
             ) from None
 
+        if settings.render_credit_debits_enabled:
+            await debit_credits(
+                db,
+                user_id=user.id,
+                org_id=user.org_id,
+                amount=credit_cost,
+                reason=f"render:{render_family}:{template}",
+                idempotency_key=credit_idempotency_key,
+                metadata={
+                    "render_family": render_family,
+                    "template": template,
+                    "template_version": renderer.version,
+                    "hash": digest,
+                    "storage_uri": storage_uri,
+                    "content_type": renderer.content_type,
+                },
+            )
+
     public_url = storage.get_public_url(storage_uri)
     return RenderResponse(
         url=public_url,
@@ -245,3 +301,20 @@ async def _render_asset(
         content_type=renderer.content_type,
         cached=cached,
     )
+
+
+def _render_credit_cost(render_family: str) -> int:
+    if render_family == "audio":
+        return settings.render_credit_cost_audio
+    if render_family == "3d":
+        return settings.render_credit_cost_3d
+    return settings.render_credit_cost_card
+
+
+def _render_credit_idempotency_key(
+    *,
+    user_id: str,
+    template: str,
+    digest: str,
+) -> str:
+    return f"render:{user_id}:{template}:{digest}"

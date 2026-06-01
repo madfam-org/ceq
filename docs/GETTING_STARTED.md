@@ -101,8 +101,9 @@ public demo/landing experience, then log in to Studio at
 are protected by CEQ session cookies; unauthenticated visitors are redirected
 to Janua through `/login`.
 
-If Janua returns `invalid_client`, the CEQ OAuth client still needs operator
-registration or rotation with `https://app.ceq.lol/auth/callback`.
+If Janua returns `invalid_client`, treat it as configuration drift: the CEQ
+OAuth client is registered in production, and the 2026-06-01 audit verified the
+Studio token route is accepted by Janua.
 
 ## Need Help?
 

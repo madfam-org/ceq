@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getSessionAuth, getToken, setAuth } from '@/lib/auth'
-import { resolveStreamAuthToken, runTemplate, runWorkflow, subscribeToJob } from '@/lib/api'
+import {
+  getCreditBalance,
+  resolveStreamAuthToken,
+  runTemplate,
+  runWorkflow,
+  subscribeToJob,
+} from '@/lib/api'
 
 vi.mock('@/lib/auth', () => ({
   getToken: vi.fn(),
@@ -132,6 +138,21 @@ describe('API Client', () => {
     )
   })
 
+  it('fetches credit balance through the server proxy', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ user_id: 'user-1', org_id: null, balance: 2500 }),
+    })
+
+    await expect(getCreditBalance()).resolves.toEqual({
+      user_id: 'user-1',
+      org_id: null,
+      balance: 2500,
+    })
+
+    expect(mockFetch).toHaveBeenCalledWith('/api/proxy/v1/credits/balance', {})
+  })
+
   it('propagates API errors with APIError', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
@@ -140,6 +161,28 @@ describe('API Client', () => {
     })
 
     await expect(runWorkflow('workflow-missing')).rejects.toMatchObject({ status: 404 })
+  })
+
+  it('normalizes structured API errors with message fields', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 402,
+      json: async () => ({
+        detail: {
+          message: 'This template requires a paid CEQ entitlement.',
+          required_entitlement: 'paid_template',
+        },
+      }),
+    })
+
+    await expect(runTemplate('premium-template', { params: {} })).rejects.toMatchObject({
+      status: 402,
+      detail: 'This template requires a paid CEQ entitlement.',
+      rawDetail: {
+        message: 'This template requires a paid CEQ entitlement.',
+        required_entitlement: 'paid_template',
+      },
+    })
   })
 
   it('propagates network failures', async () => {

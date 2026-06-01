@@ -1,232 +1,105 @@
 # CEQ Templates Guide
 
-Pre-built workflow templates for common content generation tasks.
+This guide reflects the templates that are present in this repository as of the
+2026-06-01 repo audit. CEQ has two related template surfaces:
 
-## Template Categories
+- **Workflow JSON files** under `templates/`: checked-in ComfyUI workflow assets.
+- **Seeded database templates** in `apps/api/src/ceq_api/seed_templates.py`:
+  the 13 records created by `python -m ceq_api.scripts.seed_db`.
 
-### Social Media (`templates/social/`)
+The API also has a separate deterministic render-template registry for
+`/v1/render/*`; those templates are listed at the end.
 
-Templates for generating social media content.
+## Checked-In Workflow Files
 
-| Template | Description | VRAM |
-|----------|-------------|------|
-| **Post Generator** | Static image posts with text overlays | 12GB |
-| **Carousel Builder** | Multi-image carousel sets | 12GB |
-| **Story Creator** | Vertical format (9:16) stories | 12GB |
-| **Thumbnail Forge** | Video thumbnails with dynamic text | 12GB |
+| Path | Category | Notes |
+|------|----------|-------|
+| `templates/social/flux-schnell.json` | social | FLUX schnell image workflow |
+| `templates/social/instantid-portrait.json` | social | InstantID portrait workflow |
+| `templates/video/hunyuan-video.json` | video | Hunyuan video workflow |
+| `templates/3d/triposr-image-to-3d.json` | 3d | TripoSR image-to-3D workflow |
+| `templates/utility/image-upscaler.json` | utility | Image upscale workflow |
+| `templates/utility/sdxl-txt2img.json` | utility | SDXL text-to-image workflow |
 
-#### Post Generator
+## Seeded Database Templates
 
-Generate eye-catching social media posts.
+The production seed script currently defines 13 templates:
 
-**Inputs:**
-| Input | Type | Description |
-|-------|------|-------------|
-| `prompt` | string | What to generate |
-| `style` | enum | modern, minimal, bold, retro |
-| `aspect_ratio` | enum | 1:1, 4:5, 16:9 |
-| `seed` | int | Random seed (-1 for random) |
+| Category | Template | VRAM | Primary inputs |
+|----------|----------|------|----------------|
+| social | FLUX.1 DEV | 24GB | prompt, negative_prompt, width, height, steps, cfg, seed |
+| social | FLUX.1 SCHNELL | 16GB | prompt, width, height, seed |
+| social | SD3 Medium | 16GB | prompt, negative_prompt, width, height, steps, cfg, seed |
+| social | InstantID Portrait | 12GB | face_image, prompt, negative_prompt, ip_adapter_weight, seed |
+| video | Hunyuan Video 1.0 | 24GB | prompt, negative_prompt, frames, width, height, steps, cfg, seed |
+| video | I2VGen-XL Image to Video | 16GB | image, prompt, frames, fps, seed |
+| video | LivePortrait Animals | 8GB | source_image, driving_video, relative_motion |
+| 3d | CRM 3D Model Generator | 16GB | image, remove_background, mesh_resolution |
+| 3d | Sketch to 3D | 20GB | sketch, prompt, enhance_sketch |
+| 3d | LayerDiffusion + TripoSR | 20GB | prompt, negative_prompt, seed |
+| utility | APISR 4x Upscale | 8GB | image, scale |
+| utility | YoloWorld + SAM Segmentation | 12GB | image, categories, confidence_threshold |
+| utility | Differential Diffusion Inpaint | 12GB | image, mask, prompt, negative_prompt, denoise_strength, seed |
 
-**Example:**
-```json
-{
-  "prompt": "A futuristic cityscape with neon lights",
-  "style": "modern",
-  "aspect_ratio": "1:1",
-  "seed": -1
-}
-```
-
----
-
-### Video Clone (`templates/video/`)
-
-Templates for AI-generated video content.
-
-| Template | Description | VRAM |
-|----------|-------------|------|
-| **Talking Head** | Generate spokesperson videos | 16GB |
-| **Lip Sync** | Audio-to-video lip synchronization | 16GB |
-| **Expression Transfer** | Map emotions to faces | 16GB |
-| **Avatar Animate** | Animate still images | 16GB |
-
-#### Talking Head
-
-Create AI spokesperson videos from a source image and audio.
-
-**Inputs:**
-| Input | Type | Description |
-|-------|------|-------------|
-| `source_image` | file | Reference face image |
-| `audio_file` | file | Speech audio (MP3/WAV) |
-| `expression` | enum | neutral, happy, serious, excited |
-| `movement` | float | Head movement intensity (0-1) |
-
-**Requirements:**
-- Source image: Clear face, front-facing, neutral expression
-- Audio: Clean speech, minimal background noise
-- VRAM: 16GB minimum
-
----
-
-### 3D Rendering (`templates/3d/`)
-
-Templates for 3D content generation.
-
-| Template | Description | VRAM |
-|----------|-------------|------|
-| **Product Render** | E-commerce product shots | 18GB |
-| **Scene Builder** | Environmental rendering | 18GB |
-| **Texture Gen** | Material/texture generation | 12GB |
-| **Multiview Gen** | Multi-angle generation | 18GB |
-
-#### Product Render
-
-Generate professional product photography.
-
-**Inputs:**
-| Input | Type | Description |
-|-------|------|-------------|
-| `product_image` | file | Product on white/transparent background |
-| `environment` | enum | studio, outdoor, lifestyle, minimal |
-| `lighting` | enum | soft, dramatic, natural, product |
-| `angle_count` | int | Number of angles (1-8) |
-
----
-
-### Utility (`templates/utility/`)
-
-Helper templates for post-processing and enhancement.
-
-| Template | Description | VRAM |
-|----------|-------------|------|
-| **Upscale Enhance** | Resolution enhancement (4x) | 8GB |
-| **Background Remove** | Subject isolation with alpha | 8GB |
-| **Style Transfer** | Apply artistic styles | 12GB |
-| **Batch Process** | Apply workflow to multiple inputs | varies |
-
-#### Upscale Enhance
-
-Increase image resolution with AI enhancement.
-
-**Inputs:**
-| Input | Type | Description |
-|-------|------|-------------|
-| `image` | file | Input image |
-| `scale` | enum | 2x, 4x |
-| `denoise` | float | Noise reduction (0-1) |
-| `face_enhance` | bool | Enable face restoration |
-
----
-
-## Using Templates
-
-### From the UI
-
-1. Click **Templates** in the sidebar
-2. Browse by category
-3. Click a template to open it
-4. Configure your inputs
-5. Press `Cmd + Enter` to run
-
-### From the API
+Seed with:
 
 ```bash
-# Fork a template to create your own workflow
-curl -X POST https://api.ceq.lol/v1/templates/{id}/fork \
-  -H "Authorization: Bearer <token>" \
+cd apps/api
+python -m ceq_api.scripts.seed_db
+```
+
+Use `--force` to update existing rows from source definitions:
+
+```bash
+python -m ceq_api.scripts.seed_db --force
+```
+
+## API Usage
+
+List templates:
+
+```bash
+curl https://api.ceq.lol/v1/templates \
+  -H "Authorization: Bearer <janua-jwt>"
+```
+
+Get a template:
+
+```bash
+curl https://api.ceq.lol/v1/templates/<template-id> \
+  -H "Authorization: Bearer <janua-jwt>"
+```
+
+Fork a template into a workflow:
+
+```bash
+curl -X POST https://api.ceq.lol/v1/templates/<template-id>/fork \
+  -H "Authorization: Bearer <janua-jwt>" \
   -H "Content-Type: application/json" \
   -d '{"name": "My Custom Workflow"}'
 ```
 
-### From the SDK
+Run a seeded template:
 
-```python
-from ceq import CEQClient
-
-client = CEQClient(token="...")
-
-# List templates
-templates = client.templates.list(category="social")
-
-# Fork a template
-workflow = client.templates.fork(
-    template_id="post-generator",
-    name="My Social Posts"
-)
-
-# Run with custom params
-job = workflow.run(params={
-    "prompt": "cosmic nebula",
-    "style": "modern"
-})
+```bash
+curl -X POST https://api.ceq.lol/v1/templates/<template-id>/run \
+  -H "Authorization: Bearer <janua-jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{"params": {"prompt": "cosmic nebula"}, "priority": 0}'
 ```
 
----
+## Render Templates
 
-## Custom Templates
+The `/v1/render/*` API uses pure renderers registered in
+`apps/api/src/ceq_api/render/renderers/`, not the ComfyUI workflow template
+catalog.
 
-Create your own templates from existing workflows:
+| Template | Endpoint | Output | Evidence |
+|----------|----------|--------|----------|
+| `card-standard` | `/v1/render/card`, `/thumbnail` | 512x768 PNG | `CardStandardRenderer` |
+| `tone-beep` | `/v1/render/audio` | 16-bit PCM WAV at 22.05kHz | `ToneBeepRenderer` |
+| `card-plate` | `/v1/render/3d` | GLB / glTF 2.0 binary | `CardPlateRenderer` |
 
-1. Create and test your workflow
-2. Define an input schema (JSON Schema)
-3. Save as template (admin only)
-
-### Input Schema Example
-
-```json
-{
-  "type": "object",
-  "properties": {
-    "prompt": {
-      "type": "string",
-      "title": "Prompt",
-      "description": "What to generate"
-    },
-    "style": {
-      "type": "string",
-      "title": "Style",
-      "enum": ["modern", "minimal", "bold", "retro"],
-      "default": "modern"
-    },
-    "seed": {
-      "type": "integer",
-      "title": "Seed",
-      "minimum": -1,
-      "default": -1
-    }
-  },
-  "required": ["prompt"]
-}
-```
-
----
-
-## Model Requirements
-
-Templates specify which models they need:
-
-| Model | Size | Templates |
-|-------|------|-----------|
-| SDXL Base | 6.5GB | Social, Utility |
-| Flux Dev | 23GB | Social (high quality) |
-| WAN 2.1 | 8GB | Video Clone |
-| LivePortrait | 4GB | Video Clone |
-| Hunyuan 3D | 12GB | 3D Rendering |
-| RealESRGAN | 500MB | Upscaling |
-
-Models are automatically downloaded and cached on GPU workers.
-
----
-
-## Performance Tips
-
-1. **Use the right template**: Don't over-engineer simple tasks
-2. **Start with defaults**: Tune settings after initial test
-3. **Batch similar jobs**: More efficient than one-at-a-time
-4. **Use seeds**: Reproducible results for iteration
-5. **Check VRAM**: Some templates need 18GB+ GPUs
-
----
-
-*For template contributions, see the [developer guide](./CONTRIBUTING.md).*
+The render API is deterministic and R2-cached. In production it requires Janua
+auth; unauthenticated `/v1/render/card` returned `401` in the 2026-06-01 public
+smoke.

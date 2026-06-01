@@ -7,9 +7,11 @@ Compact LLM context index for this repository.
 - `AGENTS.md` — canonical agent operating instructions.
 - `README.md` — human/product overview when present.
 - `ECOSYSTEM.md` — MADFAM ecosystem and Enclii deployment context when present.
-- `docs/CEQ_IDENTITY_AND_DEMO_WRAPUP.md` — session wrap-up, doc index, operator gates (~72% GA demo).
+- `docs/CEQ_IDENTITY_AND_DEMO_WRAPUP.md` — session wrap-up, doc index, operator gates.
+- `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md` — current repo/prod evidence audit and remaining unverified claims.
 - `docs/CEQ_STABILITY_ROADMAP.md` — stabilization phases, smoke matrix, remaining gates.
 - `docs/GA_DEMO_DEFINITION.md` — capped GA demo definition, readiness scorecard, Tier A/B/C.
+- `docs/COMMERCIAL_GA_REMEDIATION_PLAN.md` — paid launch gates, remediation tracks, commercial GA declaration criteria.
 - `docs/JANUA_OPERATOR.md` — Janua OAuth registration checklist (Phase 0 operator gate).
 - `docs/JANUA_AGENT_HANDOFF.md` — complete cross-repo handoff for Janua-side agents.
 - `docs/PLATFORM_AGENT_HANDOFFS.md` — orchestrator + Vault/K8s/acceptance agent prompts.

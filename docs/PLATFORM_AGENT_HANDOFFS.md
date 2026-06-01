@@ -4,7 +4,13 @@
 > **Goal:** Complete CEQ Tier B demo identity gate — real login on `app.ceq.lol`  
 > **CEQ repo state:** `main` @ `8f141fb`+ (CI green; K8s wiring on main)  
 > **Janua P0:** ✅ OAuth client registered (`jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`, authorize 302)  
-> **CEQ engineering P0:** ✅ K8s manifests wired; ❌ Vault `JANUA_CLIENT_SECRET` **not in Vault** (2026-05-23 coordinator run)
+> **CEQ engineering P0:** ✅ K8s manifests wired; ✅ live Studio token route accepts Janua client secret (2026-06-01); browser proof pending
+
+> **2026-06-01 audit update:** Live `POST https://app.ceq.lol/api/auth/token`
+> with a bogus authorization code returns Janua `invalid_grant`, not
+> `invalid_client`, so the deployed Studio token route has a Janua client secret
+> accepted by production Janua. This handoff is retained as historical context;
+> current P0 is real browser login proof plus authenticated smokes.
 
 ---
 
@@ -130,7 +136,7 @@ after Vault sync (Agent 1 complete).
    ```
 2. Confirm K8s secret has key (byte length only — DO NOT decode in shared logs):
    ```bash
-   kubectl -n ceq get secret ceq-secrets -o jsonpath='{.data.JANUA_CLIENT_SECRET}' | wc -c
+   kubectl -n ceq get secret ceq-janua-client-secret -o jsonpath='{.data.JANUA_CLIENT_SECRET}' | wc -c
    ```
    Expect non-zero (typically > 20 chars base64).
 3. Sync / roll Studio:
@@ -280,7 +286,7 @@ Confirm ArgoCD ceq-services Healthy after digest commit lands.
 | Public smoke | `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` | exit 0 |
 | Session (no cookie) | `curl -sS -w '\nHTTP:%{http_code}\n' https://app.ceq.lol/api/auth/session` | 401 |
 | Vault key exists | `vault kv get -format=json secret/ceq \| jq 'has("data.data.JANUA_CLIENT_SECRET")'` | true |
-| K8s secret key | `kubectl -n ceq get secret ceq-secrets -o jsonpath='{.data.JANUA_CLIENT_SECRET}' \| wc -c` | >0 |
+| K8s secret key | `kubectl -n ceq get secret ceq-janua-client-secret -o jsonpath='{.data.JANUA_CLIENT_SECRET}' \| wc -c` | >0 |
 | Pod has env | `kubectl -n ceq exec deploy/ceq-studio -- sh -c 'test -n "$JANUA_CLIENT_SECRET" && echo ok'` | ok |
 
 ---
@@ -304,14 +310,13 @@ Agents 1→2→3 dispatched per this doc. Agent 4 (Janua logout) run in parallel
 
 | Agent | Result | Evidence (redacted) |
 |-------|--------|---------------------|
-| **1 Vault** | ❌ **Blocked** — automation cannot read GitHub secret value | `ceq-secrets` has **no** `JANUA_CLIENT_SECRET` key; 10 other keys present |
-| **2 K8s** | ⏸ Waiting on Agent 1 | ExternalSecret `SecretSynced`; pod env empty until Vault |
-| **3 Acceptance** | ⏸ Partial | `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` **PASS**; session **401**; browser login blocked |
+| **1 Vault** | Historical 2026-05-23 result: ❌ **Blocked** — automation could not read GitHub secret value | `ceq-secrets` had **no** `JANUA_CLIENT_SECRET` key; 10 other keys present. 2026-06-01 token-route proof indicates deployed Studio now has an accepted secret. |
+| **2 K8s** | Historical 2026-05-23 result: ⏸ Waiting on Agent 1 | 2026-06-01 token-route proof indicates the deployed Studio now has an effective secret; verify cluster directly before secret rotation. |
+| **3 Acceptance** | ⏳ Partial | `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` **PASS**; session without cookies **401** as expected; real browser login with credentials still pending. |
 | **4 Janua logout** | 🔧 Fix in `janua` repo | `GET /logout` + OIDC `end_session_endpoint`; **prod still 404** until Janua deploy |
 
-**Operator unblock (Agent 1):** run `scripts/sync-janua-client-secret-to-vault.sh` with Vault auth
-(paste secret from GitHub Actions settings — never commit). Verify:
-`vault kv get -format=json secret/ceq | jq 'has("data.data.JANUA_CLIENT_SECRET")'` → `true`.
+**Historical operator unblock (Agent 1):** run `scripts/sync-janua-client-secret-to-vault.sh` with Vault auth
+(paste secret from GitHub Actions settings — never commit). Current fastest proof is browser acceptance with real credentials, then authenticated `scripts/production-smoke.sh`.
 
 **Automation limits:** `gh` cannot read secret values; local `vault` CLI absent; `ssh.madfam.io`
 timed out; Enclii `ops secrets vault` is inspect-only. CEQ deploy workflow intentionally has

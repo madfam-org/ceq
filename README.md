@@ -5,7 +5,7 @@
 **ceq** wraps the raw power of [ComfyUI](https://github.com/comfyanonymous/ComfyUI) with a streamlined, hacker-centric interface. Full node power when you need it, a clean UX when you don't.
 
 **Domain:** [ceq.lol](https://ceq.lol)
-**Status:** Live — studio + API deployed; `/v1/render` pipeline shipped 2026-04-19
+**Status:** Live — public landing, authenticated Studio route, and API deployed; `/v1/render` pipeline shipped 2026-04-19
 **Philosophy:** *Wrestling order from the chaos of latent space*
 
 ---
@@ -203,22 +203,22 @@ CEQ is deployed to Enclii infrastructure via Cloudflare Tunnels:
 | Domain | Service | Status |
 |--------|---------|--------|
 | ceq.lol | Landing + demo | Live (2 pods) |
-| app.ceq.lol | Studio app | Live route; Janua client registration required |
+| app.ceq.lol | Studio app | Live + auth-gated; Janua client registered |
 | api.ceq.lol | API | Live (2 pods) |
 | ws.ceq.lol | WebSocket | Configured |
 
 See [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md) for detailed deployment guide.
 
-### Deployment Status (2026-05-14)
+### Deployment Status (2026-06-01)
 
 | Component | Status |
 |-----------|--------|
-| Janua OAuth Client | Action required: register/rotate active `app.ceq.lol` client |
+| Janua OAuth Client | Registered; authorize returns 302 and Studio token route accepts client credentials (`invalid_grant` for bogus code, not `invalid_client`) |
 | Cloudflare R2 Bucket | Live (`ceq-assets`; render cache under `render/{template}/{hash}.{ext}`) |
 | Cloudflare Tunnel Routes | Configured |
 | `/v1/render/*` pipeline | Shipped — card renderer + R2 cache + `@ceq/sdk` |
 | Studio auth gate | Deployed; public no-cookie app gate verified |
-| K8s Secrets | Applied |
+| K8s Secrets | Applied; Studio reads `JANUA_CLIENT_SECRET` from `ceq-janua-client-secret` |
 | Infrastructure | Live on Enclii k3s |
 
 ---
@@ -240,6 +240,13 @@ session cookies after OAuth callback so app-host routes can be gated before the
 React shell renders; browser bearer-token storage remains as a compatibility
 bridge for the current direct API client.
 
+As of the 2026-06-01 repo/prod audit, public smoke is green:
+`ceq.lol` returns 200, `app.ceq.lol/` redirects no-cookie users to
+`/login?returnTo=%2F`, `api.ceq.lol/health` returns `status: ok`, production
+OpenAPI docs return 404, and unauthenticated `/v1/render/card` returns 401.
+Full credentialed browser login still requires an operator with a real Janua
+account to complete the acceptance checklist.
+
 ---
 
 ## Documentation
@@ -249,7 +256,9 @@ bridge for the current direct API client.
 | [docs/PRD.md](./docs/PRD.md) | Product requirements & manifesto |
 | [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md) | Production deployment guide |
 | [docs/CEQ_IDENTITY_AND_DEMO_WRAPUP.md](./docs/CEQ_IDENTITY_AND_DEMO_WRAPUP.md) | **Start here** — session wrap-up, doc index, operator gates |
+| [docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md](./docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md) | Repo/prod evidence audit and remaining unverified claims |
 | [docs/GA_DEMO_DEFINITION.md](./docs/GA_DEMO_DEFINITION.md) | Capped GA demo scope, readiness scorecard, acceptance |
+| [docs/COMMERCIAL_GA_REMEDIATION_PLAN.md](./docs/COMMERCIAL_GA_REMEDIATION_PLAN.md) | Commercial GA gates, remediation tracks, pilot/launch plan |
 | [docs/JANUA_OPERATOR.md](./docs/JANUA_OPERATOR.md) | Janua OAuth registration & login unblock checklist |
 | [docs/JANUA_AGENT_HANDOFF.md](./docs/JANUA_AGENT_HANDOFF.md) | Complete handoff for Janua-side agents |
 | [docs/PLATFORM_AGENT_HANDOFFS.md](./docs/PLATFORM_AGENT_HANDOFFS.md) | Copy-paste prompts for Vault/K8s/acceptance agents |

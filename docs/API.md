@@ -7,7 +7,9 @@ API documentation for CEQ — Creative Entropy Quantized.
 
 ## Authentication
 
-All API requests require a valid JWT token from Janua:
+Most user-scoped and mutating API requests require a valid JWT token from Janua.
+Public exceptions include health checks and template discovery (`GET
+/v1/templates`, `GET /v1/templates/{id}`, `GET /v1/templates/categories`).
 
 ```bash
 curl https://api.ceq.lol/v1/workflows \
@@ -27,8 +29,48 @@ Returns API health status.
 **Response:**
 ```json
 {
-  "status": "healthy",
+  "status": "ok",
+  "service": "ceq-api",
   "version": "0.1.0"
+}
+```
+
+---
+
+## Render Assets
+
+The render API is deterministic and content-addressed. In production it
+requires a Janua bearer token; unauthenticated requests return `401`.
+
+| Method | Endpoint | Output |
+|--------|----------|--------|
+| `POST` | `/v1/render/card` | `card-standard` PNG, 512x768 |
+| `POST` | `/v1/render/thumbnail` | Generic registered thumbnail template |
+| `POST` | `/v1/render/audio` | `tone-beep` WAV, 16-bit PCM at 22.05kHz |
+| `POST` | `/v1/render/3d` | `card-plate` GLB |
+| `GET` | `/v1/render/templates` | Registered render templates |
+
+Request:
+```json
+{
+  "template": "card-standard",
+  "data": {
+    "title": "Smoke",
+    "accent": "#FF5A3C"
+  }
+}
+```
+
+Response:
+```json
+{
+  "url": "https://...",
+  "storage_uri": "r2://ceq-assets/render/card-standard/<hash>.png",
+  "hash": "<sha256>",
+  "template": "card-standard",
+  "template_version": "1",
+  "content_type": "image/png",
+  "cached": true
 }
 ```
 
@@ -49,8 +91,9 @@ Returns all workflows for the authenticated user.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `limit` | int | Max results (default: 50) |
-| `offset` | int | Pagination offset |
+| `skip` | int | Pagination offset |
 | `tag` | string | Filter by tag |
+| `public_only` | bool | Return only public workflows |
 
 **Response:**
 ```json
@@ -145,6 +188,12 @@ POST /v1/workflows/{id}/run
 
 Executes a workflow and returns a job ID.
 
+New job submissions are capped across queued and running jobs. Free/default
+users use `MAX_ACTIVE_JOBS_PER_USER`; `pro`/`premium`, `studio`, and `admin`
+roles use `MAX_ACTIVE_JOBS_PRO`, `MAX_ACTIVE_JOBS_STUDIO`, and
+`MAX_ACTIVE_JOBS_ADMIN` respectively. `0` disables a cap. When the authenticated
+user is at the cap, this endpoint returns `429`.
+
 **Request Body:**
 ```json
 {
@@ -180,9 +229,9 @@ Returns all jobs for the authenticated user.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `status` | string | Filter: queued, running, completed, failed |
+| `status_filter` | string | Filter: queued, running, completed, failed, cancelled |
 | `limit` | int | Max results (default: 50) |
-| `offset` | int | Pagination offset |
+| `skip` | int | Pagination offset |
 
 **Response:**
 ```json
@@ -353,6 +402,100 @@ Creates a new workflow from a template.
 ```
 
 **Response:** New workflow object.
+
+### Run Template
+
+```http
+POST /v1/templates/{id}/run
+```
+
+Runs a template directly and returns a queued job.
+
+Templates tagged `pro` or `premium` require a paid/admin Janua role before
+`fork` or `run`. The same entitlement check is applied when running a workflow
+derived from a premium template, so direct API callers cannot bypass the Studio
+InterestGate by forking first.
+
+Template runs use the same per-user active job cap as workflow runs.
+
+Unentitled response:
+
+```json
+{
+  "detail": {
+    "message": "Template requires Pro or Studio access.",
+    "required_entitlement": "paid_template",
+    "template_id": "uuid",
+    "template_tags": ["premium"]
+  }
+}
+```
+
+---
+
+## Credits
+
+Credit ledger endpoints are authenticated and append-only. Positive amounts
+grant/refund credits; negative amounts consume credits. Each ledger entry
+requires an `idempotency_key` so retries do not double-apply commercial events.
+
+Render debit enforcement exists behind `RENDER_CREDIT_DEBITS_ENABLED=false` by
+default. When enabled, `/v1/render/*` cache misses require enough balance,
+append one debit after successful R2 cache write, and return `402` when the user
+does not have enough credits. Cache hits do not debit credits.
+
+GPU job debit/refund enforcement exists behind
+`GPU_JOB_CREDIT_DEBITS_ENABLED=false` by default. When enabled,
+workflow/template/synthesis submissions require enough balance, append one debit
+for the queued job, and refund once when the API cancels the job or a worker
+reports `failed`/`cancelled`.
+
+### Get Balance
+
+```http
+GET /v1/credits/balance
+```
+
+Returns the authenticated user's current credit balance.
+
+```json
+{
+  "user_id": "uuid",
+  "org_id": "uuid",
+  "balance": 375
+}
+```
+
+### List Ledger
+
+```http
+GET /v1/credits/ledger
+```
+
+Returns paginated ledger entries for the authenticated user.
+
+### Grant Credits
+
+```http
+POST /v1/credits/grants
+```
+
+Admin-only endpoint for pilot grants and support adjustments. Reusing the same
+`idempotency_key` with the same payload returns the existing entry; reusing it
+with a different payload returns `409`.
+
+```json
+{
+  "user_id": "uuid",
+  "org_id": "uuid",
+  "amount": 250,
+  "reason": "pilot grant",
+  "idempotency_key": "pilot-grant-001",
+  "metadata": {
+    "source": "support"
+  }
+}
+```
 
 ---
 

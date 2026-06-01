@@ -18,6 +18,7 @@ export const queryKeys = {
   jobs: ["jobs"] as const,
   job: (id: string) => ["jobs", id] as const,
   jobOutputs: (id: string) => ["jobs", id, "outputs"] as const,
+  creditBalance: ["credits", "balance"] as const,
   health: ["health"] as const,
 };
 
@@ -164,6 +165,17 @@ export function useJobOutputs(id: string) {
     queryKey: queryKeys.jobOutputs(id),
     queryFn: () => api.getJobOutputs(id),
     enabled: !!id,
+  });
+}
+
+// === Credit Hooks ===
+
+export function useCreditBalance(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.creditBalance,
+    queryFn: api.getCreditBalance,
+    enabled,
+    retry: false,
   });
 }
 

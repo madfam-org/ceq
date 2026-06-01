@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
 
+from ceq_api.models import CreditLedgerEntry, CreditLedgerType
 from ceq_api.render.hash import render_hash
 from ceq_api.render.renderers import registry
 from ceq_api.render.renderers.card import CardStandardRenderer
+from ceq_api.routers import render as render_router
 
 # ---------- hash ----------
 
@@ -228,3 +232,104 @@ def test_different_inputs_produce_different_hashes(client, render_storage) -> No
     r1 = client.post("/v1/render/card", json=p1)
     r2 = client.post("/v1/render/card", json=p2)
     assert r1.json()["hash"] != r2.json()["hash"]
+
+
+@pytest.mark.asyncio
+async def test_render_card_debits_credits_on_cache_miss(
+    async_client,
+    db_session,
+    mock_user,
+    render_storage,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(render_router.settings, "render_credit_debits_enabled", True)
+    await _grant_credits(db_session, mock_user.id, mock_user.org_id, amount=10)
+
+    response = await async_client.post(
+        "/v1/render/card",
+        json={
+            "template": "card-standard",
+            "data": {"title": "Paid render", "accent": "#FF5A3C"},
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    result = await db_session.execute(
+        select(CreditLedgerEntry).where(
+            CreditLedgerEntry.transaction_type == CreditLedgerType.DEBIT.value
+        )
+    )
+    debit = result.scalar_one()
+    assert debit.user_id == mock_user.id
+    assert debit.org_id == mock_user.org_id
+    assert debit.amount == -5
+    assert debit.reason == "render:card:card-standard"
+    assert debit.idempotency_key == f"render:{mock_user.id}:card-standard:{body['hash']}"
+    assert debit.ledger_metadata["storage_uri"] == body["storage_uri"]
+
+
+@pytest.mark.asyncio
+async def test_render_card_rejects_insufficient_credits_before_rendering(
+    async_client,
+    render_storage,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(render_router.settings, "render_credit_debits_enabled", True)
+
+    response = await async_client.post(
+        "/v1/render/card",
+        json={
+            "template": "card-standard",
+            "data": {"title": "No balance", "accent": "#FF5A3C"},
+        },
+    )
+
+    assert response.status_code == 402
+    assert response.json()["detail"]["message"] == "Insufficient CEQ credits."
+    render_storage.put_object.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_render_card_cache_hit_does_not_debit_credits(
+    async_client,
+    db_session,
+    render_storage,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(render_router.settings, "render_credit_debits_enabled", True)
+    render_storage.head_object = AsyncMock(return_value=True)
+
+    response = await async_client.post(
+        "/v1/render/card",
+        json={
+            "template": "card-standard",
+            "data": {"title": "Cached paid render", "accent": "#FF5A3C"},
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["cached"] is True
+    render_storage.put_object.assert_not_called()
+
+    result = await db_session.execute(
+        select(CreditLedgerEntry).where(
+            CreditLedgerEntry.transaction_type == CreditLedgerType.DEBIT.value
+        )
+    )
+    assert result.scalars().all() == []
+
+
+async def _grant_credits(db_session, user_id, org_id, *, amount: int) -> None:
+    db_session.add(
+        CreditLedgerEntry(
+            user_id=user_id,
+            org_id=org_id,
+            amount=amount,
+            transaction_type=CreditLedgerType.GRANT.value,
+            reason="test grant",
+            idempotency_key=f"render-test-grant-{uuid4()}",
+            ledger_metadata={},
+        )
+    )
+    await db_session.flush()

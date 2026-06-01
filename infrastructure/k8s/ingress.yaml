@@ -11,12 +11,24 @@ spec:
   tls:
     - hosts:
         - ceq.lol
+        - app.ceq.lol
         - api.ceq.lol
         - ws.ceq.lol
       secretName: ceq-tls
   rules:
     # Main app
     - host: ceq.lol
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ceq-studio
+                port:
+                  number: 80
+    # Authenticated Studio
+    - host: app.ceq.lol
       http:
         paths:
           - path: /

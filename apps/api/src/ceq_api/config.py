@@ -79,6 +79,21 @@ class Settings(BaseSettings):
     # ComfyUI
     comfyui_default_timeout: int = 300  # 5 minutes
     comfyui_max_concurrent_jobs: int = 10
+    max_active_jobs_per_user: int = 5
+    max_active_jobs_pro: int = 10
+    max_active_jobs_studio: int = 25
+    max_active_jobs_admin: int = 0
+
+    # Commercial metering
+    render_credit_debits_enabled: bool = False
+    render_credit_cost_card: int = 5
+    render_credit_cost_audio: int = 3
+    render_credit_cost_3d: int = 10
+    gpu_job_credit_debits_enabled: bool = False
+    gpu_job_credit_cost_image: int = 25
+    gpu_job_credit_cost_video: int = 75
+    gpu_job_credit_cost_3d: int = 50
+    gpu_job_credit_cost_default: int = 25
 
     # Rate Limiting
     rate_limit_enabled: bool = True

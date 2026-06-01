@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sync JANUA_CLIENT_SECRET into Vault for CEQ ExternalSecret → ceq-secrets → Studio.
+# Sync JANUA_CLIENT_SECRET into Vault for CEQ ExternalSecret → ceq-janua-client-secret → Studio.
 #
 # Enclii-first: prefer Enclii secrets UI/CLI when available. This script is
 # break-glass for operators who have Vault CLI access.

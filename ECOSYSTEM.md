@@ -23,7 +23,7 @@ CEQ is MADFAM's internal content generation platform: a streamlined hacker-centr
 
 **Pillar**: Brand / Asset pillar
 **Type**: service
-**Status**: production (infra-stable; ~72% to capped GA demo — `docs/GA_DEMO_DEFINITION.md`; Janua OAuth registered 2026-05-23; CEQ Vault sync pending — `docs/JANUA_OPERATOR.md`)
+**Status**: production (public edge stable; capped GA still pending browser login proof and GPU E2E — `docs/GA_DEMO_DEFINITION.md`; commercial GA still pending billing/credits/entitlements/quotas/support launch work — `docs/COMMERCIAL_GA_REMEDIATION_PLAN.md`; Janua OAuth registered 2026-05-23; Studio token route accepted client secret in the 2026-06-01 audit — `docs/JANUA_OPERATOR.md`)
 
 ### Deployed services
 

@@ -19,11 +19,11 @@
 - GitHub repo write access for secrets
 - Terraform installed (`brew install terraform`)
 
-## Deployment Status (2026-05-14)
+## Deployment Status (2026-06-01)
 
 | Step | Status | Notes |
 |------|--------|-------|
-| Janua OAuth Client | Done (2026-05-23) | Client registered; sync `JANUA_CLIENT_SECRET` to Vault + roll Studio |
+| Janua OAuth Client | Done (2026-05-23) | Client registered; Studio token route returns `invalid_grant` for a bogus code, proving the client secret is mounted and accepted |
 | Cloudflare Tunnel Routes | Done | ceq.lol, app.ceq.lol, api.ceq.lol, ws.ceq.lol |
 | R2 Bucket + Token | Done | `ceq-assets` with Object Read & Write |
 | secrets.local.yaml | Done | R2 + OAuth done, DB/Redis configured |
@@ -34,7 +34,10 @@
 | Studio Auth Gate | Done | `app.ceq.lol` no-cookie gate verified with public smoke |
 | Deploy + Verify | Done | GitOps deploy `25853708026` succeeded; digest commit `1eaf6a6` |
 
-
+Commercial GA is not declared by this deployment checklist. Paid launch still
+requires billing, credits, server-side entitlements, quotas, support, and launch
+signoff per
+[`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md).
 
 ## Deployment Checklist
 
@@ -66,9 +69,11 @@ vim infra/terraform/terraform.tfvars
 
 ### 3. Janua OAuth client + Studio secret sync
 
-> **Status (2026-05-23):** Janua client `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk` is
-> registered. Authorize returns 302. **Next:** sync `JANUA_CLIENT_SECRET` from
-> GitHub Actions repo secret to Vault → `ceq-secrets` → Studio pods.
+> **Status (2026-06-01):** Janua client `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk` is
+> registered. Authorize returns 302. `POST https://app.ceq.lol/api/auth/token`
+> with a bogus code returns Janua `invalid_grant`, not `invalid_client`, which
+> proves the deployed Studio has a client secret accepted by Janua. Real browser
+> login with credentials still needs operator acceptance.
 
 The Studio uses Janua's OIDC discovery endpoints:
 
@@ -117,7 +122,9 @@ The Studio route is now server-gated with CEQ session cookies:
 
 ### 5. Configure Tunnel Routes (Done)
 
-**Completed 2026-04-30.** Tunnel: `ceq-prod` (ID: `0de376f0-dd76-40ab-af58-1a5d63eb9b11`)
+CEQ now routes through the platform `enclii-prod` Cloudflare tunnel. The older
+per-service `ceq-prod` tunnel was deleted on the Cloudflare side on 2026-04-09
+and should not be recreated for routine operations.
 
 | Public Hostname | Service | Port |
 |-----------------|---------|------|
@@ -148,6 +155,8 @@ Required values:
 - `R2_ENDPOINT`, `R2_ACCESS_KEY`, `R2_SECRET_KEY`, `R2_BUCKET_NAME`: Cloudflare R2 credentials
 - `JOB_COMPLETION_CALLBACK_TOKEN`: Shared API/worker token for `POST /v1/jobs/{job_id}/outputs/report`
 - `JOB_WEBHOOK_SECRET`: HMAC signing secret for user-provided job completion webhooks
+- `JANUA_CLIENT_SECRET`: Studio OAuth token-exchange secret, synced to the
+  `ceq-janua-client-secret` Kubernetes Secret by ExternalSecret
 
 Callback token rules:
 - Generate a high-entropy secret and store the exact same value for API and workers.
@@ -395,7 +404,7 @@ kubectl logs -n ceq deployment/cloudflared
                           │
                     ┌─────┴─────┐
                     │  Tunnel   │
-                    │  ceq-prod │
+                    │enclii-prod│
                     └─────┬─────┘
                           │
         ┌─────────────────┼─────────────────┐
@@ -478,8 +487,11 @@ stringData:
 
   # Janua OAuth
   JANUA_CLIENT_ID: "jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk"
-  JANUA_CLIENT_SECRET: "..."
 ``` 
+
+The Studio deployment reads `JANUA_CLIENT_SECRET` from the dedicated
+`ceq-janua-client-secret` Secret, which is sourced from Vault path
+`secret/ceq`, property `JANUA_CLIENT_SECRET`.
 
 ---
 

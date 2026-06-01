@@ -1,8 +1,8 @@
 # CEQ Capped GA Demo — Definition and Readiness
 
-> **Last updated:** 2026-05-23  
+> **Last updated:** 2026-06-01
 > **Audience:** Product, engineering, operators, demo presenters  
-> **Related:** [`CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md), [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md), [`JANUA_OPERATOR.md`](./JANUA_OPERATOR.md), [`JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md), [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md)
+> **Related:** [`CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md), [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md), [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md), [`JANUA_OPERATOR.md`](./JANUA_OPERATOR.md), [`JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md), [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md)
 
 ---
 
@@ -10,22 +10,24 @@
 
 CEQ is **infra-stable and partially demoable in production today**. A **capped,
 prod-quality GA demo** (real login, one golden GPU path, deterministic render
-API, InterestGate caps) is approximately **72% complete**.
+API, InterestGate caps) is not yet declared ready because browser login proof
+and GPU golden-path proof remain open.
 
 | Milestone | Readiness | Blocker |
 |-----------|-----------|---------|
 | Public marketing + API edge | **~90%** | None |
 | Asset pillar (`/v1/render/*`, `@ceq/sdk`) | **~90%** | Needs Janua JWT for live call |
-| Authenticated Studio (`app.ceq.lol`) | **~50%** | Janua registered; CEQ secret mount + browser proof pending |
+| Authenticated Studio (`app.ceq.lol`) | **~65%** | Janua registered; token route accepts client secret; browser proof pending |
 | End-to-end GPU job in prod | **~10%** | Janua + runtime secrets + prod smokes |
-| Capped monetization (InterestGate) | **~40%** | Code shipped; Tulana pricing low confidence |
-| GA ops (strict smoke, alerts, branch protection) | **~30%** | Operator + org-admin actions |
+| Capped monetization (InterestGate + API guard) | **~60%** | Interest capture, premium API guard, credit ledger, role-derived caps, feature-flagged render/GPU debits, and Studio balance readout shipped; checkout/pricing still open |
+| GA ops (strict smoke, alerts, branch protection) | **~45%** | Branch protection enabled; strict smoke and alert routing still open |
 
-**Critical path:** ~~Janua OAuth registration~~ ✅ (2026-05-23) → **CEQ Vault sync +
-Studio rollout** → runtime secrets verified → one authenticated GPU smoke green.
+**Critical path:** ~~Janua OAuth registration~~ done (2026-05-23) →
+~~CEQ Studio token secret accepted~~ done by live token-route proof (2026-06-01)
+→ browser login proof → runtime secrets verified → one authenticated GPU smoke green.
 
-**Estimated calendar time after Vault sync + Studio rollout:** **~1 week** for
-capped GA demo; **~2 weeks** for full stability declaration per roadmap.
+**Estimated calendar time after browser proof:** **~1 week** for capped GA demo;
+**~2 weeks** for full stability declaration per roadmap.
 
 ---
 
@@ -36,10 +38,10 @@ external stakeholders **without** claiming full PRD breadth. Caps are intentiona
 
 | Cap type | Mechanism | Status |
 |----------|-----------|--------|
-| **Identity** | Janua SSO; demo accounts only | Janua registered; CEQ secret sync pending |
+| **Identity** | Janua SSO; demo accounts only | Janua registered; Studio token route accepts client secret; browser proof pending |
 | **GPU throughput** | Single “golden” template + Vast.ai capacity | Not prod-proven |
 | **Templates** | 6 seeded workflows; demo uses 1 image path | Seeded; smoke TBD |
-| **Monetization** | InterestGate on pro/premium tags (not checkout) | Shipped in code |
+| **Monetization** | InterestGate on pro/premium tags plus API-side premium guard (not checkout) | Shipped in code |
 | **Render API** | Auth-gated; deterministic R2 cache | Shipped |
 | **Publishing** | Webhook only; social channels `coming_soon` | Out of demo scope |
 | **OpenAPI** | Disabled in production | Enforced |
@@ -56,20 +58,27 @@ external stakeholders **without** claiming full PRD breadth. Caps are intentiona
 **Not required** for capped GA demo: full template catalog, Furnace migration,
 multi-channel publishing, paid checkout, or full observability on-call proof.
 
+Commercial GA is a separate milestone. A capped GA demo proves that CEQ can be
+shown on production infrastructure with tight scope; it does **not** prove that
+CEQ can be sold broadly. Paid launch requires server-side credits, API
+entitlements, billing/checkout, quotas, support, legal/commercial docs, and
+launch signoff. Track that work in
+[`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md).
+
 ---
 
-## Readiness scorecard (2026-05-23)
+## Readiness scorecard (2026-06-01)
 
 ```
 Public / infra / render API     ████████████████████  ~90%
 CI & deploy safety              ████████████████░░░░  ~80%
-Authenticated Studio UX         ████░░░░░░░░░░░░░░░░  ~20%
+Authenticated Studio UX         █████████████░░░░░░░  ~65%
 End-to-end GPU in prod          ██░░░░░░░░░░░░░░░░░░  ~10%
-Capped monetization (InterestGate) ████████░░░░░░░░  ~40%
+Capped monetization + API guard    ██████████░░░░░░  ~50%
 GA ops (alerts, strict smoke)   ██████░░░░░░░░░░░░░░  ~30%
 ```
 
-### Live production evidence (re-verified 2026-05-23)
+### Live production evidence (re-verified 2026-06-01)
 
 | Check | Result |
 |-------|--------|
@@ -78,6 +87,7 @@ GA ops (alerts, strict smoke)   ██████░░░░░░░░░░
 | `https://api.ceq.lol/health` | `status: ok` |
 | `https://app.ceq.lol/` (no session) | 307 → login |
 | `POST /v1/render/card` (no auth) | 401 |
+| `POST app.ceq.lol/api/auth/token` with bogus code | Janua `invalid_grant` (client accepted) |
 | Janua authorize for documented client | 302 → login (registered 2026-05-23) |
 
 ### Engineering gates landed (2026-05-22 commit `b47cca8`)
@@ -118,8 +128,8 @@ GA ops (alerts, strict smoke)   ██████░░░░░░░░░░
 
 **Prerequisites:**
 
-1. Phase 0 — Janua OAuth client live ✅ (2026-05-23) + CEQ Vault sync + Studio rollout
-2. CEQ wires `JANUA_CLIENT_SECRET` into Studio deployment (see handoff § CEQ follow-up)
+1. Phase 0 — Janua OAuth client live (2026-05-23) + Studio token route accepts mounted client secret (2026-06-01)
+2. Browser login proof with real credentials on `app.ceq.lol`
 3. Phase 1 — `operations/status` green (callback + webhook secrets)
 4. Phase 2 — one `CEQ_STRICT_SMOKE` golden path
 
@@ -136,14 +146,19 @@ GA ops (alerts, strict smoke)   ██████░░░░░░░░░░
 
 ---
 
-### Tier C — Full stability / GA (uncapped ops)
+### Tier C - Full stability (not commercial GA)
 
 **Audience:** Production on-call, compliance, scale.
 
-Adds: cancel smoke, multi-modal template smokes, alert routing, branch protection,
-`CEQ_STRICT_SMOKE` full matrix, stability declaration in roadmap.
+Adds: cancel smoke, multi-modal template smokes, alert routing,
+`CEQ_STRICT_SMOKE` full matrix, stability declaration in roadmap. Branch
+protection is already enabled.
 
 See [`CEQ_STABILITY_ROADMAP.md` § Definition of done](./CEQ_STABILITY_ROADMAP.md#definition-of-done--full-stability).
+
+Commercial GA comes after Tier C and adds billing, credit enforcement, quotas,
+support readiness, legal/commercial launch materials, and customer onboarding.
+See [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md).
 
 ---
 
@@ -152,10 +167,11 @@ See [`CEQ_STABILITY_ROADMAP.md` § Definition of done](./CEQ_STABILITY_ROADMAP.m
 ### Identity (Phase 0)
 
 - [x] Janua returns no `invalid_client` for `jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk` (302 authorize, 2026-05-23)
-- [ ] Browser login on `app.ceq.lol` completes OAuth callback (needs Vault secret + Studio rollout)
+- [x] Studio token route accepts mounted Janua client secret (`invalid_grant` for bogus code, 2026-06-01)
+- [ ] Browser login on `app.ceq.lol` completes OAuth callback with real credentials
 - [ ] `GET /api/auth/session` returns `user` + `access_token` with session cookies
 - [ ] Logout clears CEQ cookies and completes Janua post-logout redirect
-- [ ] Studio `env`: `JANUA_CLIENT_SECRET` mounted at runtime (not only at build)
+- [x] Studio `env`: `JANUA_CLIENT_SECRET` mounted at runtime (inferred from token route)
 
 ### Runtime secrets (Phase 1)
 
@@ -218,12 +234,14 @@ Full matrix: [`CEQ_STABILITY_ROADMAP.md` § Smoke matrix](./CEQ_STABILITY_ROADMA
 
 | Day | Focus | Exit |
 |-----|-------|------|
-| D0 | CEQ: Vault sync + ArgoCD Studio rollout | Token exchange 200 |
-| D1 | Browser acceptance + `CEQ_AUTH_TOKEN` smoke | Tier B identity ✅ |
+| D0 | Browser acceptance with real credentials | OAuth callback + session cookies |
+| D1 | `CEQ_AUTH_TOKEN` smoke | Tier B identity checked |
 | D1 | Phase 1 secrets + `operations/status` | Callback/webhook green |
 | D2–4 | Phase 2 golden GPU smoke | Gallery output in prod |
 | D5 | Tier B demo rehearsal + InterestGate check | Capped GA demo ready |
 | W2–3 | Tier C (optional) | Full stability declaration |
+| W2-4 | Limited commercial pilot foundation | Credits, entitlements, quotas, support workflow |
+| W6-10 | Commercial GA hardening | Billing reconciliation, abuse controls, launch signoff |
 
 ---
 
@@ -233,11 +251,14 @@ Full matrix: [`CEQ_STABILITY_ROADMAP.md` § Smoke matrix](./CEQ_STABILITY_ROADMA
 - Twitter/Instagram/LinkedIn/Discord publishing
 - Furnace GPU scheduler (Vast.ai is current provider)
 - Paid checkout / Tulana billing integration
+- Server-side credit ledger and commercial entitlements
 - `synthesis` / `intent` / `printability` intelligence APIs
 - Redis Sentinel migration
 - Staging environment parity proof
 
-Track these in roadmap Phase 7 backlog.
+Track commercial launch work in
+[`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md) and
+remaining product scope in roadmap Phase 7 backlog.
 
 ---
 
@@ -253,6 +274,8 @@ flowchart TD
   F --> G
   G --> H[Capped GA demo]
   H --> I[Full stability Tier C]
+  I --> J[Commercial pilot]
+  J --> K[Commercial GA]
 ```
 
 ---
@@ -271,7 +294,8 @@ Playwright uses mocked Janua; it guards regressions but does not replace live
 Janua registration.
 
 **What’s the fastest unblock?**  
-Dispatch [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md) — Vault sync (Agent 1) then K8s rollout (Agent 2).
+Run browser acceptance from [`JANUA_OPERATOR.md`](./JANUA_OPERATOR.md), then run
+`scripts/production-smoke.sh` with the resulting Janua JWT.
 
 ---
 
@@ -280,6 +304,7 @@ Dispatch [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md) — Vault 
 | Document | Purpose |
 |----------|---------|
 | [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md) | Full P0–P7 phases and stability declaration |
+| [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md) | Paid launch gates, remediation tracks, commercial GA declaration |
 | [`JANUA_OPERATOR.md`](./JANUA_OPERATOR.md) | CEQ-side operator checklist |
 | [`JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md) | Janua-repo agent complete handoff |
 | [`PRODUCTION_DEPLOYMENT.md`](./PRODUCTION_DEPLOYMENT.md) | Deploy and secrets |

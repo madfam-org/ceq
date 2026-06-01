@@ -2,6 +2,7 @@
 
 from ceq_api.models.asset import Asset
 from ceq_api.models.base import Base, TimestampMixin
+from ceq_api.models.credit import CreditLedgerEntry, CreditLedgerType
 from ceq_api.models.feature_interest import FeatureInterest
 from ceq_api.models.job import Job, JobStatus
 from ceq_api.models.output import Output
@@ -12,6 +13,8 @@ __all__ = [
     "Base",
     "TimestampMixin",
     "Asset",
+    "CreditLedgerEntry",
+    "CreditLedgerType",
     "FeatureInterest",
     "Job",
     "JobStatus",

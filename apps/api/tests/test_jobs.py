@@ -295,6 +295,73 @@ class TestCancelJob:
         assert control_payload["job_id"] == str(job.id)
 
     @pytest.mark.asyncio
+    async def test_cancel_job_refunds_gpu_job_credit_debit(
+        self,
+        async_client,
+        db_session,
+        mock_user,
+        mock_redis,
+        monkeypatch,
+    ):
+        """Cancelling a metered GPU job refunds the submission debit once."""
+        from sqlalchemy import select
+
+        from ceq_api.models import CreditLedgerEntry, CreditLedgerType
+        from ceq_api.models.workflow import Workflow
+        from ceq_api.routers import jobs as jobs_router
+
+        monkeypatch.setattr(jobs_router.settings, "gpu_job_credit_debits_enabled", True)
+
+        workflow = Workflow(
+            name="Metered Workflow",
+            description="Test",
+            workflow_json={"test": "data"},
+            input_schema={},
+            user_id=mock_user.id,
+        )
+        db_session.add(workflow)
+        await db_session.flush()
+
+        job = Job(
+            workflow_id=workflow.id,
+            user_id=mock_user.id,
+            status=JobStatus.QUEUED.value,
+            progress=0.0,
+            input_params={},
+            queued_at=datetime.now(UTC),
+        )
+        db_session.add(job)
+        await db_session.flush()
+        db_session.add(
+            CreditLedgerEntry(
+                user_id=mock_user.id,
+                org_id=mock_user.org_id,
+                job_id=job.id,
+                amount=-25,
+                transaction_type=CreditLedgerType.DEBIT.value,
+                reason="gpu-job:social",
+                idempotency_key=f"gpu-job:{job.id}:debit",
+                ledger_metadata={},
+            )
+        )
+        await db_session.flush()
+
+        with patch("ceq_api.routers.jobs.get_redis", return_value=mock_redis), \
+             patch("ceq_api.routers.jobs.publish_job_update", new_callable=AsyncMock):
+            response = await async_client.delete(f"/v1/jobs/{job.id}")
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        result = await db_session.execute(
+            select(CreditLedgerEntry).where(
+                CreditLedgerEntry.transaction_type == CreditLedgerType.REFUND.value
+            )
+        )
+        refund = result.scalar_one()
+        assert refund.amount == 25
+        assert refund.job_id == job.id
+        assert refund.idempotency_key == f"gpu-job:{job.id}:refund"
+
+    @pytest.mark.asyncio
     async def test_cancel_running_job_does_not_reset_progress(self, async_client, db_session, mock_user, mock_redis):
         """Canceling running jobs should preserve observed progress."""
         from ceq_api.models.workflow import Workflow
@@ -730,6 +797,79 @@ class TestJobCompletionReport:
         assert delivery["attempts"] == 1
         assert delivery["last_status_code"] == 410
         assert delivery["last_error"] == "gone"
+
+    @pytest.mark.asyncio
+    async def test_report_job_outputs_refunds_failed_gpu_job_debit(
+        self,
+        async_client,
+        db_session,
+        mock_user,
+        monkeypatch,
+    ):
+        """Worker failure reports refund a previously debited GPU job."""
+        from sqlalchemy import select
+
+        from ceq_api.models import CreditLedgerEntry, CreditLedgerType
+        from ceq_api.models.workflow import Workflow
+        from ceq_api.routers import jobs as jobs_router
+
+        monkeypatch.setattr(
+            jobs_router.settings,
+            "job_completion_callback_token",
+            "test-token",
+        )
+        monkeypatch.setattr(jobs_router.settings, "gpu_job_credit_debits_enabled", True)
+
+        workflow = Workflow(
+            name="Metered Failed Workflow",
+            description="Test",
+            workflow_json={"test": "data"},
+            input_schema={},
+            user_id=mock_user.id,
+        )
+        db_session.add(workflow)
+        await db_session.flush()
+
+        job = Job(
+            workflow_id=workflow.id,
+            user_id=mock_user.id,
+            status=JobStatus.RUNNING.value,
+            progress=0.5,
+            input_params={},
+            queued_at=datetime.now(UTC),
+        )
+        db_session.add(job)
+        await db_session.flush()
+        db_session.add(
+            CreditLedgerEntry(
+                user_id=mock_user.id,
+                org_id=mock_user.org_id,
+                job_id=job.id,
+                amount=-25,
+                transaction_type=CreditLedgerType.DEBIT.value,
+                reason="gpu-job:social",
+                idempotency_key=f"gpu-job:{job.id}:debit",
+                ledger_metadata={},
+            )
+        )
+        await db_session.flush()
+
+        response = await async_client.post(
+            f"/v1/jobs/{job.id}/outputs/report",
+            headers={"X-CEQ-Worker-Token": "test-token"},
+            json={"status": "failed", "error": "executor failed", "outputs": []},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        result = await db_session.execute(
+            select(CreditLedgerEntry).where(
+                CreditLedgerEntry.transaction_type == CreditLedgerType.REFUND.value
+            )
+        )
+        refund = result.scalar_one()
+        assert refund.amount == 25
+        assert refund.job_id == job.id
+        assert refund.idempotency_key == f"gpu-job:{job.id}:refund"
 
     @pytest.mark.asyncio
     async def test_report_job_outputs_skips_webhook_without_signing_secret(

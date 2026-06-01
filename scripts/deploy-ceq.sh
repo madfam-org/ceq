@@ -3,8 +3,12 @@
 # CEQ Production Deployment Script
 # =============================================================================
 #
-# This script automates the deployment of CEQ to the Foundry infrastructure
-# (Hetzner k3s + Cloudflare Tunnel).
+# LEGACY / BREAK-GLASS ONLY.
+#
+# Routine CEQ production deploys are GitOps through `.github/workflows/deploy.yaml`
+# and ArgoCD. Current public hosts route through the platform `enclii-prod`
+# Cloudflare tunnel; do not recreate the deleted per-service `ceq-prod` tunnel
+# during normal operations.
 #
 # Prerequisites:
 #   - kubectl configured with cluster access
@@ -34,7 +38,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 NAMESPACE="ceq"
 TUNNEL_NAME="ceq-prod"
 REGISTRY="ghcr.io/madfam-org"
-DOMAINS=("ceq.lol" "api.ceq.lol" "ws.ceq.lol")
+DOMAINS=("ceq.lol" "app.ceq.lol" "api.ceq.lol" "ws.ceq.lol")
 
 # Colors
 RED='\033[0;31m'
@@ -135,6 +139,13 @@ cmd_check() {
 # Create/Configure Cloudflare Tunnel
 # =============================================================================
 cmd_tunnel() {
+    if [[ "${CEQ_ALLOW_LEGACY_TUNNEL:-false}" != "true" ]]; then
+        log_error "The legacy ceq-prod tunnel flow is disabled."
+        log_info "Production now uses the platform enclii-prod tunnel. Use Enclii domains/junctions for routine route changes."
+        log_info "Set CEQ_ALLOW_LEGACY_TUNNEL=true only for documented break-glass recovery."
+        return 1
+    fi
+
     log_info "Configuring Cloudflare Tunnel..."
 
     # Check if tunnel exists
