@@ -13,10 +13,10 @@ CEQ can support a technical demo today and is on track for a capped GA demo once
 browser login, runtime secrets, and one authenticated GPU golden path are proven.
 That is not the same as commercial GA.
 
-**Commercial GA distance:** approximately **47%** as of this audit.
+**Commercial GA distance:** approximately **48%** as of this audit.
 
 - Technical demo and infrastructure readiness: ~100% (live evidence)
-- Capped GA readiness: ~65%
+- Capped GA readiness: ~68%
 - Full stability: ~55%
 - Limited commercial pilot: ~50%
 - Commercial GA: ~45%
@@ -35,7 +35,7 @@ Planning readiness as of 2026-06-01:
 | Milestone | Planning readiness | Basis |
 |-----------|--------------------|-------|
 | Public technical demo | Ready now | Public smoke green; landing/API live |
-| Capped GA demo | ~55-65% | Identity token route works; browser, seeded-catalog, and GPU proof remain open |
+| Capped GA demo | ~55-65% | Identity token route and browser login proof are now green; seeded-catalog and GPU proof remain open |
 | Full stability | ~50-60% | Core runtime is implemented; strict prod smoke still open |
 | Limited commercial pilot | ~50-60% | Credit/entitlement/queue/metering primitives landed; needs funded balances, GPU proof, and one supportable cohort |
 | Commercial GA | ~45-55% | Needs Dhanam billing, prod GPU proof, alert/support/legal launch pack |
@@ -51,12 +51,12 @@ the latest endpoint-attempt run is stale in
 
 | GA scope | Weight | Evidence status | Latest evidence |
 |----------|--------|----------------|----------------|
-| Capped GA demo | 30% | 46% | Browser login proof is operator-owned; operations/authenticated GPU path remains unproven in prod. |
+| Capped GA demo | 30% | 52% | Browser login proof is now captured in production; operations/authenticated GPU path remains unproven in prod. |
 | Full stability | 25% | 52% | Public smoke is green; alert/rollback drill + strict CI gate still pending. |
 | Limited commercial pilot | 25% | 40% | Credits API + billing source exist, but route has no confirmed live auth flow and entitlements are role-derived. |
 | Commercial GA | 20% | 43% | Product/legal/operations launch controls are drafted, not yet fully proven in production. |
 
-Estimated aggregate readiness remains **47%** (evidence-weighted). This is a
+Estimated aggregate readiness remains **48%** (evidence-weighted). This is a
 single-source readiness value, not a prediction of time to GA.
 
 ### GA-Critical Execution Register (as-of 2026-06-01)
@@ -65,8 +65,8 @@ Use this registry as the canonical closure board for GA-blocking work.
 
 | Priority | Action | Owner | Status | Completion signal |
 |----------|--------|-------|--------|------------------|
-| P0-1 | Capture real browser login proof on `app.ceq.lol` with authenticated session bootstrap (`/api/auth/session`, httpOnly cookies, Studio shell load). | Studio + Janua operator | **Blocked** (requires operator credentials) | Missing |
-| P0-2 | Run `GET /v1/operations/status` with admin JWT and capture callback/webhook/migration/dead-letter readiness. | Platform + API | **Not started** | No captured green proof |
+| P0-1 | Capture real browser login proof on `app.ceq.lol` with authenticated session bootstrap (`/api/auth/session`, httpOnly cookies, Studio shell load). | Studio + Janua operator | **Complete** | `2026-06-01`: `GET /api/auth/session` returned `user`, `roles`, and `access_token` for `admin@madfam.io`; `ceq_access_token` + `ceq_refresh_token` cookies were present and `httpOnly`; Studio shell route was loaded. |
+| P0-2 | Run `GET /v1/operations/status` with admin JWT and capture callback/webhook/migration/dead-letter readiness. | Platform + API | **In progress** | PR #38 updates Janua introspection to probe `/api/v1/oauth/userinfo` (with `/api/v1/auth/me` fallback) and normalize user id/roles payloads. Awaiting deploy + prod green capture. |
 | P0-3 | Seed and verify non-empty `/v1/templates/` in production; record stable template UUIDs for smoke runs. | Platform + API | **Inconsistent** (`/v1/templates/` returns empty in public evidence run) | `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md` |
 | P0-4 | Run authenticated GPU golden path smoke (`job → callback → output → gallery`) and capture output URL trail. | API + Workers + Platform | **Not started** | Not yet captured |
 | P0-5 | Run active cancellation + multi-modal smoke under `CEQ_STRICT_SMOKE=true` with dead-letter threshold checks. | API + Workers | **Not started** | Not yet captured |
@@ -85,8 +85,8 @@ Track completion with these five high-impact lanes before broader closure.
 
 | Lane | Action item | Completion status |
 |------|-------------|------------------|
-| P0-1 | Get one full browser proof (`app.ceq.lol` session bootstrap + `/api/auth/session` user payload). | `Blocked` (operator credentials still required) |
-| P0-2 | Capture green `GET /v1/operations/status` with admin JWT (`callback`, `webhook`, `revision`, `dead-letter`). | `Not started` |
+| P0-1 | Get one full browser proof (`app.ceq.lol` session bootstrap + `/api/auth/session` user payload). | `Complete` (2026-06-01) |
+| P0-2 | Capture green `GET /v1/operations/status` with admin JWT (`callback`, `webhook`, `revision`, `dead-letter`). | `In progress` |
 | P0-3 | Restore non-empty seeded `/v1/templates/` and freeze canonical template IDs for smoke. | `Inconsistent` (public evidence still empty) |
 | P0-4 | Prove authenticated GPU production golden path (`job → callback → output → gallery`) including one cancellation check. | `Not started` |
 | P1-1 | Publish/verify credits balance + entitlement proof for paying cohort; attach paid pilot receipt/invoice evidence. | `In progress` |
@@ -145,7 +145,7 @@ Re-verified 2026-06-01:
 
 | Blocker | Severity | Why it matters |
 |---------|----------|----------------|
-| Real operator browser proof on `app.ceq.lol` | P0 | Commercial product acceptance cannot start without this |
+| Real operator browser proof on `app.ceq.lol` | ✅ **Cleared** | Commercial product acceptance can proceed to runtime secrets and GPU proof |
 | `GET /v1/operations/status` (admin) | P0 | Proves runtime callbacks/webhook readiness and migration state |
 | Authenticated GPU golden path in prod | P0 | Confirms core fulfillment before paid use |
 | Template catalog seeded in prod | P1 | Workflow demo paths cannot run if `/v1/templates/` is empty |
@@ -156,8 +156,8 @@ Open evidence gaps:
 
 | Gap | Blocks |
 |-----|--------|
-| Real browser login with operator credentials | Capped GA demo, any user-facing launch |
-| `operations/status` proof for callback/webhook secrets | GPU acceptance, on-call confidence |
+| `operations/status` proof for callback/webhook secrets | P0 | Runtime callback/webhook readiness remains required |
+| `operations/status` still returning `401 Invalid credentials. Signal corrupted.` for `admin@madfam.io` session token | GPU acceptance, on-call confidence |
 | Authenticated GPU golden path in prod | Demo, pilot, commercial fulfillment |
 | Template catalog remains unseeded in prod (`/v1/templates/` returns empty) | Workflow demo and premium template path availability |
 | Dhanam plan funding and entitlement source | Limited commercial pilot and commercial GA |
@@ -342,8 +342,8 @@ Dependency gates:
 ### Progress snapshot for Priority 1 (2026-06-01)
 
 - [x] Studio token route accepts Janua client secret (`invalid_grant` on bogus code)
-- [ ] Browser login + callback cookie state verified in production
-- [ ] `GET /v1/operations/status` admin proof captured
+- [x] Browser login + callback cookie state verified in production
+- [ ] `GET /v1/operations/status` admin proof captured (currently `401 Invalid credentials. Signal corrupted.`)
 - [ ] `/v1/templates/` seeded/catalog evidence captured (non-empty IDs)
 - [ ] Authenticated job + gallery output proof captured
 - [ ] `POST /v1/render/card` with Janua JWT confirms debit + cache semantics for paid path
@@ -413,6 +413,7 @@ Each run should include one row in this section and a link to raw output.
 - Date: 2026-06-01 — Endpoint matrix snapshot attempt in this session was inconsistent (DNS/connectivity); latest successful unauth matrix is `ops/evidence/2026-06-01b-prod-endpoints.csv`
 - Date: 2026-06-01 — Added reproducible unauthenticated matrix capture path:
   `scripts/capture-public-endpoint-matrix.sh` (writes to `ops/evidence/<timestamp>-public-prod-endpoints.csv` when run in a healthy network)
+- Date: 2026-06-01 — Session bootstrap evidence captured: `app.ceq.lol` login with `admin@madfam.io` returned `/api/auth/session` `user`, `roles`, `access_token`, and `ceq_access_token`/`ceq_refresh_token` `httpOnly` cookies.
 
 
 ## Implementation Tracks
@@ -574,7 +575,7 @@ Acceptance:
 
 ## Immediate Implementation Tickets
 
-1. [ ] **BLOCKED** Complete browser login proof on `app.ceq.lol` and capture authenticated session headers.
+1. [x] **DONE** Complete browser login proof on `app.ceq.lol` and capture authenticated session headers (`/api/auth/session` + httpOnly cookies).
 2. [ ] **BLOCKED** Run `operations/status` with admin JWT and require callback/webhook readiness.
 3. [ ] **BLOCKED** Seed/verify non-empty `/v1/templates/` catalog and capture a template UUID.
 4. [ ] **BLOCKED** Run one authenticated GPU golden path (`job → complete → gallery`) with output URL evidence.
