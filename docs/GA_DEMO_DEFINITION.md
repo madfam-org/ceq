@@ -40,7 +40,7 @@ external stakeholders **without** claiming full PRD breadth. Caps are intentiona
 |----------|-----------|--------|
 | **Identity** | Janua SSO; demo accounts only | Janua registered; Studio token route accepts client secret; browser proof captured |
 | **GPU throughput** | Single “golden” template + Vast.ai capacity | Not prod-proven |
-| **Templates** | 13 seeded workflow templates in repo code; production needs seed verification | Repo-seeded; prod `/v1/templates/` currently returns `{"templates":[]...}` in public check |
+| **Templates** | 13 seeded workflow templates in repo code; production needs seed verification | Repo-seeded; prod `/v1/templates/` now returns seeded rows in public checks |
 | **Monetization** | InterestGate on pro/premium tags plus API-side premium guard (not checkout) | Shipped in code |
 | **Render API** | Auth-gated; deterministic R2 cache | Shipped |
 | **Publishing** | Webhook only; social channels `coming_soon` | Out of demo scope |
@@ -82,7 +82,7 @@ GA ops (alerts, strict smoke)   ██████░░░░░░░░░░
 ### Live production evidence (re-verified 2026-06-01)
 
 `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` is green. The last successful
-full unauthenticated endpoint matrix in this session is `ops/evidence/2026-06-01b-prod-endpoints.csv`; a later full matrix attempt is stale in `ops/evidence/2026-06-01-public-prod-endpoints.csv` due transient connectivity.
+full unauthenticated endpoint matrix in this session is `ops/evidence/2026-06-01T212236Z-public-prod-endpoints.csv`; a later full matrix attempt is stale in `ops/evidence/2026-06-01-public-prod-endpoints.csv` due transient connectivity.
 
 Fresh unauth matrix capture command:
 
