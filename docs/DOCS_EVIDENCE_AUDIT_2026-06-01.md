@@ -24,6 +24,7 @@ credentials.
 | unauthenticated `GET /v1/credits/balance` | 404 | Credits API is not currently routable in production |
 | Janua authorize for CEQ client | 302 | Redirects to Janua login, client name `ceq-studio` |
 | `https://app.ceq.lol/api/auth/session` without cookies | 401 | Session endpoint correctly rejects no-cookie requests |
+| `https://app.ceq.lol/api/auth/session` (admin@madfam.io session cookies) | 200 | `user`, `roles`, and `access_token` present |
 | `POST /api/auth/token` with bogus code | 400 `invalid_grant` | Janua accepts the client secret; code is invalid as expected |
 | `https://auth.madfam.io/logout?...` | 404 | Logout route remains a Janua P1 follow-up |
 | `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` | pass | API health, host split, and app auth-gate checks pass |
@@ -56,7 +57,7 @@ credentials.
 
 | Area | Correction |
 |------|------------|
-| Janua status | Updated docs from "Vault sync pending" to "token route accepts client secret; browser proof pending" where supported by live evidence. |
+| Janua status | Updated docs from "Vault sync pending" to "token route accepts client secret; browser proof captured" where supported by live evidence. |
 | Secret wiring | Added `ceq-janua-client-secret` ExternalSecret and aligned docs to the dedicated Secret used by Studio. |
 | Ingress | Added `app.ceq.lol` to the committed ingress host/TLS list to match documented and live host split. |
 | Render auth | Removed claims that `/v1/render/*` is public/free-open; it is stable but Janua-authenticated in prod. |
@@ -76,10 +77,8 @@ this public audit:
 
 | Claim | Required proof |
 |-------|----------------|
-| Real browser login completes and lands in Studio shell | Operator login with real Janua credentials |
-| `GET /api/auth/session` returns user + access token after login | Browser session cookies from a real login |
-| `GET /v1/credits/balance` with authenticated user | Valid Janua JWT and deployed credits route |
 | `GET /v1/operations/status` is green | Admin Janua JWT |
+| `GET /v1/credits/balance` with authenticated user | Valid Janua JWT and deployed credits route |
 | Alembic head is applied in production DB | Admin operations status or DB/ArgoCD access |
 | Worker pods or Vast.ai workers are healthy | Enclii workload status or provider dashboard |
 | GPU job reaches R2, callback, PostgreSQL, and gallery | Authenticated production smoke with seeded template UUID |
@@ -88,7 +87,7 @@ this public audit:
 ## Current Conclusion
 
 CEQ public edge, host split, API health, production OpenAPI posture, Janua client
-registration, and Studio token-route secret wiring are evidence-backed. Full
-Tier B / GA-demo readiness still depends on real browser login proof, runtime
-operations-status proof, a confirmed production credits API surface, and at least
-one authenticated GPU golden-path smoke.
+registration, Studio token-route proof, and browser login proof are evidence-backed.
+Full Tier B / GA-demo readiness still depends on runtime operations-status proof, a
+confirmed production credits API surface, and at least one authenticated GPU
+golden-path smoke.

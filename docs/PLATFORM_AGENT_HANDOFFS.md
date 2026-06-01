@@ -4,13 +4,14 @@
 > **Goal:** Complete CEQ Tier B demo identity gate — real login on `app.ceq.lol`  
 > **CEQ repo state:** `main` branch state reflected in active commercial GA remediation notes (CI green; K8s wiring on main)
 > **Janua P0:** ✅ OAuth client registered (`jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`, authorize 302)  
-> **CEQ engineering P0:** ✅ K8s manifests wired; ✅ live Studio token route accepts Janua client secret (2026-06-01); browser proof pending
+> **CEQ engineering P0:** ✅ K8s manifests wired; ✅ live Studio token route accepts Janua client secret (2026-06-01); browser proof captured (2026-06-01)
 
 > **2026-06-01 audit update:** Live `POST https://app.ceq.lol/api/auth/token`
 > with a bogus authorization code returns Janua `invalid_grant`, not
 > `invalid_client`, so the deployed Studio token route has a Janua client secret
-> accepted by production Janua. This handoff is retained as historical context;
-> current P0 is real browser login proof plus authenticated smokes.
+> accepted by production Janua. Browser login proof is also captured for
+> `admin@madfam.io`; remaining P0 work is runtime operations status and GPU
+> proof.
 
 ---
 
@@ -313,7 +314,7 @@ Agents 1→2→3 dispatched per this doc. Agent 4 (Janua logout) run in parallel
 |-------|--------|---------------------|
 | **1 Vault** | Historical 2026-05-23 result: ❌ **Blocked** — automation could not read GitHub secret value | `ceq-secrets` had **no** `JANUA_CLIENT_SECRET` key; 10 other keys present. 2026-06-01 token-route proof indicates deployed Studio now has an accepted secret. |
 | **2 K8s** | Historical 2026-05-23 result: ⏸ Waiting on Agent 1 | 2026-06-01 token-route proof indicates the deployed Studio now has an effective secret; verify cluster directly before secret rotation. |
-| **3 Acceptance** | ⏳ Partial | `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` **PASS**; session without cookies **401** as expected; real browser login with credentials still pending. |
+| **3 Acceptance** | ⏳ Partial | `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` **PASS**; session without cookies **401** as expected; browser login captured; operations/runtime smoke still pending. |
 | **4 Janua logout** | 🔧 Fix in `janua` repo | `GET /logout` + OIDC `end_session_endpoint`; **prod still 404** until Janua deploy |
 
 **Historical operator unblock (Agent 1):** run `scripts/sync-janua-client-secret-to-vault.sh` with Vault auth

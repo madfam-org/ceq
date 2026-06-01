@@ -2,8 +2,8 @@
 
 > **Last updated:** 2026-06-01
 > **Audience:** Engineering, operators, platform agents, stakeholders  
-> **Status:** Identity wiring deployed; Studio token route accepts Janua client secret; browser credential proof still pending
-> **Readiness:** Partially demoable; Tier B still needs browser login and GPU golden-path proof ([`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md))
+> **Status:** Identity wiring deployed; Studio token route accepts Janua client secret; browser credential proof captured
+> **Readiness:** Partially demoable; Tier B still needs runtime operations-status and GPU golden-path proof ([`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md))
 
 This document consolidates the 2026-05-22/23 stabilization session: what was
 built, what Janua delivered, what operators must still run, and where every
@@ -22,7 +22,7 @@ E2E are green. **Janua OAuth P0 is complete** — authorize returns 302 for clie
 The 2026-06-01 audit verified `POST https://app.ceq.lol/api/auth/token` with a
 bogus code returns Janua `invalid_grant`, not `invalid_client`, so the deployed
 Studio token route has a client secret accepted by Janua. The remaining P0 is
-operator browser proof with real credentials on `app.ceq.lol`.
+runtime operations proof (`/v1/operations/status`) plus authenticated GPU path proof.
 
 Public prod smoke was revalidated on 2026-06-01 with
 `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` and stored in
@@ -128,7 +128,7 @@ Execute in order. Full prompts: [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_
 |---|-------|--------|-------------|-------------------|
 | 1 | Enclii/Vault | Write `JANUA_CLIENT_SECRET` to Vault `secret/ceq` | Token exchange | ✅ Runtime token route accepts secret (2026-06-01) |
 | 2 | Platform/K8s | ExternalSecret sync + `ceq-studio` rollout | Pod env | ✅ Inferred from live token route; verify cluster directly if changing secrets |
-| 3 | CEQ acceptance | Browser login + `production-smoke.sh` with JWT | Tier B demo | ⏳ Browser credentials proof pending |
+| 3 | CEQ acceptance | Browser login + `production-smoke.sh` with JWT | Tier B demo | ✅ Browser login completed; operations/runtime smoke still pending |
 | 4 | Janua (P1) | Deploy `GET /logout` fix | Sign-out redirect | 🔧 Code in `janua`; prod 404 |
 | 5 | CEQ deploy | Monitor GitOps digest deploy | Latest images | Ongoing |
 | 6 | Phase 1 secrets | `JOB_COMPLETION_CALLBACK_TOKEN`, webhook secret | GPU smoke | Open |
@@ -214,7 +214,7 @@ OAuth callback **must** be `https://app.ceq.lol/auth/callback` (not `ceq.lol`).
 - [x] CI green (unit + Playwright mock + Docker smoke)
 - [x] Studio token route accepts mounted Janua client secret
 - [x] `ceq-studio` has effective `JANUA_CLIENT_SECRET` at runtime (inferred from token route)
-- [ ] Real browser login on `app.ceq.lol`
+- [x] Real browser login on `app.ceq.lol`
 - [ ] `CEQ_AUTH_TOKEN` production smoke green
 - [ ] Tier B checklist in `GA_DEMO_DEFINITION.md` ticked
 

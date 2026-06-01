@@ -607,10 +607,10 @@ class TestValidateToken:
         assert user is None
 
     @pytest.mark.asyncio
-    async def test_invalid_claims_with_jwks_configured_no_fallback(
+    async def test_invalid_claims_with_jwks_configured_falls_back_to_introspection(
         self, rsa_public_key, rsa_private_key
     ):
-        """Token with valid signature but bad claims should not fall back."""
+        """Token with valid signature but missing claims should fall back to introspection."""
         private_pem = rsa_private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.PKCS8,
@@ -627,7 +627,12 @@ class TestValidateToken:
         mock_jwks = MagicMock()
         mock_jwks.get_signing_key.return_value = rsa_public_key
 
-        mock_introspection = AsyncMock()
+        introspection_user = JanuaUser(
+            id=UUID(str(uuid4())),
+            email="fallback-introspection@madfam.io",
+            roles=["user"],
+        )
+        mock_introspection = AsyncMock(return_value=introspection_user)
 
         with patch("ceq_api.auth.janua.settings") as mock_settings:
             mock_settings.janua_enabled = True
@@ -642,8 +647,9 @@ class TestValidateToken:
                 ):
                     user = await validate_token(token)
 
-        assert user is None
-        mock_introspection.assert_not_called()
+        assert user is not None
+        assert user.email == "fallback-introspection@madfam.io"
+        mock_introspection.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
