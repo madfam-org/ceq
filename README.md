@@ -218,7 +218,7 @@ See [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md) for detaile
 | Cloudflare Tunnel Routes | Configured |
 | `/v1/render/*` pipeline | Shipped — card renderer + R2 cache + `@ceq/sdk` |
 | Studio auth gate | Deployed; public no-cookie app gate verified |
-| K8s Secrets | Applied; Studio reads `JANUA_CLIENT_SECRET` from `ceq-janua-client-secret` |
+| K8s Secrets | Wired in manifests and confirmed through token exchange behavior (`invalid_grant` for bogus code, indicating Janua secret is accepted) |
 | Infrastructure | Live on Enclii k3s |
 
 ---

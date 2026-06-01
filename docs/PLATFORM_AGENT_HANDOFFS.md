@@ -1,8 +1,8 @@
 # Platform Agent Handoffs — CEQ Studio Login Unblock
 
-> **Last updated:** 2026-05-23  
+> **Last updated:** 2026-06-01
 > **Goal:** Complete CEQ Tier B demo identity gate — real login on `app.ceq.lol`  
-> **CEQ repo state:** `main` @ `8f141fb`+ (CI green; K8s wiring on main)  
+> **CEQ repo state:** `main` branch state reflected in active commercial GA remediation notes (CI green; K8s wiring on main)
 > **Janua P0:** ✅ OAuth client registered (`jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`, authorize 302)  
 > **CEQ engineering P0:** ✅ K8s manifests wired; ✅ live Studio token route accepts Janua client secret (2026-06-01); browser proof pending
 

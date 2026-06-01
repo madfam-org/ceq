@@ -8,13 +8,18 @@ credentials.
 
 | Check | Result | Evidence |
 |-------|--------|----------|
+| `endpoint matrix generator` | executable | `scripts/capture-public-endpoint-matrix.sh` |
+| `2026-06-01 public smoke` | pass | [`CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`](../ops/evidence/2026-06-01-public-prod-smoke.md) |
+| `2026-06-01 unauth endpoint matrix` | **stale** (attempted) | Endpoint matrix probe was DNS/connectivity-failing during this attempt; last successful snapshot is `../ops/evidence/2026-06-01b-prod-endpoints.csv` |
 | `https://api.ceq.lol/health` | 200 JSON | `{"status":"ok","service":"ceq-api","version":"0.1.0"}` |
 | `https://api.ceq.lol/ready` | 200 JSON | `status: ready`, `database: ok`, `redis: ok` |
 | `https://ceq.lol/` | 200 | Public landing reachable |
 | `https://app.ceq.lol/` without cookies | 307 | Redirects to `https://app.ceq.lol/login?returnTo=%2F` |
 | `https://app.ceq.lol/login` | 200 | Login surface reachable |
 | `https://api.ceq.lol/docs` | 404 | OpenAPI disabled in production |
+| `GET /v1/jobs` | 307 | Redirects to `/v1/jobs/` in this deployment |
 | unauthenticated `GET /v1/templates/` | 200 JSON | `{ "templates": [], "total": 0, "skip": 0, "limit": 50 }` (catalog appears unseeded in this public check) |
+| `unauthenticated GET /v1/jobs/` | 401 | `{"detail":"Signal lost. Authentication required."}` |
 | unauthenticated `POST /v1/render/card` | 401 | Render API is auth-gated in prod |
 | unauthenticated `GET /v1/credits/balance` | 404 | Credits API is not currently routable in production |
 | Janua authorize for CEQ client | 302 | Redirects to Janua login, client name `ceq-studio` |
@@ -28,6 +33,7 @@ credentials.
 
 | Claim | Source evidence |
 |-------|-----------------|
+| Main branch protection is active and enforces 6 CEQ checks plus PR safeguards | `gh api repos/madfam-org/ceq/branches/main/protection` (2026-06-01)
 | API runs on port 5800 | `apps/api/src/ceq_api/config.py`, `infrastructure/k8s/api-deployment.yaml` |
 | Studio runs on port 5801 | `infrastructure/k8s/studio-deployment.yaml` |
 | Services are digest-pinned in GitOps | `infrastructure/k8s/kustomization.yaml` |

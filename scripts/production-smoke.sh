@@ -44,16 +44,6 @@ CANCEL_TEMPLATE_ID="${CEQ_CANCEL_TEMPLATE_ID:-$TEMPLATE_ID}"
 CANCEL_TEMPLATE_PARAMS_JSON="${CEQ_CANCEL_TEMPLATE_PARAMS_JSON:-$TEMPLATE_PARAMS_JSON}"
 CANCEL_AFTER_SECONDS="${CEQ_CANCEL_AFTER_SECONDS:-10}"
 
-if [[ "$STRICT_SMOKE" == "true" ]]; then
-  log "Strict smoke enabled via CEQ_STRICT_SMOKE=true"
-  RUN_OPERATIONS_STATUS="true"
-  REQUIRE_OPERATIONS_STATUS="true"
-  RUN_CANCEL_SMOKE="true"
-  REQUIRE_CANCEL_SMOKE="true"
-  REQUIRE_TEMPLATE_SEEDING="true"
-  CREDITS_ROUTE_AUTH_REQUIREMENT="true"
-fi
-
 log() {
   printf '[ceq-smoke] %s\n' "$*" >&2
 }
@@ -66,6 +56,21 @@ fail() {
 need() {
   command -v "$1" >/dev/null 2>&1 || fail "Missing required command: $1"
 }
+
+log "Configuration:"
+log "  API URL: ${API_URL}"
+log "  Studio URL: ${STUDIO_URL}"
+log "  App URL: ${APP_URL}"
+
+if [[ "$STRICT_SMOKE" == "true" ]]; then
+  log "Strict smoke enabled via CEQ_STRICT_SMOKE=true"
+  RUN_OPERATIONS_STATUS="true"
+  REQUIRE_OPERATIONS_STATUS="true"
+  RUN_CANCEL_SMOKE="true"
+  REQUIRE_CANCEL_SMOKE="true"
+  REQUIRE_TEMPLATE_SEEDING="true"
+  CREDITS_ROUTE_AUTH_REQUIREMENT="true"
+fi
 
 curl_json_with_token() {
   local token="$1"

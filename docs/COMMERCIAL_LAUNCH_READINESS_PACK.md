@@ -17,6 +17,19 @@
 
 ## Operational evidence pack
 
+### Evidence repository
+
+- 2026-06-01 public smoke evidence: [`ops/evidence/2026-06-01-public-prod-smoke.md`](../ops/evidence/2026-06-01-public-prod-smoke.md)
+  - `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` is green (limited scope).
+  - Fresh public endpoint matrix runs use:
+
+```bash
+scripts/capture-public-endpoint-matrix.sh
+```
+
+  - Latest successful snapshot on record: `ops/evidence/2026-06-01b-prod-endpoints.csv`
+  - Latest attempted re-run (stale): `ops/evidence/2026-06-01-public-prod-endpoints.csv`
+
 ### Required evidence for paid launch
 
 Before commercial GA, collect and archive the following:
@@ -52,7 +65,7 @@ Store each run as:
 
 Minimum evidence gates for GA-adjacent launch:
 
-- `GET /v1/templates` returns `total > 0`
+- `GET /v1/templates/` returns `total > 0` (or seeded UUID evidence is recorded)
 - `GET /v1/credits/balance` returns `401/403` unauthenticated and success with `200` for authenticated user
 - Browser login on `app.ceq.lol` persists session cookies and loads Studio shell
 - `operations/status` shows callback token configured and alembic revision

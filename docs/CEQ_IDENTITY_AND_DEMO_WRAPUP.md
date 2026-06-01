@@ -24,6 +24,13 @@ bogus code returns Janua `invalid_grant`, not `invalid_client`, so the deployed
 Studio token route has a client secret accepted by Janua. The remaining P0 is
 operator browser proof with real credentials on `app.ceq.lol`.
 
+Public prod smoke was revalidated on 2026-06-01 with
+`CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` and stored in
+[`ops/evidence/2026-06-01-public-prod-smoke.md`](../ops/evidence/2026-06-01-public-prod-smoke.md).
+The full unauthenticated endpoint matrix from that date is maintained separately in
+`ops/evidence/2026-06-01b-prod-endpoints.csv`; the intermediate re-run capture
+is stale due transient DNS/connectivity in this environment.
+
 After login works: Phase 1 runtime secrets → Phase 2 GPU golden-path smoke → Tier B
 demo declaration.
 

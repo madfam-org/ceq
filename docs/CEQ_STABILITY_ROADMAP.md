@@ -85,6 +85,10 @@ deployed Studio token route accepts the Janua client secret. Browser login with
 real credentials, template seeding, and GPU production smokes still need operator
 proof before CEQ can be declared fully healthy.
 
+Commercial GA readiness remains ~47% (evidence-weighted) and is tracked as the
+shared execution baseline in [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md).
+Use the GA-critical board below for close-form status and the evidence audit for proof artifacts.
+
 ### Live production evidence
 
 | Check | Result | Notes |
@@ -95,6 +99,7 @@ proof before CEQ can be declared fully healthy.
 | `https://app.ceq.lol/` (no session) | HTTP 307 → login | Server-side auth gate |
 | `https://app.ceq.lol/login` | HTTP 200 | Studio login surface |
 | `https://api.ceq.lol/docs` | HTTP 404 | OpenAPI not exposed in prod |
+| `https://api.ceq.lol/v1/jobs` | HTTP 307 → `/v1/jobs/` | trailing-slash contract is working |
 | `POST /v1/render/card` (no auth) | 401 | Render pillar auth-gated |
 | Janua OAuth for documented client | 302 → login (registered 2026-05-23) |
 | `GET /v1/templates/` | 200 JSON | `{"templates": [], "total": 0, "skip": 0, "limit": 50}` |
@@ -154,6 +159,25 @@ quota/rate/spend controls, support readiness, customer-facing legal/commercial
 docs, and launch signoff. Track those in
 [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md) and
 [`COMMERCIAL_LAUNCH_READINESS_PACK.md`](./COMMERCIAL_LAUNCH_READINESS_PACK.md).
+
+### GA-Critical evidence board (roadmap truth)
+
+Use this as the roadmap-level priority closure board, synchronized with
+[`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md)
+and `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md`.
+
+| Priority | Category | Action | Status | Evidence status |
+|----------|----------|--------|--------|----------------|
+| P0-1 | Identity | Browser login on `app.ceq.lol` with operator credentials proves Studio shell session bootstrap. | Blocked | Missing |
+| P0-2 | Runtime | `GET /v1/operations/status` passes with admin JWT (`callback`, `webhook`, `revision`, `dead-letter`) . | Not started | Not yet captured |
+| P0-3 | Runtime | Authenticated GPU smoke and gallery durability (`job → callback → output`) | Not started | Not yet captured |
+| P0-4 | Platform | Template catalog seeded (`/v1/templates/` returns non-empty IDs) | Inconsistent | Public evidence currently empty |
+| P0-5 | Stability | Cancel + multi-modal + strict smoke pass in production | Not started | Not yet captured |
+| P1-1 | Monetization | Dhanam-backed plan/checkout and funded entitlements live | Not started | Not yet captured |
+| P1-2 | Monetization | Entitlements are enforced server-side (not UI-only) | In progress | Role-derived guards landed |
+| P1-3 | Reliability | Alerts and rollback drills hit on-call/owner paths | Not started | Not yet proven |
+| P1-4 | Legal/commercial | Terms, privacy, pricing, and support docs are linked in user flows | Not started | Not linked |
+| P1-5 | Launch | Paid pilot + launch signoff with incident/runbook rehearsals | Not started | Not yet executed |
 
 ### 2026-05-22 implementation progress
 
@@ -220,10 +244,10 @@ Current planning estimate:
 | Milestone | Readiness | Notes |
 |-----------|-----------|-------|
 | Public technical demo | Ready now | Public edge and API evidence are green |
-| Capped GA demo | ~50-60% | Browser login, template seeding, and one GPU golden path remain open |
+| Capped GA demo | ~55-65% | Browser login, template seeding, and one GPU golden path remain open |
 | Full stability | ~50-60% | Strict smoke, alert routing, and governance remain open |
 | Limited commercial pilot | ~50-60% | Credit/entitlement/queue/metering primitives landed; needs funded balances, GPU proof, support workflow |
-| Commercial GA | ~45-55% | Needs Dhanam billing, prod GPU proof, alert/support/legal launch pack |
+| Commercial GA | ~47% | Needs Dhanam billing, prod GPU proof, and alert/support/legal launch pack |
 
 Commercial GA gates:
 
@@ -727,6 +751,7 @@ strictly additive and does not weaken the P0 stability gates.
 | Scenario | Command flags |
 |----------|---------------|
 | Public edge only | `CEQ_PUBLIC_ONLY=true` |
+| Public endpoint matrix | `scripts/capture-public-endpoint-matrix.sh` |
 | Full strict gate | `CEQ_STRICT_SMOKE=true CEQ_AUTH_TOKEN=… CEQ_TEMPLATE_ID=…` |
 | Operations readiness | `CEQ_RUN_OPERATIONS_STATUS=true CEQ_REQUIRE_OPERATIONS_STATUS=true CEQ_ADMIN_AUTH_TOKEN=…` |
 | Webhook secret required | `CEQ_REQUIRE_WEBHOOK_SECRET=true` |
@@ -778,15 +803,15 @@ app gate on `app.ceq.lol`.
 
 ## Immediate next actions (this week)
 
-1. **CEQ operator:** Complete real browser login proof for `app.ceq.lol` — *critical path*
-2. **Platform operator:** Provision `JOB_COMPLETION_CALLBACK_TOKEN` +
+1. [ ] **BLOCKED** **CEQ operator:** Complete real browser login proof for `app.ceq.lol` — *critical path*
+2. [ ] **BLOCKED** **Platform operator:** Provision `JOB_COMPLETION_CALLBACK_TOKEN` +
    `JOB_WEBHOOK_SECRET` via Enclii/ExternalSecret
-3. **CEQ operator:** Run `operations/status` smoke with admin JWT
-4. **CEQ operator:** Seed templates if needed; capture UUIDs in runbook
-5. **CEQ operator:** Run authenticated GPU + cancel + multi-modal smokes
-6. **Product + engineering:** Freeze commercial launch SKU, credit units, and
+3. [ ] **BLOCKED** **CEQ operator:** Run `operations/status` smoke with admin JWT
+4. [ ] **BLOCKED** **CEQ operator:** Seed templates if needed; capture UUIDs in runbook
+5. [ ] **BLOCKED** **CEQ operator:** Run authenticated GPU + cancel + multi-modal smokes
+6. [ ] **IN PROGRESS** **Product + engineering:** Freeze commercial launch SKU, credit units, and
    supported template catalog
-7. **API + Dhanam:** Replace initial role-based entitlement checks and
+7. [ ] **IN PROGRESS** **API + Dhanam:** Replace initial role-based entitlement checks and
    role-derived quotas with Dhanam plan state; fund balances and enable
    render/GPU debit flags for a pilot cohort
 

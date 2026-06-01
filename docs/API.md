@@ -35,6 +35,46 @@ Returns API health status.
 }
 ```
 
+### Readiness
+
+```http
+GET /ready
+```
+
+Dependency-aware readiness check for DB/Redis and key runtime dependencies.
+
+**Response:**
+```json
+{
+  "status": "ready",
+  "message": "Entropy containment stable. All systems operational.",
+  "database": "ok",
+  "redis": "ok"
+}
+```
+
+### Circuits
+
+```http
+GET /circuits
+```
+
+Returns circuit-breaker health for runtime stability monitoring.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "open_circuits": [],
+  "circuits": {
+    "redis": {
+      "state": "closed",
+      "fail_count": 0
+    }
+  }
+}
+```
+
 ---
 
 ## Render Assets
@@ -209,7 +249,7 @@ user is at the cap, this endpoint returns `429`.
 {
   "job_id": "uuid",
   "status": "queued",
-  "queue_position": 3
+  "message": "In the crucible... Your transmutation is queued."
 }
 ```
 
@@ -296,6 +336,40 @@ Returns job details including outputs if complete.
 }
 ```
 
+### Poll Job
+
+```http
+GET /v1/jobs/{id}/poll
+```
+
+Compatibility polling endpoint; returns the same shape as
+`GET /v1/jobs/{id}`.
+
+### Get Job Outputs
+
+```http
+GET /v1/jobs/{job_id}/outputs
+```
+
+Returns outputs for a specific job.
+
+```json
+[
+  {
+    "id": "uuid",
+    "filename": "output.png",
+    "storage_uri": "r2://ceq-assets/outputs/job/output.png",
+    "public_url": "https://...",
+    "file_type": "image/png",
+    "file_size_bytes": 524288,
+    "width": 512,
+    "height": 768,
+    "duration_seconds": null,
+    "preview_url": "https://..."
+  }
+]
+```
+
 ### Cancel Job
 
 ```http
@@ -360,6 +434,7 @@ Returns available workflow templates.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `category` | string | Filter: social, video, 3d, utility |
+| `tag` | string | Filter by tag name |
 
 **Response:**
 ```json
@@ -385,6 +460,25 @@ GET /v1/templates/{id}
 ```
 
 Returns template details.
+
+### List Template Categories
+
+```http
+GET /v1/templates/categories
+```
+
+Returns unique template categories from seeded templates.
+
+```json
+{
+  "categories": [
+    "social",
+    "video",
+    "3d",
+    "utility"
+  ]
+}
+```
 
 ### Fork Template
 
@@ -546,6 +640,38 @@ GET /v1/assets/{id}
 
 Returns asset details.
 
+### List Asset Types
+
+```http
+GET /v1/assets/types
+```
+
+Returns available asset type labels.
+
+### Presigned Upload URL
+
+```http
+POST /v1/assets/presigned-url
+```
+
+Create a presigned upload URL for direct browser uploads.
+
+### Confirm Asset
+
+```http
+POST /v1/assets/{asset_id}/confirm
+```
+
+Finalize or confirm a direct upload and return the final asset record.
+
+### Delete Asset
+
+```http
+DELETE /v1/assets/{id}
+```
+
+Deletes an existing asset.
+
 ---
 
 ## Outputs
@@ -580,6 +706,83 @@ Returns generated outputs.
   ]
 }
 ```
+
+### Get Output
+
+```http
+GET /v1/outputs/{id}
+```
+
+Returns output details.
+
+### Download Output
+
+```http
+GET /v1/outputs/{id}/download
+```
+
+Returns a short-lived download link for output binary bytes.
+
+### Publish Output
+
+```http
+POST /v1/outputs/{id}/publish
+```
+
+Publish output to a channel.
+
+**Request Body:**
+```json
+{
+  "channel": "webhook",
+  "options": {
+    "url": "https://hooks.example.com/ceq/callback",
+    "caption": "Check out this cosmic nebula!"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "channel": "webhook",
+  "url": "https://hooks.example.com/ceq/callback",
+  "message": "Creation broadcasted via webhook. ✨"
+}
+```
+
+### List Channels
+
+```http
+GET /v1/outputs/channels
+```
+
+Returns configured output publishing channels and their availability.
+
+### Upload URL for External Asset
+
+```http
+POST /v1/outputs/upload-url
+```
+
+Issue an upload URL for direct output upload workflows.
+
+### Register Output
+
+```http
+POST /v1/outputs/register
+```
+
+Register an output already uploaded by an external producer.
+
+### Delete Output
+
+```http
+DELETE /v1/outputs/{id}
+```
+
+Deletes an existing output and attempts to remove associated storage object.
 
 ### Worker Completion Report
 
@@ -724,38 +927,68 @@ stored callback URL with the configured `JOB_COMPLETION_CALLBACK_TOKEN`, or
 discard a payload after manual handling. Successful replay removes the exact
 Redis list item and marks the job Redis hash with `callback_replayed_at`.
 
-### Get Output
-
-```http
-GET /v1/outputs/{id}
-```
-
-Returns output details.
-
-### Publish Output
-
-```http
-POST /v1/outputs/{id}/publish
-```
-
-Publish output to a channel.
-
-**Request Body:**
-```json
-{
-  "channel": "twitter",
-  "caption": "Check out this cosmic nebula!"
-}
-```
-
-**Response:**
-```json
-{
-  "published_url": "https://twitter.com/madfam/status/..."
-}
-```
-
 ---
+
+## Auxiliary and Intelligence APIs
+
+### Register Interest
+
+```http
+POST /v1/interest/
+```
+
+Captures gated feature interest and optional wishlist data.
+
+**Response (first registration):**
+
+```json
+{
+  "status": "registered"
+}
+```
+
+**Response (duplicate):**
+
+```json
+{
+  "status": "already_registered"
+}
+```
+
+### Synthesize From Query
+
+```http
+POST /v1/synthesis/from_query
+```
+
+Enqueues a text-to-3D synthesis job for zero-results downstream flows.
+
+```json
+{
+  "job_id": "uuid",
+  "status": "queued",
+  "prompt": "A sculptural table",
+  "source_query": "sculptural table",
+  "message": "Synthesis queued. CEQ is generating a royalty-free 3D asset from your prompt.",
+  "estimated_seconds": 45
+}
+```
+
+### Analyze Printability
+
+```http
+POST /v1/printability/analyze
+```
+
+Returns heuristic printability scores and risk flags for upload or geometry metadata.
+
+### Route User Intent
+
+```http
+POST /v1/intent/route
+```
+
+Classifies user intent and optionally forwards to a downstream ecosystem service.
 
 ## Error Responses
 
@@ -840,4 +1073,5 @@ console.log(result.outputUrls);
 
 ---
 
-*For more details, see the [OpenAPI spec](/v1/openapi.json).*
+For more details, see the [OpenAPI spec](/openapi.json) (when docs are enabled in
+non-production). Production disables OpenAPI docs and `/docs`.
