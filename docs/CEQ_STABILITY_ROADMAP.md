@@ -171,7 +171,7 @@ and `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md`.
 | Priority | Category | Action | Status | Evidence status |
 |----------|----------|--------|--------|----------------|
 | P0-1 | Identity | Browser login on `app.ceq.lol` with operator credentials proves Studio shell session bootstrap. | Complete | `/api/auth/session` user payload and `httpOnly` session cookies captured |
-| P0-2 | Runtime | `GET /v1/operations/status` passes with admin JWT (`callback`, `webhook`, `revision`, `dead-letter`) . | Not started | Not yet captured |
+| P0-2 | Runtime | `GET /v1/operations/status` passes with admin JWT (`callback`, `webhook`, `revision`, `dead-letter`) . | In progress | PR #38 updates Janua introspection fallback endpoints. Awaiting prod verification after merge to `main`. |
 | P0-3 | Runtime | Authenticated GPU smoke and gallery durability (`job → callback → output`) | Not started | Not yet captured |
 | P0-4 | Platform | Template catalog seeded (`/v1/templates/` returns non-empty IDs) | Inconsistent | Public evidence currently empty |
 | P0-5 | Stability | Cancel + multi-modal + strict smoke pass in production | Not started | Not yet captured |
@@ -189,7 +189,7 @@ the commercial GA plan and evidence audit.
 | Priority | Action | Status | Completion rule |
 |----------|--------|--------|-----------------|
 | P0-1 | Browser login on `app.ceq.lol` with operator credentials and stable session proof. | Complete | Login succeeds + `/api/auth/session` returns user identity |
-| P0-2 | `GET /v1/operations/status` with admin JWT returns callback/webhook readiness and migration revision. | Not started | Status includes `callback.ready=true`, `webhook.ready=true`, `revision` value |
+| P0-2 | `GET /v1/operations/status` with admin JWT returns callback/webhook readiness and migration revision. | In progress | PR #38 updates API Janua introspection path. Awaiting prod verification. |
 | P0-3 | Authenticated production GPU smoke and gallery durability check. | Not started | End-to-end output URL + callback row + PostgreSQL output row |
 | P0-4 | Seed templates + persistent template IDs in production. | Inconsistent | `GET /v1/templates/` returns non-empty templates for smoke |
 | P1-1 | Strict smoke pass (`CEQ_STRICT_SMOKE=true`), dead-letter thresholds, and rollback/alarm drill proof. | Not started | Smoke script passes with documented alert + on-call path references |

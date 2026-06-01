@@ -66,7 +66,7 @@ Use this registry as the canonical closure board for GA-blocking work.
 | Priority | Action | Owner | Status | Completion signal |
 |----------|--------|-------|--------|------------------|
 | P0-1 | Capture real browser login proof on `app.ceq.lol` with authenticated session bootstrap (`/api/auth/session`, httpOnly cookies, Studio shell load). | Studio + Janua operator | **Complete** | `2026-06-01`: `GET /api/auth/session` returned `user`, `roles`, and `access_token` for `admin@madfam.io`; `ceq_access_token` + `ceq_refresh_token` cookies were present and `httpOnly`; Studio shell route was loaded. |
-| P0-2 | Run `GET /v1/operations/status` with admin JWT and capture callback/webhook/migration/dead-letter readiness. | Platform + API | **Not started** | No captured green proof |
+| P0-2 | Run `GET /v1/operations/status` with admin JWT and capture callback/webhook/migration/dead-letter readiness. | Platform + API | **In progress** | PR #38 updates Janua introspection to probe `/api/v1/oauth/userinfo` (with `/api/v1/auth/me` fallback) and normalize user id/roles payloads. Awaiting deploy + prod green capture. |
 | P0-3 | Seed and verify non-empty `/v1/templates/` in production; record stable template UUIDs for smoke runs. | Platform + API | **Inconsistent** (`/v1/templates/` returns empty in public evidence run) | `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md` |
 | P0-4 | Run authenticated GPU golden path smoke (`job → callback → output → gallery`) and capture output URL trail. | API + Workers + Platform | **Not started** | Not yet captured |
 | P0-5 | Run active cancellation + multi-modal smoke under `CEQ_STRICT_SMOKE=true` with dead-letter threshold checks. | API + Workers | **Not started** | Not yet captured |
@@ -86,7 +86,7 @@ Track completion with these five high-impact lanes before broader closure.
 | Lane | Action item | Completion status |
 |------|-------------|------------------|
 | P0-1 | Get one full browser proof (`app.ceq.lol` session bootstrap + `/api/auth/session` user payload). | `Complete` (2026-06-01) |
-| P0-2 | Capture green `GET /v1/operations/status` with admin JWT (`callback`, `webhook`, `revision`, `dead-letter`). | `Not started` |
+| P0-2 | Capture green `GET /v1/operations/status` with admin JWT (`callback`, `webhook`, `revision`, `dead-letter`). | `In progress` |
 | P0-3 | Restore non-empty seeded `/v1/templates/` and freeze canonical template IDs for smoke. | `Inconsistent` (public evidence still empty) |
 | P0-4 | Prove authenticated GPU production golden path (`job → callback → output → gallery`) including one cancellation check. | `Not started` |
 | P1-1 | Publish/verify credits balance + entitlement proof for paying cohort; attach paid pilot receipt/invoice evidence. | `In progress` |
