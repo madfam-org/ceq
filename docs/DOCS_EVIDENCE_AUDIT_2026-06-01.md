@@ -10,7 +10,7 @@ credentials.
 |-------|--------|----------|
 | `endpoint matrix generator` | executable | `scripts/capture-public-endpoint-matrix.sh` |
 | `2026-06-01 public smoke` | pass | [`CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`](../ops/evidence/2026-06-01-public-prod-smoke.md) |
-| `2026-06-01 unauth endpoint matrix` | **stale** (attempted) | Endpoint matrix probe was DNS/connectivity-failing during this attempt; last successful snapshot is `../ops/evidence/2026-06-01b-prod-endpoints.csv` |
+| `2026-06-01 unauth endpoint matrix` | pass | Endpoint matrix probe was retried and completed successfully as `../ops/evidence/2026-06-01T212236Z-public-prod-endpoints.csv`. |
 | `https://api.ceq.lol/health` | 200 JSON | `{"status":"ok","service":"ceq-api","version":"0.1.0"}` |
 | `https://api.ceq.lol/ready` | 200 JSON | `status: ready`, `database: ok`, `redis: ok` |
 | `https://ceq.lol/` | 200 | Public landing reachable |
@@ -18,7 +18,7 @@ credentials.
 | `https://app.ceq.lol/login` | 200 | Login surface reachable |
 | `https://api.ceq.lol/docs` | 404 | OpenAPI disabled in production |
 | `GET /v1/jobs` | 307 | Redirects to `/v1/jobs/` in this deployment |
-| unauthenticated `GET /v1/templates/` | 200 JSON | `{ "templates": [], "total": 0, "skip": 0, "limit": 50 }` (catalog appears unseeded in this public check) |
+| unauthenticated `GET /v1/templates/` | 200 JSON | Non-empty catalog; sample template returned: `94df20ca-280f-43a1-baa9-1c8b3f4eae48` |
 | `unauthenticated GET /v1/jobs/` | 401 | `{"detail":"Signal lost. Authentication required."}` |
 | unauthenticated `POST /v1/render/card` | 401 | Render API is auth-gated in prod |
 | unauthenticated `GET /v1/credits/balance` | 404 | Credits API is not currently routable in production |
@@ -62,7 +62,7 @@ credentials.
 | Render auth | Removed claims that `/v1/render/*` is public/free-open; it is stable but Janua-authenticated in prod. |
 | API docs | Corrected health response and added render endpoint reference. |
 | Template docs | Replaced placeholder template catalog with the actual checked-in files, 13 DB seed templates, and render templates. |
-| Template catalog in prod | Added verification row for `GET /v1/templates/`; production currently returns an empty list, indicating seeding needs re-check. |
+| Template catalog in prod | Added verification row for `GET /v1/templates/`; production now returns seeded data and should be treated as seeded for smoke planning. |
 | Deployment docs | Replaced stale `ceq-prod` tunnel guidance with platform `enclii-prod` tunnel status. |
 | Legacy deploy script | Disabled legacy `ceq-prod` tunnel creation unless `CEQ_ALLOW_LEGACY_TUNNEL=true` is explicitly set. |
 | Digest docs | Updated current kustomization digest table in the stability roadmap. |

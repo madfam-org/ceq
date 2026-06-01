@@ -43,7 +43,7 @@ Planning readiness as of 2026-06-01:
 These percentages are planning estimates, not automated measurements. Evidence
 sources are the 2026-06-01 prod audit, `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`,
 local test matrix, and current code/docs state. The latest fully successful
-unauthenticated endpoint matrix snapshot is `ops/evidence/2026-06-01b-prod-endpoints.csv`;
+unauthenticated endpoint matrix snapshot is `ops/evidence/2026-06-01T212236Z-public-prod-endpoints.csv`;
 the latest endpoint-attempt run is stale in
 `ops/evidence/2026-06-01-public-prod-endpoints.csv`.
 
@@ -67,7 +67,7 @@ Use this registry as the canonical closure board for GA-blocking work.
 |----------|--------|-------|--------|------------------|
 | P0-1 | Capture real browser login proof on `app.ceq.lol` with authenticated session bootstrap (`/api/auth/session`, httpOnly cookies, Studio shell load). | Studio + Janua operator | **Complete** | `2026-06-01`: `GET /api/auth/session` returned `user`, `roles`, and `access_token` for `admin@madfam.io`; `ceq_access_token` + `ceq_refresh_token` cookies were present and `httpOnly`; Studio shell route was loaded. |
 | P0-2 | Run `GET /v1/operations/status` with admin JWT and capture callback/webhook/migration/dead-letter readiness. | Platform + API | **In progress** | PR #38 updates Janua introspection to probe `/api/v1/oauth/userinfo` (with `/api/v1/auth/me` fallback) and normalize user id/roles payloads. Awaiting deploy + prod green capture. |
-| P0-3 | Seed and verify non-empty `/v1/templates/` in production; record stable template UUIDs for smoke runs. | Platform + API | **Inconsistent** (`/v1/templates/` returns empty in public evidence run) | `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md` |
+| P0-3 | Seed and verify non-empty `/v1/templates/` in production; record stable template UUIDs for smoke runs. | Platform + API | **In progress** (`/v1/templates/` returns seeded catalog in latest evidence snapshot) | `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md` |
 | P0-4 | Run authenticated GPU golden path smoke (`job → callback → output → gallery`) and capture output URL trail. | API + Workers + Platform | **Not started** | Not yet captured |
 | P0-5 | Run active cancellation + multi-modal smoke under `CEQ_STRICT_SMOKE=true` with dead-letter threshold checks. | API + Workers | **Not started** | Not yet captured |
 | P1-1 | Finalize Dhanam-backed plan/checkout path for paid signup and plan changes. | Product + Dhanam + API | **Not started** | Not yet captured |
@@ -87,7 +87,7 @@ Track completion with these five high-impact lanes before broader closure.
 |------|-------------|------------------|
 | P0-1 | Get one full browser proof (`app.ceq.lol` session bootstrap + `/api/auth/session` user payload). | `Complete` (2026-06-01) |
 | P0-2 | Capture green `GET /v1/operations/status` with admin JWT (`callback`, `webhook`, `revision`, `dead-letter`). | `In progress` |
-| P0-3 | Restore non-empty seeded `/v1/templates/` and freeze canonical template IDs for smoke. | `Inconsistent` (public evidence still empty) |
+| P0-3 | Restore non-empty seeded `/v1/templates/` and freeze canonical template IDs for smoke. | `In progress` (`/v1/templates/` is non-empty in latest matrix snapshot) |
 | P0-4 | Prove authenticated GPU production golden path (`job → callback → output → gallery`) including one cancellation check. | `Not started` |
 | P1-1 | Publish/verify credits balance + entitlement proof for paying cohort; attach paid pilot receipt/invoice evidence. | `In progress` |
 
@@ -138,7 +138,7 @@ Re-verified 2026-06-01:
 | Studio client secret | Bogus token code returns `invalid_grant`, not `invalid_client` |
 | Public smoke | `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` passes |
 | Branch protection | `main` requires six CEQ CI checks, one review, stale-review dismissal, admin enforcement, and conversation resolution |
-| Template catalog (`/v1/templates/`) | Returns empty in public check (`{"templates": [], "total": 0}`) |
+| Template catalog (`/v1/templates/`) | Non-empty in latest public check (`/v1/templates/?skip=0&limit=1` returns seeded rows) |
 | Production credits route | `GET /v1/credits/balance` returns 404 when unauthenticated |
 
 ### Evidence-backed GA blockers
@@ -159,7 +159,7 @@ Open evidence gaps:
 | `operations/status` proof for callback/webhook secrets | P0 | Runtime callback/webhook readiness remains required |
 | `operations/status` still returning `401 Invalid credentials. Signal corrupted.` for `admin@madfam.io` session token | GPU acceptance, on-call confidence |
 | Authenticated GPU golden path in prod | Demo, pilot, commercial fulfillment |
-| Template catalog remains unseeded in prod (`/v1/templates/` returns empty) | Workflow demo and premium template path availability |
+| Template catalog now appears seeded in latest check (`/v1/templates/` returns templates) | Workflow demo and premium template path availability |
 | Dhanam plan funding and entitlement source | Limited commercial pilot and commercial GA |
 | Alert receiver/on-call proof | Full stability and commercial GA |
 
@@ -410,7 +410,7 @@ Each run should include one row in this section and a link to raw output.
 
 - Date: 2026-06-01 — Public smoke evidence row completed (`CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`)
 - Date: 2026-06-01 — Public smoke command completed (`CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`) with results in [`ops/evidence/2026-06-01-public-prod-smoke.md`](../ops/evidence/2026-06-01-public-prod-smoke.md)
-- Date: 2026-06-01 — Endpoint matrix snapshot attempt in this session was inconsistent (DNS/connectivity); latest successful unauth matrix is `ops/evidence/2026-06-01b-prod-endpoints.csv`
+- Date: 2026-06-01 — Endpoint matrix snapshot initially hit DNS/connectivity errors, then succeeded as `ops/evidence/2026-06-01T212236Z-public-prod-endpoints.csv`.
 - Date: 2026-06-01 — Added reproducible unauthenticated matrix capture path:
   `scripts/capture-public-endpoint-matrix.sh` (writes to `ops/evidence/<timestamp>-public-prod-endpoints.csv` when run in a healthy network)
 - Date: 2026-06-01 — Session bootstrap evidence captured: `app.ceq.lol` login with `admin@madfam.io` returned `/api/auth/session` `user`, `roles`, `access_token`, and `ceq_access_token`/`ceq_refresh_token` `httpOnly` cookies.
