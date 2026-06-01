@@ -27,7 +27,7 @@
 scripts/capture-public-endpoint-matrix.sh
 ```
 
-- Latest successful snapshot on record: `ops/evidence/2026-06-01T221058Z-public-prod-endpoints.csv`
+- Latest successful snapshot on record: `ops/evidence/2026-06-01T221752Z-public-prod-endpoints.csv`
 - Earlier successful snapshots: `ops/evidence/2026-06-01T2200-public-prod-endpoints.csv`,
   `ops/evidence/2026-06-01T212236Z-public-prod-endpoints.csv`
 

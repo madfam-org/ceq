@@ -43,9 +43,10 @@ Planning readiness as of 2026-06-01:
 These percentages are planning estimates, not automated measurements. Evidence
 sources are the 2026-06-01 prod audit, `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`,
 local test matrix, and current code/docs state. The latest fully successful
-unauthenticated endpoint matrix snapshot is `ops/evidence/2026-06-01T2200-public-prod-endpoints.csv`;
-the previous successful snapshot is `ops/evidence/2026-06-01T212236Z-public-prod-endpoints.csv`.
-The latest run attempt succeeded as `ops/evidence/2026-06-01T221058Z-public-prod-endpoints.csv`.
+unauthenticated endpoint matrix snapshot is `ops/evidence/2026-06-01T221752Z-public-prod-endpoints.csv`;
+the previous successful snapshot is `ops/evidence/2026-06-01T221058Z-public-prod-endpoints.csv`.
+Earlier successful reruns remain as `ops/evidence/2026-06-01T2200-public-prod-endpoints.csv` and
+`ops/evidence/2026-06-01T212236Z-public-prod-endpoints.csv`.
 
 ### Evidence-weighted GA Score (2026-06-01)
 
@@ -413,6 +414,7 @@ Each run should include one row in this section and a link to raw output.
 - Date: 2026-06-01 — Endpoint matrix snapshot initially hit DNS/connectivity errors, then succeeded as `ops/evidence/2026-06-01T212236Z-public-prod-endpoints.csv`.
 - Date: 2026-06-01 — Endpoint matrix rerun succeeded as `ops/evidence/2026-06-01T2200-public-prod-endpoints.csv`.
 - Date: 2026-06-01 — Endpoint matrix rerun succeeded as `ops/evidence/2026-06-01T221058Z-public-prod-endpoints.csv`.
+- Date: 2026-06-01T22:17:53Z — Endpoint matrix rerun succeeded as `ops/evidence/2026-06-01T221752Z-public-prod-endpoints.csv`.
 - Date: 2026-06-01 — Added reproducible unauthenticated matrix capture path:
   `scripts/capture-public-endpoint-matrix.sh` (writes to `ops/evidence/<timestamp>-public-prod-endpoints.csv` when run in a healthy network)
 - Date: 2026-06-01 — Session bootstrap evidence captured: `app.ceq.lol` login with `admin@madfam.io` returned `/api/auth/session` `user`, `roles`, `access_token`, and `ceq_access_token`/`ceq_refresh_token` `httpOnly` cookies.

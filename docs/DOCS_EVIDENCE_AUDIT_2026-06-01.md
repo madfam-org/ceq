@@ -10,7 +10,7 @@ credentials.
 |-------|--------|----------|
 | `endpoint matrix generator` | executable | `scripts/capture-public-endpoint-matrix.sh` |
 | `2026-06-01 public smoke` | pass | [`CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`](../ops/evidence/2026-06-01-public-prod-smoke.md) |
-| `2026-06-01 unauth endpoint matrix` | pass | Endpoint matrix probe was retried and completed successfully as `../ops/evidence/2026-06-01T212236Z-public-prod-endpoints.csv`, with clean reruns at `../ops/evidence/2026-06-01T2200-public-prod-endpoints.csv` and `../ops/evidence/2026-06-01T221058Z-public-prod-endpoints.csv`. |
+| `2026-06-01 unauth endpoint matrix` | pass | Endpoint matrix probe was retried and completed successfully as `../ops/evidence/2026-06-01T212236Z-public-prod-endpoints.csv`, with clean reruns at `../ops/evidence/2026-06-01T2200-public-prod-endpoints.csv`, `../ops/evidence/2026-06-01T221058Z-public-prod-endpoints.csv`, and `../ops/evidence/2026-06-01T221752Z-public-prod-endpoints.csv`. |
 | `https://api.ceq.lol/health` | 200 JSON | `{"status":"ok","service":"ceq-api","version":"0.1.0"}` |
 | `https://api.ceq.lol/ready` | 200 JSON | `status: ready`, `database: ok`, `redis: ok` |
 | `https://ceq.lol/` | 200 | Public landing reachable |

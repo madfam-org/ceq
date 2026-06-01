@@ -83,7 +83,7 @@ GA ops (alerts, strict smoke)   ██████░░░░░░░░░░
 
 `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` is green. The latest successful
 full unauthenticated endpoint matrix in this session is
-`ops/evidence/2026-06-01T221058Z-public-prod-endpoints.csv`; earlier
+`ops/evidence/2026-06-01T221752Z-public-prod-endpoints.csv`; earlier
 successful attempts remain in
 `ops/evidence/2026-06-01T2200-public-prod-endpoints.csv` and
 `ops/evidence/2026-06-01T212236Z-public-prod-endpoints.csv`.
