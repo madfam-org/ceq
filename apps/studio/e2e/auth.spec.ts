@@ -16,7 +16,7 @@ test.describe("Studio auth (mocked Janua)", () => {
   }) => {
     await page.goto("/workflows");
     await expect(page).toHaveURL(/\/login\?returnTo=%2Fworkflows/);
-    await expect(page.getByRole("button", { name: "Enter the Terminal" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Enter CEQ Studio" })).toBeVisible();
   });
 
   test("completes mocked OAuth callback and renders the studio shell", async ({
@@ -25,7 +25,7 @@ test.describe("Studio auth (mocked Janua)", () => {
     await installAuthenticatedShellMocks(page);
 
     await page.goto("/login?returnTo=%2F");
-    await page.getByRole("button", { name: "Enter the Terminal" }).click();
+    await page.getByRole("button", { name: "Enter CEQ Studio" }).click();
 
     await expect(page).toHaveURL(/\/auth\/callback/, { timeout: 10_000 });
     await expect(page).toHaveURL(/http:\/\/127\.0\.0\.1:5801\/(\?|$)/, {
@@ -58,7 +58,7 @@ test.describe("Studio auth (mocked Janua)", () => {
     await installAuthenticatedShellMocks(page);
 
     await page.goto("/login?returnTo=%2F");
-    await page.getByRole("button", { name: "Enter the Terminal" }).click();
+    await page.getByRole("button", { name: "Enter CEQ Studio" }).click();
     await expect(page.getByRole("heading", { name: "Workflows" })).toBeVisible({
       timeout: 15_000,
     });

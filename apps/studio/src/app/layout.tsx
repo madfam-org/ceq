@@ -15,23 +15,26 @@ const fontSans = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "ceq | Creative Entropy Quantized",
-  description: "Generative AI image pipeline by MADFAM. The skunkworks terminal for the generative avant-garde.",
+  title: "ceq | Production Control Plane for Generative Media",
+  description:
+    "CEQ turns repeatable ComfyUI workflows into deterministic render APIs, galleries, billing-ready credits, and client-safe generative production.",
   metadataBase: new URL("https://ceq.lol"),
   icons: {
     icon: "/favicon.ico",
   },
   openGraph: {
-    title: "CEQ Studio — Generative AI Image Pipeline",
-    description: "The skunkworks terminal for the generative avant-garde. Wraps ComfyUI with a streamlined, hacker-centric interface.",
+    title: "CEQ Studio — Production Control Plane for Generative Media",
+    description:
+      "Run reusable templates, preserve seeds, control GPU cost, cache outputs, and ship client-ready image, audio, and 3D assets.",
     url: "https://ceq.lol",
     siteName: "CEQ Studio by MADFAM",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "CEQ Studio — Generative AI Image Pipeline",
-    description: "The skunkworks terminal for the generative avant-garde.",
+    title: "CEQ Studio — Production Control Plane for Generative Media",
+    description:
+      "Reusable ComfyUI workflows, deterministic render APIs, cached outputs, and client-safe generative production.",
   },
 };
 
