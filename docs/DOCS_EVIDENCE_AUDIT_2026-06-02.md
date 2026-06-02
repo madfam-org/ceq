@@ -2,10 +2,12 @@
 
 This is a supplemental evidence snapshot focused on public production readiness after the latest merge window.
 
+Related: [`README.md`](./README.md), [`CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md`](./CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md), [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md), [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md).
+
 ## Public production evidence updates
 
 - `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` result: [../ops/evidence/2026-06-02-live-public-smoke.md](../ops/evidence/2026-06-02-live-public-smoke.md)
-- `capture-public-endpoint-matrix.sh` result: [../ops/evidence/2026-06-02-live-public-matrix.csv](../ops/evidence/2026-06-02-live-public-matrix.csv)
+- `capture-public-endpoint-matrix.sh` result: [../ops/evidence/2026-06-02T041548Z-public-prod-endpoints.csv](../ops/evidence/2026-06-02T041548Z-public-prod-endpoints.csv)
 - `2026-06-02T04:15Z` public smoke rerun passed locally.
 - `2026-06-02T04:15Z` public endpoint matrix was captured at [../ops/evidence/2026-06-02T041548Z-public-prod-endpoints.csv](../ops/evidence/2026-06-02T041548Z-public-prod-endpoints.csv).
 - `GET /ready` returned `200`; unauthenticated `GET /v1/credits/balance` returned `401`; unauthenticated `GET /v1/operations/status` returned `401`.

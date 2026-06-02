@@ -1,5 +1,12 @@
 # CEQ Docs Evidence Audit - 2026-06-01
 
+> **Superseded for current status:** Use
+> [`README.md`](./README.md),
+> [`CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md`](./CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md),
+> and [`DOCS_EVIDENCE_AUDIT_2026-06-02.md`](./DOCS_EVIDENCE_AUDIT_2026-06-02.md)
+> for current production truth. This file is retained as historical evidence
+> for the 2026-06-01 audit.
+
 This audit cross-checks CEQ documentation against the repository and public
 production endpoints. It does not use raw cluster access or real Janua user
 credentials.

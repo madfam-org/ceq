@@ -5,6 +5,7 @@
 > **Janua-side agent:** See [`JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md) for the complete cross-repo handoff.  
 > **Platform agents (Vault/K8s/acceptance):** [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md)  
 > **Demo context:** [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md)  
+> **Current evidence:** [`CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md`](./CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md), [`DOCS_EVIDENCE_AUDIT_2026-06-02.md`](./DOCS_EVIDENCE_AUDIT_2026-06-02.md)
 > **Enclii-first:** Register clients and rotate secrets via Enclii/Janua adapters when available. Use Janua admin only as documented break-glass and record adapter gaps.
 
 ---
@@ -23,13 +24,15 @@ Janua. Authorize returns **302** to login (not `invalid_client`).
 | §9.4 JWKS / issuer | ✅ `https://auth.madfam.io` |
 | §9.5 GET `/logout` | ⚠️ 404 — non-blocking for login; see [Logout follow-up](#logout-follow-up) |
 
-### CEQ-side (browser proof captured)
+### CEQ-side (historical browser proof captured; current secret-sync blocker)
 
 Studio token exchange requires **`JANUA_CLIENT_SECRET` at runtime**. As of
-2026-06-01:
+2026-06-02:
 
 - GitHub Actions repo secret `JANUA_CLIENT_SECRET` is set (`madfam-org/ceq`).
 - **Vault** path `secret/ceq` must include property `JANUA_CLIENT_SECRET`.
+  Current evidence says this property is missing, so ExternalSecret
+  `ceq-janua-client-secret` is `SecretSyncedError`.
 - **`external-secret.yaml`** syncs that property into the dedicated
   `ceq-janua-client-secret` Kubernetes Secret.
 - **`studio-deployment.yaml`** mounts `JANUA_CLIENT_SECRET` from
@@ -37,6 +40,9 @@ Studio token exchange requires **`JANUA_CLIENT_SECRET` at runtime**. As of
 - Live prod check: `POST https://app.ceq.lol/api/auth/token` with a bogus code
   returns Janua `invalid_grant`, not `invalid_client`, which proves the deployed
   Studio token route has a client secret accepted by Janua.
+- Fallback GitHub workflow `sync-janua-client-secret.yml` refreshed the live
+  Kubernetes Secret successfully on 2026-06-02, but that does not populate Vault
+  and does not make the ExternalSecret healthy.
 
 Remaining acceptance: browser proof has been captured with real credentials and
 `/api/auth/session`; remaining non-blocking follow-up is logout + refresh hardening.

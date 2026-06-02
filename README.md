@@ -5,8 +5,21 @@
 **ceq** wraps the raw power of [ComfyUI](https://github.com/comfyanonymous/ComfyUI) with a streamlined, hacker-centric interface. Full node power when you need it, a clean UX when you don't.
 
 **Domain:** [ceq.lol](https://ceq.lol)
-**Status:** Live — public landing, authenticated Studio route, and API deployed; `/v1/render` pipeline shipped 2026-04-19
+**Status:** Live public surfaces; not commercial GA. Public smoke is green, but authenticated smoke, ExternalSecret health, GPU golden-path proof, and paid-launch controls remain open.
 **Philosophy:** *Wrestling order from the chaos of latent space*
+
+---
+
+## Current documentation truth
+
+Start with [`docs/README.md`](./docs/README.md), then the latest audit wrap-up
+and evidence:
+
+- [`docs/CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md`](./docs/CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md)
+- [`docs/DOCS_EVIDENCE_AUDIT_2026-06-02.md`](./docs/DOCS_EVIDENCE_AUDIT_2026-06-02.md)
+
+Older roadmap, deployment, and handoff docs preserve historical context. When
+they conflict, the latest evidence audit wins.
 
 ---
 
@@ -220,7 +233,7 @@ See [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md) for detaile
 | Cloudflare Tunnel Routes | Configured |
 | `/v1/render/*` pipeline | Shipped — card renderer + R2 cache + `@ceq/sdk` |
 | Studio auth gate | Deployed; public no-cookie app gate verified |
-| K8s Secrets | Wired in manifests and confirmed through token exchange behavior (`invalid_grant` for bogus code, indicating Janua secret is accepted) |
+| Runtime secret state | K8s Secret exists and fallback GitHub sync is refreshed; ExternalSecret remains degraded until Vault `secret/ceq.JANUA_CLIENT_SECRET` is populated |
 | Infrastructure | Live on Enclii k3s |
 
 ---
@@ -258,7 +271,9 @@ account to complete the acceptance checklist.
 | [docs/PRD.md](./docs/PRD.md) | Product requirements & manifesto |
 | [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md) | Production deployment guide |
 | [docs/CEQ_IDENTITY_AND_DEMO_WRAPUP.md](./docs/CEQ_IDENTITY_AND_DEMO_WRAPUP.md) | **Start here** — session wrap-up, doc index, operator gates |
-| [docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md](./docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md) | Repo/prod evidence audit and remaining unverified claims |
+| [docs/README.md](./docs/README.md) | Documentation map, precedence, and current truth layer |
+| [docs/CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md](./docs/CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md) | Current audit wrap-up, live blockers, and ROI order |
+| [docs/DOCS_EVIDENCE_AUDIT_2026-06-02.md](./docs/DOCS_EVIDENCE_AUDIT_2026-06-02.md) | Latest repo/prod evidence audit and remaining unverified claims |
 | [docs/GA_DEMO_DEFINITION.md](./docs/GA_DEMO_DEFINITION.md) | Capped GA demo scope, readiness scorecard, acceptance |
 | [docs/COMMERCIAL_GA_REMEDIATION_PLAN.md](./docs/COMMERCIAL_GA_REMEDIATION_PLAN.md) | Commercial GA gates, remediation tracks, pilot/launch plan |
 | [docs/COMMERCIAL_LAUNCH_READINESS_PACK.md](./docs/COMMERCIAL_LAUNCH_READINESS_PACK.md) | Commercial launch evidence, support macros, alert/compliance readiness |

@@ -1,23 +1,25 @@
 # CEQ Capped GA Demo — Definition and Readiness
 
-> **Last updated:** 2026-06-01
+> **Last updated:** 2026-06-02
 > **Audience:** Product, engineering, operators, demo presenters  
+> **Truth layer:** [`README.md`](./README.md), [`CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md`](./CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md), [`DOCS_EVIDENCE_AUDIT_2026-06-02.md`](./DOCS_EVIDENCE_AUDIT_2026-06-02.md)
 > **Related:** [`CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md), [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md), [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md), [`COMMERCIAL_LAUNCH_READINESS_PACK.md`](./COMMERCIAL_LAUNCH_READINESS_PACK.md), [`JANUA_OPERATOR.md`](./JANUA_OPERATOR.md), [`JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md), [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md)
 
 ---
 
 ## Executive summary
 
-CEQ is **infra-stable and partially demoable in production today**. A **capped,
-prod-quality GA demo** (real login, one golden GPU path, deterministic render
-API, InterestGate caps) is not yet declared ready because operations-status and
-authenticated GPU proof remain open.
+CEQ is **public-edge stable and partially demoable in production today**. A
+**capped, prod-quality GA demo** (repeatable authenticated smoke, one golden GPU
+path, deterministic render API, InterestGate caps) is not yet declared ready
+because ExternalSecret health, operations-status, authenticated smoke, and GPU
+proof remain open.
 
 | Milestone | Readiness | Blocker |
 |-----------|-----------|---------|
 | Public marketing + API edge | **~90%** | None |
 | Asset pillar (`/v1/render/*`, `@ceq/sdk`) | **~90%** | Needs Janua JWT for live call |
-| Authenticated Studio (`app.ceq.lol`) | **~85%** | Janua registered; token route accepts client secret; browser proof captured |
+| Authenticated Studio (`app.ceq.lol`) | **~75%** | Janua registered and historical browser/token-route proof exists; current repeatable auth smoke is blocked by missing CEQ auth token and degraded Janua ExternalSecret |
 | End-to-end GPU job in prod | **~10%** | Janua + runtime secrets + prod smokes |
 | Capped monetization (InterestGate + API guard) | **~60%** | Interest capture, premium API guard, claim-aware caps, feature-flagged render/GPU debits, and Studio balance readout shipped; checkout/pricing still open |
 | GA ops (strict smoke, alerts, branch protection) | **~45%** | Branch protection enabled; strict smoke and alert routing still open |
@@ -38,7 +40,7 @@ external stakeholders **without** claiming full PRD breadth. Caps are intentiona
 
 | Cap type | Mechanism | Status |
 |----------|-----------|--------|
-| **Identity** | Janua SSO; demo accounts only | Janua registered; Studio token route accepts client secret; browser proof captured |
+| **Identity** | Janua SSO; demo accounts only | Janua registered; historical browser/token-route proof exists; current gate is repeatable auth smoke plus healthy Vault-backed ExternalSecret |
 | **GPU throughput** | Single “golden” template + Vast.ai capacity | Not prod-proven |
 | **Templates** | 13 seeded workflow templates in repo code; production needs seed verification | Repo-seeded; prod `/v1/templates/` now returns seeded rows in public checks |
 | **Monetization** | InterestGate on pro/premium tags plus API-side premium guard (not checkout) | Shipped in code |

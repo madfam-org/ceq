@@ -1,6 +1,6 @@
 # Janua Agent Handoff — CEQ Studio OAuth Integration
 
-> **Last updated:** 2026-06-01  
+> **Last updated:** 2026-06-02  
 > **From:** CEQ (`madfam-org/ceq`)  
 > **To:** Janua agent / Janua operator / Enclii identity adapter owner  
 > **Priority:** P0 — blocks all authenticated CEQ value and capped GA demo  
@@ -8,12 +8,13 @@
 > **Platform agents:** [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md)  
 > **Session wrap-up:** [`CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md)  
 > **Demo context:** [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md)
+> **Current CEQ truth layer:** [`README.md`](./README.md), [`CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md`](./CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md), [`DOCS_EVIDENCE_AUDIT_2026-06-02.md`](./DOCS_EVIDENCE_AUDIT_2026-06-02.md)
 
-> **2026-06-01 audit update:** Janua registration remains good. Live Studio
+> **2026-06-02 audit update:** Janua registration remains good. Historical Studio
 > token exchange with a bogus code returns Janua `invalid_grant`, not
-> `invalid_client`, which means the deployed CEQ Studio has a client secret
-> accepted by Janua. Browser login with real credentials and `/api/auth/session`
-> are captured; remaining proof is runtime secrets + GPU production smoke.
+> `invalid_client`, which means the deployed CEQ Studio had a client secret
+> accepted by Janua. Current CEQ-side blocker is Vault-backed ExternalSecret
+> health plus repeatable authenticated smoke; GPU production smoke remains open.
 
 ---
 

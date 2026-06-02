@@ -4,6 +4,11 @@
 
 Welcome to **CEQ** — Creative Entropy Quantized. This guide will help you get started with creating AI-generated content using our streamlined ComfyUI interface.
 
+> **Production readiness note:** CEQ public surfaces are live, but CEQ is not
+> commercial GA. For current blockers and evidence, start with
+> [`README.md`](./README.md), [`CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md`](./CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md),
+> and [`DOCS_EVIDENCE_AUDIT_2026-06-02.md`](./DOCS_EVIDENCE_AUDIT_2026-06-02.md).
+
 ## What is CEQ?
 
 CEQ is a content generation platform that wraps [ComfyUI](https://github.com/comfyanonymous/ComfyUI) with a clean, hacker-friendly interface. It's designed for power users who want:
