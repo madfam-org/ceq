@@ -16,28 +16,52 @@ PRO_QUOTA_ROLES = {
     "paid",
     "pro",
     "premium",
-    "ceq-pro",
-    "ceq-premium",
-    "ceq:pro",
-    "ceq:premium",
-    "plan-pro",
-    "plan-premium",
+    "plan:paid",
     "plan:pro",
     "plan:premium",
-    "tier-pro",
-    "tier-premium",
+    "plan-paid",
+    "plan-pro",
+    "plan-premium",
+    "tier:paid",
     "tier:pro",
     "tier:premium",
+    "tier-paid",
+    "tier-pro",
+    "tier-premium",
+    "ceq-paid",
+    "ceq-pro",
+    "ceq-premium",
+    "ceq:paid",
+    "ceq:pro",
+    "ceq:premium",
 }
 STUDIO_QUOTA_ROLES = {
     "studio",
+    "plan:studio",
+    "plan-studio",
+    "tier:studio",
+    "tier-studio",
     "ceq-studio",
     "ceq:studio",
-    "plan-studio",
-    "plan:studio",
-    "tier-studio",
-    "tier:studio",
 }
+
+
+def _expand_quota_tokens(values: Iterable[object] | None) -> set[str]:
+    normalized = _normalize(values)
+    expanded = set(normalized)
+
+    for value in normalized:
+        if value.startswith("ceq-") or value.startswith("ceq:"):
+            expanded.add(value.removeprefix("ceq:").removeprefix("ceq-"))
+        if value.startswith("plan:") or value.startswith("plan-"):
+            expanded.add(value.split(":", 1)[1] if ":" in value else value.split("-", 1)[1])
+        if value.startswith("tier:") or value.startswith("tier-"):
+            expanded.add(value.split(":", 1)[1] if ":" in value else value.split("-", 1)[1])
+
+        if value.endswith("-artist"):
+            expanded.add(value.removesuffix("-artist"))
+
+    return expanded
 
 
 def _normalize(values: Iterable[object] | None) -> set[str]:
@@ -51,11 +75,15 @@ def _normalize(values: Iterable[object] | None) -> set[str]:
 def active_job_limit_for_user(user: JanuaUser, settings: Any) -> int:
     """Resolve the active-job cap for the user's current plan/role."""
     roles = _normalize(user.roles)
+    entitlements = _normalize(getattr(user, "entitlements", None))
+
+    caps = roles | entitlements
+    expanded_caps = _expand_quota_tokens(caps)
     if user.is_admin:
         return int(settings.max_active_jobs_admin)
-    if roles & STUDIO_QUOTA_ROLES:
+    if expanded_caps & STUDIO_QUOTA_ROLES:
         return int(settings.max_active_jobs_studio)
-    if roles & PRO_QUOTA_ROLES:
+    if expanded_caps & PRO_QUOTA_ROLES:
         return int(settings.max_active_jobs_pro)
     return int(settings.max_active_jobs_per_user)
 

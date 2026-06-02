@@ -187,6 +187,7 @@ class JanuaUser:
     email: str
     org_id: UUID | None = None
     roles: list[str] | None = None
+    entitlements: list[str] | None = None
 
     @property
     def is_admin(self) -> bool:
@@ -212,6 +213,36 @@ def _normalize_roles(value: Any) -> list[str] | None:
         if isinstance(role, (str, UUID, int, float)) and not isinstance(role, dict)
     ]
     return roles if roles else None
+
+
+def _normalize_entitlements(value: Any) -> list[str] | None:
+    """Normalize entitlement claims from token payloads into a list of strings."""
+    if value is None:
+        return None
+
+    values = value
+
+    if isinstance(value, dict):
+        nested = value.get("id") or value.get("slug") or value.get("name")
+        if nested is None:
+            return None
+        values = nested
+
+    if isinstance(value, str):
+        values = [value]
+    elif isinstance(value, Iterable) and not isinstance(value, (bytes, bytearray, dict)):
+        values = list(value)
+    else:
+        values = [value]
+
+    entitlements = [
+        str(entitlement).strip().lower().replace("_", "-")
+        for entitlement in values
+        if isinstance(entitlement, (str, UUID, int, float))
+        and not isinstance(entitlement, dict)
+        and str(entitlement).strip()
+    ]
+    return entitlements if entitlements else None
 
 
 # ---------------------------------------------------------------------------
@@ -260,11 +291,24 @@ async def _validate_token_introspection(token: str) -> JanuaUser | None:
         if roles_raw is None:
             roles_raw = data.get("role")
 
+        entitlements = _normalize_entitlements(
+            data.get("entitlements")
+            or data.get("plan")
+            or data.get("plan_id")
+            or data.get("subscription")
+            or data.get("subscription_tier")
+        )
+        if entitlements is None:
+            plans = data.get("plans")
+            if isinstance(plans, list):
+                entitlements = _normalize_entitlements(plans)
+
         user = JanuaUser(
             id=UUID(user_id),
             email=email,
             org_id=UUID(data["org_id"]) if data.get("org_id") else None,
             roles=_normalize_roles(roles_raw),
+            entitlements=entitlements,
         )
         logger.debug("Token validated via introspection for user %s", user.email)
         return user
@@ -334,12 +378,24 @@ def _validate_token_local(token: str) -> JanuaUser | None:
         logger.warning("JWT missing required claims (sub, email)")
         return None
 
+    entitlements = _normalize_entitlements(
+        payload.get("entitlements")
+        or payload.get("plan")
+        or payload.get("plan_id")
+        or payload.get("subscription")
+        or payload.get("subscription_tier")
+    )
+    if entitlements is None:
+        plans = payload.get("plans")
+        if isinstance(plans, list):
+            entitlements = _normalize_entitlements(plans)
+
     user = JanuaUser(
         id=UUID(sub),
         email=email,
         org_id=UUID(payload["org_id"]) if payload.get("org_id") else None,
-        roles=_normalize_roles(payload.get("roles"))
-        or _normalize_roles(payload.get("role")),
+        roles=_normalize_roles(payload.get("roles")) or _normalize_roles(payload.get("role")),
+        entitlements=entitlements,
     )
     logger.debug(f"Token validated locally (JWKS) for user {user.email}")
     return user

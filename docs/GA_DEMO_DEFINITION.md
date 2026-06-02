@@ -19,7 +19,7 @@ authenticated GPU proof remain open.
 | Asset pillar (`/v1/render/*`, `@ceq/sdk`) | **~90%** | Needs Janua JWT for live call |
 | Authenticated Studio (`app.ceq.lol`) | **~85%** | Janua registered; token route accepts client secret; browser proof captured |
 | End-to-end GPU job in prod | **~10%** | Janua + runtime secrets + prod smokes |
-| Capped monetization (InterestGate + API guard) | **~60%** | Interest capture, premium API guard, credit ledger, role-derived caps, feature-flagged render/GPU debits, and Studio balance readout shipped; checkout/pricing still open |
+| Capped monetization (InterestGate + API guard) | **~60%** | Interest capture, premium API guard, claim-aware caps, feature-flagged render/GPU debits, and Studio balance readout shipped; checkout/pricing still open |
 | GA ops (strict smoke, alerts, branch protection) | **~45%** | Branch protection enabled; strict smoke and alert routing still open |
 
 **Critical path:** ~~Janua OAuth registration~~ done (2026-05-23) →
@@ -60,7 +60,7 @@ multi-channel publishing, paid checkout, or full observability on-call proof.
 
 Commercial GA is a separate milestone. A capped GA demo proves that CEQ can be
 shown on production infrastructure with tight scope; it does **not** prove that
-CEQ can be sold broadly. Paid launch requires server-side credits, API
+CEQ can be sold broadly. Paid launch requires server-side credits, plan-backed
 entitlements, billing/checkout, quotas, support, legal/commercial docs, and
 launch signoff. Track that work in
 [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md) and

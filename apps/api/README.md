@@ -270,14 +270,17 @@ Role claim handling is intentionally defensive:
 - Single string roles (for example `"Admin"`) and iterable role claims are
   normalized into a list.
 - Role normalization lowercases values and converts underscores to hyphens (for
-  example `"Studio_Admin"` → `"studio-admin"`) before entitlement checks.
+- example `"Studio_Admin"` → `"studio-admin"`) before entitlement checks.
+- Entitlement claims are also supported. `entitlements`, `plan`, `plan_id`,
+  `subscription`, and `subscription_tier` (including list-style variants) map
+  into paid access during entitlement evaluation.
 
 ## Monetization gating (InterestGate)
 
 CEQ is still pre-checkout, but premium template execution now has an API-side
-guard. Templates tagged `pro` or `premium` require a paid/admin Janua role for
-direct template `fork`/`run`, synthesis-selected premium templates, and
-premium-origin workflow runs.
+guard. Templates tagged `pro` or `premium` require a paid/admin Janua role or a
+supported entitlement claim for direct template `fork`/`run`, synthesis-selected
+premium templates, and premium-origin workflow runs.
 
 The studio still uses the **InterestGate** pattern for demand capture: gated UI
 is wrapped in `<InterestGate featureKey="..." variant="overlay">` (see
