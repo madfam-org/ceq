@@ -178,7 +178,7 @@ Code progress since this baseline:
 | 2026-06-01 | GitHub `main` branch protection enabled with required CEQ CI checks and review gate | Keep required checks current as workflow names change |
 | 2026-06-01 | Studio billing page added with Dhanam checkout URL bridge for catalog product `ceq` tiers `pro_artist` and `studio`, gated by `NEXT_PUBLIC_CEQ_CHECKOUT_ENABLED` | Keep checkout disabled until Dhanam entitlement source and paid-run proof are captured |
 | 2026-06-01 | Customer-facing legal/commercial routes added under `/legal/*` and linked from `/billing` | Product/legal review and final policy approval remain required |
-| 2026-06-02 | Public landing redesigned around conversion: outcome-first hero, product proof panel, superpower matrix, simulated deterministic render/cache-hit demo, buyer-safety links, founding-pilot CTAs, and landing event hooks | Deploy to production, connect event sink beyond `CustomEvent`/`dataLayer`, and keep paid CTAs gated until entitlement proof |
+| 2026-06-02 | Public landing redesigned around conversion: outcome-first hero, product proof panel, superpower matrix, simulated deterministic render/cache-hit demo, buyer-safety links, founding-pilot CTAs, and landing event hooks. Landing conversion assertions are now captured in `apps/studio/__tests__/components/marketing-landing.test.tsx` and `docs/LANDING_CONVERSION_AUDIT_2026-06-02.md`. | Deploy to production, connect event sink beyond `CustomEvent`/`dataLayer`, and keep paid CTAs gated until entitlement proof |
 
 ---
 

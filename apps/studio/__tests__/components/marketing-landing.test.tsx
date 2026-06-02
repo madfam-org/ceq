@@ -33,8 +33,8 @@ describe("MarketingLanding", () => {
         name: /generate repeatable client-ready ai assets/i,
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/deterministic render pipeline live/i)).toBeInTheDocument();
-    expect(screen.getByText(/same inputs, same asset/i)).toBeInTheDocument();
+    expect(screen.getByText(/build once, run everywhere/i)).toBeInTheDocument();
+    expect(screen.getByText(/stable assets/i)).toBeInTheDocument();
   });
 
   it("starts the free sign-in flow from the hero CTA", async () => {
@@ -81,5 +81,16 @@ describe("MarketingLanding", () => {
       "href",
       "/legal/privacy",
     );
+  });
+
+  it("surfaces founder-seat conversion framing in paid tiers", () => {
+    render(<MarketingLanding />);
+
+    expect(
+      screen.getByRole("button", { name: /reserve founder price/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /book studio pilot/i }),
+    ).toBeInTheDocument();
   });
 });

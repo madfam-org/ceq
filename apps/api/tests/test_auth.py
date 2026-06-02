@@ -25,6 +25,7 @@ from ceq_api.auth.janua import (
     JanuaUser,
     JWKSCircuitBreaker,
     _jwks_breaker,
+    _normalize_roles,
     _validate_token_introspection,
     _validate_token_local,
     get_current_user,
@@ -139,6 +140,35 @@ class TestJanuaUser:
         assert user.is_admin is False
 
 
+class TestRoleNormalization:
+    """Tests for role-claim normalization."""
+
+    def test_normalize_roles_from_string(self):
+        """String role should become a normalized list."""
+        assert _normalize_roles("Admin") == ["admin"]
+
+    def test_normalize_roles_from_iterables(self):
+        """Iterable roles should preserve multiplicity while normalizing strings."""
+        assert _normalize_roles(["Pro", "pro", "plan-pro", "Tier_Studio"]) == [
+            "pro",
+            "pro",
+            "plan-pro",
+            "tier-studio",
+        ]
+
+    def test_normalize_roles_from_other_iterables(self):
+        """Tuple roles are accepted and normalized."""
+        assert _normalize_roles(("Admin", "studio_pro", 2)) == [
+            "admin",
+            "studio-pro",
+            "2",
+        ]
+
+    def test_normalize_roles_none(self):
+        """No role value should return None."""
+        assert _normalize_roles(None) is None
+
+
 # ---------------------------------------------------------------------------
 # JWKS Circuit Breaker
 # ---------------------------------------------------------------------------
@@ -224,6 +254,30 @@ class TestValidateTokenLocal:
         assert user.email == "alice@madfam.io"
         assert str(user.org_id) == org_id
         assert user.roles == ["user", "editor"]
+
+    def test_valid_token_with_string_roles(self, rsa_public_key, make_test_jwt):
+        """String role in JWT should be normalized into a role list."""
+        user_id = str(uuid4())
+        org_id = str(uuid4())
+        token = make_test_jwt(
+            sub=user_id,
+            email="alice@madfam.io",
+            org_id=org_id,
+            extra_claims={"roles": "Admin"},
+        )
+
+        mock_jwks = MagicMock()
+        mock_jwks.get_signing_key.return_value = rsa_public_key
+
+        with patch("ceq_api.auth.janua._get_jwks_client", return_value=mock_jwks):
+            with patch("ceq_api.auth.janua.settings") as mock_settings:
+                mock_settings.janua_issuer = "https://auth.madfam.io"
+                mock_settings.janua_audience = "ceq-api"
+
+                user = _validate_token_local(token)
+
+        assert user is not None
+        assert user.roles == ["admin"]
 
     def test_expired_token_raises(self, rsa_public_key, make_test_jwt):
         """Expired JWT should raise ExpiredSignatureError."""
@@ -378,6 +432,29 @@ class TestValidateTokenIntrospection:
         assert str(user.id) == user_id
 
     @pytest.mark.asyncio
+    async def test_introspection_string_role_claim(self):
+        """Introspection response can return a string role claim."""
+        user_id = str(uuid4())
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "id": user_id,
+            "email": "role-test@test.com",
+            "role": "Studio_Owner",
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch("ceq_api.auth.janua.get_janua_client", return_value=mock_client):
+            user = await _validate_token_introspection("valid-token")
+
+        assert user is not None
+        assert str(user.id) == user_id
+        assert user.roles == ["studio-owner"]
+
+    @pytest.mark.asyncio
     async def test_introspection_invalid_status(self):
         """Non-200 status from introspection should return None."""
         mock_response = MagicMock()
@@ -503,6 +580,75 @@ class TestValidateToken:
 
         assert user is None
         mock_introspection.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_invalid_audience_falls_back_to_introspection(self, mock_admin_user):
+        """Audience claim mismatch should still try introspection fallback."""
+        introspection_user = mock_admin_user
+
+        with patch("ceq_api.auth.janua.settings") as mock_settings:
+            mock_settings.janua_enabled = True
+            mock_settings.janua_jwks_url = "https://auth.madfam.io/.well-known/jwks.json"
+            mock_settings.janua_issuer = ""
+            mock_settings.janua_audience = ""
+
+            with patch(
+                "ceq_api.auth.janua._validate_token_local",
+                side_effect=pyjwt.InvalidAudienceError("aud invalid"),
+            ):
+                with patch(
+                    "ceq_api.auth.janua._validate_token_introspection",
+                    return_value=introspection_user,
+                ):
+                    user = await validate_token("some-token")
+
+        assert user is introspection_user
+
+    @pytest.mark.asyncio
+    async def test_invalid_issuer_falls_back_to_introspection(self, mock_admin_user):
+        """Issuer claim mismatch should still try introspection fallback."""
+        introspection_user = mock_admin_user
+
+        with patch("ceq_api.auth.janua.settings") as mock_settings:
+            mock_settings.janua_enabled = True
+            mock_settings.janua_jwks_url = "https://auth.madfam.io/.well-known/jwks.json"
+            mock_settings.janua_issuer = ""
+            mock_settings.janua_audience = ""
+
+            with patch(
+                "ceq_api.auth.janua._validate_token_local",
+                side_effect=pyjwt.InvalidIssuerError("iss invalid"),
+            ):
+                with patch(
+                    "ceq_api.auth.janua._validate_token_introspection",
+                    return_value=introspection_user,
+                ):
+                    user = await validate_token("some-token")
+
+        assert user is introspection_user
+
+    @pytest.mark.asyncio
+    async def test_invalid_jwt_structure_falls_back_to_introspection(self, mock_admin_user):
+        """Opaque/malformed tokens should still be attempted via introspection."""
+        introspection_user = mock_admin_user
+
+        with patch("ceq_api.auth.janua.settings") as mock_settings:
+            mock_settings.janua_enabled = True
+            mock_settings.janua_jwks_url = "https://auth.madfam.io/.well-known/jwks.json"
+            mock_settings.janua_issuer = ""
+            mock_settings.janua_audience = ""
+
+            with patch(
+                "ceq_api.auth.janua._validate_token_local",
+                side_effect=pyjwt.DecodeError("not enough segments"),
+            ):
+                with patch(
+                    "ceq_api.auth.janua._validate_token_introspection",
+                    return_value=introspection_user,
+                ):
+                    user = await validate_token("not-a-jwt")
+
+        assert user is introspection_user
 
     @pytest.mark.asyncio
     async def test_jwks_not_configured_uses_introspection(self):

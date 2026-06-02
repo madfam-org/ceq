@@ -260,7 +260,17 @@ async def protected_route(user = Depends(get_current_user)):
     return {"user_id": user.id}
 ```
 
-JWT tokens are validated against Janua's JWKS endpoint.
+JWT tokens are validated against Janua's JWKS endpoint first, then Janua fallback
+endpoints are used when JWKS is unavailable, claims are malformed, or token
+claims need normalization.
+
+Role claim handling is intentionally defensive:
+
+- `roles` and `role` claims are both accepted.
+- Single string roles (for example `"Admin"`) and iterable role claims are
+  normalized into a list.
+- Role normalization lowercases values and converts underscores to hyphens (for
+  example `"Studio_Admin"` → `"studio-admin"`) before entitlement checks.
 
 ## Monetization gating (InterestGate)
 

@@ -27,9 +27,8 @@
 scripts/capture-public-endpoint-matrix.sh
 ```
 
-- Latest successful snapshot on record: `ops/evidence/2026-06-01T221752Z-public-prod-endpoints.csv`
-- Earlier successful snapshots: `ops/evidence/2026-06-01T2200-public-prod-endpoints.csv`,
-  `ops/evidence/2026-06-01T212236Z-public-prod-endpoints.csv`
+- Latest successful snapshot on record: `ops/evidence/2026-06-02T021322Z-public-prod-endpoints.csv`
+  (earlier successful snapshots: `2026-06-01T2200`, `2026-06-01T212236Z`, `2026-06-01T221058Z`, `2026-06-01T221752Z`, `2026-06-01T224003Z`).
 
 ### Required evidence for paid launch
 
@@ -45,6 +44,8 @@ Before commercial GA, collect and archive the following:
 - Cancel smoke passes in production and no stale failed completion replay without explicit action.
 - `/billing` checkout buttons are enabled only after Dhanam catalog, entitlement, and paid-run evidence is captured.
 - Public landing conversion QA passes on desktop and mobile: outcome-first hero, product proof panel, simulated render/cache-hit demo, pricing CTAs, buyer-safety links, and no horizontal overflow at 390px width.
+- Landing conversion QA includes a documented audit and release note review:
+  `docs/LANDING_CONVERSION_AUDIT_2026-06-02.md`.
 
 Use one date-stamped checklist row for each production run:
 
@@ -75,6 +76,7 @@ Minimum evidence gates for GA-adjacent launch:
 - One authenticated GPU golden path with queue completion + output in gallery
 - Dhanam checkout uses product `ceq` with tiers `pro_artist` and `studio`; `NEXT_PUBLIC_CEQ_CHECKOUT_ENABLED=true` is allowed only after entitlement source proof.
 - `ceq.lol` landing presents the CEQ conversion path: start free, reserve founding price, book studio pilot, and links the commercial/legal surface before paid onboarding.
+- Unit test `apps/studio/__tests__/components/marketing-landing.test.tsx` includes paid-intent framing assertions and cache-hit conversion states.
 
 ### Documents and contracts
 
