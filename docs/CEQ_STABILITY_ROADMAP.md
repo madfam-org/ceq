@@ -177,7 +177,7 @@ and `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md`.
 | P0-4 | Platform | Template catalog seeded (`/v1/templates/` returns non-empty IDs) | Inconsistent | Public evidence currently empty |
 | P0-5 | Stability | Cancel + multi-modal + strict smoke pass in production | Not started | Not yet captured |
 | P1-1 | Monetization | Dhanam-backed plan/checkout and funded entitlements live | Not started | Not yet captured |
-| P1-2 | Monetization | Entitlements are enforced server-side (not UI-only) | In progress | Role-derived guards landed |
+| P1-2 | Monetization | Entitlements are enforced server-side (not UI-only) | In progress | Role/entitlement-claim guards landed |
 | P1-3 | Reliability | Alerts and rollback drills hit on-call/owner paths | Not started | Not yet proven |
 | P1-4 | Legal/commercial | Terms, privacy, pricing, and support docs are linked in user flows | In progress | Public landing and `/billing` link legal/commercial routes; legal approval still pending |
 | P1-5 | Launch | Paid pilot + launch signoff with incident/runbook rehearsals | Not started | Not yet executed |
@@ -275,7 +275,7 @@ Commercial GA gates:
 | Billing | Dhanam checkout/invoice path or approved pilot billing bridge works |
 | Credits | Initial ledger/API, Studio account balance, and feature-flagged render/GPU debit-refund plumbing landed; billing reconciliation still required |
 | Entitlements | Initial premium/pro API guard landed; Dhanam-backed plan source still required |
-| Quotas/abuse | Role-derived active-job caps landed; Dhanam-backed queue/rate/spend limits still required |
+| Quotas/abuse | Role/entitlement-aware active-job caps landed; Dhanam-backed queue/rate/spend limits still required |
 | Observability/support | Alerts route to on-call; support macros and escalation runbooks exist |
 | Security/legal | AuthZ, audit logs, terms, privacy, acceptable-use, and retention docs are ready |
 | Launch signoff | Product, engineering, platform, and support sign off with evidence links |
@@ -733,7 +733,7 @@ gates pass.
 |------|-------|-------|
 | Template catalog expansion | Product + eng | 6 checked-in workflow JSON files + 13 seeded DB templates; PRD lists dozens — prioritize social + video MVP |
 | Publishing channels | `apps/api` outputs | Twitter/Instagram/LinkedIn/Discord `coming_soon`; webhook only live |
-| Monetization | Product + Dhanam + API + Studio | InterestGate exists; initial API-side premium guard, credit ledger, role-derived active-job caps, Studio account balance, and feature-flagged render/GPU debits landed 2026-06-01; commercial GA still requires Dhanam checkout, billing reconciliation, Dhanam-backed quotas, and full Studio billing UX per [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md) |
+| Monetization | Product + Dhanam + API + Studio | InterestGate exists; initial API-side premium guard, credit ledger, role/entitlement-aware active-job caps, Studio account balance, and feature-flagged render/GPU debits landed 2026-06-01; commercial GA still requires Dhanam checkout, billing reconciliation, Dhanam-backed quotas, and full Studio billing UX per [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md) |
 | Landing conversion | Studio landing | Outcome-first landing with product proof panel, simulated deterministic render/cache-hit demo, founding-pilot CTAs, and lightweight event hooks; connect analytics sink after deploy |
 | Furnace migration | Workers | Vast.ai today; Furnace provider not deployed |
 | PRD promotion | Product | Move from Draft v0.1.0 to accepted MVP spec |
@@ -828,8 +828,8 @@ app gate on `app.ceq.lol`.
 5. [ ] **BLOCKED** **CEQ operator:** Run authenticated GPU + cancel + multi-modal smokes
 6. [ ] **IN PROGRESS** **Product + engineering:** Freeze commercial launch SKU, credit units, and
    supported template catalog
-7. [ ] **IN PROGRESS** **API + Dhanam:** Replace initial role-based entitlement checks and
-   role-derived quotas with Dhanam plan state; fund balances and enable
+7. [ ] **IN PROGRESS** **API + Dhanam:** Replace initial role/entitlement checks and
+   role/entitlement-claim quotas with Dhanam plan state; fund balances and enable
    render/GPU debit flags for a pilot cohort
 
 ---

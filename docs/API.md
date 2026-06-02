@@ -505,8 +505,9 @@ POST /v1/templates/{id}/run
 
 Runs a template directly and returns a queued job.
 
-Templates tagged `pro` or `premium` require a paid/admin Janua role before
-`fork` or `run`. The same entitlement check is applied when running a workflow
+Templates tagged `pro` or `premium` require a paid/admin Janua role or a paid
+entitlement claim for `fork` or `run`. The same entitlement check is applied
+when running a workflow
 derived from a premium template, so direct API callers cannot bypass the Studio
 InterestGate by forking first.
 

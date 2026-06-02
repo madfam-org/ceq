@@ -67,7 +67,7 @@ credentials.
 | Deployment docs | Replaced stale `ceq-prod` tunnel guidance with platform `enclii-prod` tunnel status. |
 | Legacy deploy script | Disabled legacy `ceq-prod` tunnel creation unless `CEQ_ALLOW_LEGACY_TUNNEL=true` is explicitly set. |
 | Digest docs | Updated current kustomization digest table in the stability roadmap. |
-| Commercial controls | Added credit ledger, role-derived entitlement/quota guards, feature-flagged render/GPU debits, and Studio balance readout to docs. |
+| Commercial controls | Added credit ledger, role/entitlement-claim entitlement and quota guards, feature-flagged render/GPU debits, and Studio balance readout to docs. |
 | Branch protection | Enabled `main` protection and removed it from open GA blockers. |
 
 ## Remaining Unverified Claims

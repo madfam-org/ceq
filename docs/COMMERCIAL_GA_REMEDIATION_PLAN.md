@@ -54,7 +54,7 @@ Earlier successful reruns remain as `ops/evidence/2026-06-01T2200-public-prod-en
 |----------|--------|----------------|----------------|
 | Capped GA demo | 30% | 52% | Browser login proof is now captured in production; operations/authenticated GPU path remains unproven in prod. |
 | Full stability | 25% | 52% | Public smoke is green; alert/rollback drill + strict CI gate still pending. |
-| Limited commercial pilot | 25% | 40% | Credits API + billing source exist, but route has no confirmed live auth flow and entitlements are role-derived. |
+| Limited commercial pilot | 25% | 40% | Credits API + billing source exist, but route has no confirmed live auth flow and entitlements are role/entitlement-claim aware. |
 | Commercial GA | 20% | 43% | Product/legal/operations launch controls are drafted, not yet fully proven in production. |
 
 Estimated aggregate readiness remains **48%** (evidence-weighted). This is a
@@ -72,9 +72,9 @@ Use this registry as the canonical closure board for GA-blocking work.
 | P0-4 | Run authenticated GPU golden path smoke (`job → callback → output → gallery`) and capture output URL trail. | API + Workers + Platform | **Not started** | Not yet captured |
 | P0-5 | Run active cancellation + multi-modal smoke under `CEQ_STRICT_SMOKE=true` with dead-letter threshold checks. | API + Workers | **Not started** | Not yet captured |
 | P1-1 | Finalize Dhanam-backed plan/checkout path for paid signup and plan changes. | Product + Dhanam + API | **In progress** | Studio checkout bridge now targets Dhanam catalog product `ceq`; enablement still requires entitlement source proof |
-| P1-2 | Replace role-derived paid API gates with entitlement checks backed by plan state and server-side grants. | API | **In progress** (role-based guards landed) | No plan-backed enforcement evidence yet |
+| P1-2 | Replace role-only paid API gates with entitlement checks backed by plan state and server-side grants. | API | **In progress** (role/entitlement claim guards landed) | No plan-backed enforcement evidence yet |
 | P1-3 | Enable and reconcile feature-flagged render/GPU debit-refund flow for a pilot cohort. | API | **In progress** (code paths exist, flags available) | Not yet bound to funded flow |
-| P1-4 | Replace role-derived caps with plan/rate/spend quotas tied to production entitlements. | API + Platform | **In progress** (schema + quotas exist, billing source missing) | No paid traffic evidence |
+| P1-4 | Replace role-only caps with plan/rate/spend quotas tied to production entitlements. | API + Platform | **In progress** (schema + quotas exist, billing source missing) | No paid traffic evidence |
 | P1-5 | Confirm alert + rollback drill evidence, link synthetic alert path, and attach runbooks to alert annotations. | Platform + Support | **Not started** | Not yet linked |
 | P1-6 | Publish and link customer-facing legal/commercial docs (terms, privacy, AUP, pricing, limits) from GA flows. | Product + Legal | **In progress** | Studio `/billing` and the redesigned landing link `/legal/{terms,privacy,acceptable-use,retention,refunds}`; legal review still required |
 | P1-7 | Publish fresh-account paid pilot rehearsal evidence (login, generation, invoice/receipt, output retrieval). | Product + Eng + Support | **Not started** | Not yet executed |
@@ -173,7 +173,7 @@ Code progress since this baseline:
 | 2026-06-01 | Per-user active job cap added for workflow/template/synthesis submissions via `MAX_ACTIVE_JOBS_PER_USER` | Replace the global cap with plan-aware Dhanam quotas and Studio limit UI |
 | 2026-06-01 | Studio credit balance UI is wired to `/v1/credits/balance` | Confirm endpoint is live in production and add usage history, upgrade, exhausted-credit, and payment-failure states |
 | 2026-06-01 | Render cache-miss debit plumbing added behind `RENDER_CREDIT_DEBITS_ENABLED` | Fund balances from Dhanam/pilot grants, enable for pilot cohort, and add GPU job debit/refund metering |
-| 2026-06-01 | Plan-aware active-job caps added for free/pro/studio/admin roles | Replace role-derived limits with Dhanam plan state when billing source is live |
+| 2026-06-01 | Plan-aware active-job caps added for free/pro/studio/admin roles | Replace role-only limits with Dhanam plan state when billing source is live |
 | 2026-06-01 | GPU job debit/refund plumbing added behind `GPU_JOB_CREDIT_DEBITS_ENABLED` | Fund balances, enable for pilot cohort, and reconcile ledger to completed jobs/billing export |
 | 2026-06-01 | GitHub `main` branch protection enabled with required CEQ CI checks and review gate | Keep required checks current as workflow names change |
 | 2026-06-01 | Studio billing page added with Dhanam checkout URL bridge for catalog product `ceq` tiers `pro_artist` and `studio`, gated by `NEXT_PUBLIC_CEQ_CHECKOUT_ENABLED` | Keep checkout disabled until Dhanam entitlement source and paid-run proof are captured |
@@ -363,7 +363,7 @@ Dependency gates:
 - [x] Credit ledger schema and `/v1/credits/*` APIs exist in code
 - [ ] `/v1/credits/balance` route is 401/403 for unauthenticated users and works with valid user token (currently `404` unauthenticated)
 - [ ] Credit balance surfacing in Studio depends on production `credits` endpoint availability
-- [x] Role-derived premium gating and per-user active-job caps landed
+- [x] Role/entitlement-claim premium gating and per-user active-job caps landed
 - [x] Dhanam checkout bridge exists in Studio, feature-flagged off by default until entitlement proof
 - [ ] No Dhanam-backed entitlement source wired into API enforcement
 
@@ -376,7 +376,7 @@ Dependency gates:
 
 ### Priority 3 — Reliability, support, and compliance
 
-7. Replace role-derived caps with plan-aware quota/rate/spend controls.
+7. Replace role-only caps with plan-aware quota/rate/spend controls.
 8. Add/lock alert routing, runbooks, and rollback drill evidence.
 9. Publish support macros and customer-facing terms/privacy/AUP/retention.
 
@@ -490,15 +490,15 @@ Tasks:
 - Extend the initial credit ledger tables/API into Dhanam-backed plan funding
 - Meter every billable generation and render action server-side; render cache-miss and GPU job debit/refund plumbing landed behind feature flags
 - Make credit deduction idempotent against retries and callbacks
-- Replace initial role-based premium template API enforcement with Dhanam-backed entitlements
-- Replace role-derived plan caps with Dhanam-backed queue/rate/spend quotas
+- Replace initial role/entitlement-claim premium template API enforcement with Dhanam-backed entitlements
+- Replace role/entitlement-aware plan caps with Dhanam-backed queue/rate/spend quotas
 - Add usage summary and remaining credit views in Studio; account-menu balance landed 2026-06-01
 - Add admin credit grant/adjustment workflow with audit trail
 
 Acceptance:
 
-- Free users cannot invoke premium templates by direct API call (initial role-based guard landed 2026-06-01)
-- Paid users cannot exceed plan credits/queue limits without explicit overage policy (role-derived active-job caps landed 2026-06-01)
+- Free users cannot invoke premium templates by direct API call (initial role/entitlement-claim guard landed 2026-06-01)
+- Paid users cannot exceed plan credits/queue limits without explicit overage policy (role/entitlement-aware active-job caps landed 2026-06-01)
 - Each completed paid job has exactly one ledger entry tied to job/output IDs
 - Failed/cancelled jobs have clear refund/no-charge semantics
 
@@ -588,7 +588,7 @@ Acceptance:
 4. [ ] **BLOCKED** Run one authenticated GPU golden path (`job → complete → gallery`) with output URL evidence.
 5. [ ] **IN PROGRESS** Add `/v1/credits/balance` and credit-route auth behavior into `CEQ_PUBLIC_ONLY=true` + authenticated smoke evidence.
 6. [ ] **NOT STARTED** Enable credit plan source (Dhanam bridge or approved pilot billing bridge) and verify one paid action with debits.
-7. [ ] **IN PROGRESS** Replace role-derived paid-template/API enforcement with entitlement-backed checks.
+7. [ ] **IN PROGRESS** Replace role-only paid-template/API enforcement with entitlement-backed checks.
 8. [ ] **IN PROGRESS** Finalize queue/rate/spend guardrails in API + worker path.
 9. [ ] **NOT STARTED** Confirm alert routing + rollback drill evidence and link runbooks.
 10. [ ] **IN PROGRESS** Publish customer-facing legal/commercial docs (terms/privacy/AUP/retention/recovery) in public landing and Studio paths.
