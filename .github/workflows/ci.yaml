@@ -183,6 +183,8 @@ jobs:
             NEXT_PUBLIC_WS_URL=wss://ws.ceq.lol
             NEXT_PUBLIC_JANUA_URL=https://auth.madfam.io
             NEXT_PUBLIC_JANUA_CLIENT_ID=jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk
+            NEXT_PUBLIC_DHANAM_BILLING_URL=https://api.dhan.am
+            NEXT_PUBLIC_CEQ_CHECKOUT_ENABLED=false
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

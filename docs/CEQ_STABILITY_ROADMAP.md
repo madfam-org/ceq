@@ -179,7 +179,7 @@ and `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md`.
 | P1-1 | Monetization | Dhanam-backed plan/checkout and funded entitlements live | Not started | Not yet captured |
 | P1-2 | Monetization | Entitlements are enforced server-side (not UI-only) | In progress | Role-derived guards landed |
 | P1-3 | Reliability | Alerts and rollback drills hit on-call/owner paths | Not started | Not yet proven |
-| P1-4 | Legal/commercial | Terms, privacy, pricing, and support docs are linked in user flows | Not started | Not linked |
+| P1-4 | Legal/commercial | Terms, privacy, pricing, and support docs are linked in user flows | In progress | Public landing and `/billing` link legal/commercial routes; legal approval still pending |
 | P1-5 | Launch | Paid pilot + launch signoff with incident/runbook rehearsals | Not started | Not yet executed |
 
 ### Roadmap closure priority board
@@ -734,7 +734,7 @@ gates pass.
 | Template catalog expansion | Product + eng | 6 checked-in workflow JSON files + 13 seeded DB templates; PRD lists dozens — prioritize social + video MVP |
 | Publishing channels | `apps/api` outputs | Twitter/Instagram/LinkedIn/Discord `coming_soon`; webhook only live |
 | Monetization | Product + Dhanam + API + Studio | InterestGate exists; initial API-side premium guard, credit ledger, role-derived active-job caps, Studio account balance, and feature-flagged render/GPU debits landed 2026-06-01; commercial GA still requires Dhanam checkout, billing reconciliation, Dhanam-backed quotas, and full Studio billing UX per [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md) |
-| Landing conversion | Studio landing | Self-contained demo on `ceq.lol`; funnel instrumentation |
+| Landing conversion | Studio landing | Outcome-first landing with product proof panel, simulated deterministic render/cache-hit demo, founding-pilot CTAs, and lightweight event hooks; connect analytics sink after deploy |
 | Furnace migration | Workers | Vast.ai today; Furnace provider not deployed |
 | PRD promotion | Product | Move from Draft v0.1.0 to accepted MVP spec |
 | Intelligence layer | API | `synthesis`, `intent`, `printability` — define prod acceptance separately |
@@ -927,6 +927,18 @@ Partially delivered (Phase 5 remaining):
 - `/api/proxy` BFF for REST — done
 - WebSocket session migration — done (`resolveStreamAuthToken()`)
 - Browser Playwright E2E in CI — done (6 mocked Janua tests; CI job `Studio · Playwright auth`)
+
+### Implementation wave 2026-06-02 — landing conversion
+
+Delivered in code, pending production deploy:
+
+- Public landing rewritten around the core CEQ outcome: repeatable client-ready AI assets without rebuilding ComfyUI graphs
+- First-viewport product proof panel shows template inputs, SDK shape, stable URL, credit cost, and cache-hit semantics
+- Superpower matrix maps customer pains to CEQ production outcomes
+- Simulated landing demo covers Card, Thumbnail, Audio, and 3D Plate flows and demonstrates cache-hit economics
+- Pricing CTAs now drive free start, founding-price reservation, and studio pilot intent while paid checkout remains gated
+- Buyer-safety section links terms, privacy, acceptable use, retention, and refund routes
+- Landing tests cover hero promise, CTA, demo switching, cache-hit state, and legal links
 
 ### 2026-05-17 remediation wrap-up
 

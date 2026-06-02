@@ -71,12 +71,12 @@ Use this registry as the canonical closure board for GA-blocking work.
 | P0-3 | Seed and verify non-empty `/v1/templates/` in production; record stable template UUIDs for smoke runs. | Platform + API | **In progress** (`/v1/templates/` returns seeded catalog in latest evidence snapshot) | `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md` |
 | P0-4 | Run authenticated GPU golden path smoke (`job → callback → output → gallery`) and capture output URL trail. | API + Workers + Platform | **Not started** | Not yet captured |
 | P0-5 | Run active cancellation + multi-modal smoke under `CEQ_STRICT_SMOKE=true` with dead-letter threshold checks. | API + Workers | **Not started** | Not yet captured |
-| P1-1 | Finalize Dhanam-backed plan/checkout path for paid signup and plan changes. | Product + Dhanam + API | **Not started** | Not yet captured |
+| P1-1 | Finalize Dhanam-backed plan/checkout path for paid signup and plan changes. | Product + Dhanam + API | **In progress** | Studio checkout bridge now targets Dhanam catalog product `ceq`; enablement still requires entitlement source proof |
 | P1-2 | Replace role-derived paid API gates with entitlement checks backed by plan state and server-side grants. | API | **In progress** (role-based guards landed) | No plan-backed enforcement evidence yet |
 | P1-3 | Enable and reconcile feature-flagged render/GPU debit-refund flow for a pilot cohort. | API | **In progress** (code paths exist, flags available) | Not yet bound to funded flow |
 | P1-4 | Replace role-derived caps with plan/rate/spend quotas tied to production entitlements. | API + Platform | **In progress** (schema + quotas exist, billing source missing) | No paid traffic evidence |
 | P1-5 | Confirm alert + rollback drill evidence, link synthetic alert path, and attach runbooks to alert annotations. | Platform + Support | **Not started** | Not yet linked |
-| P1-6 | Publish and link customer-facing legal/commercial docs (terms, privacy, AUP, pricing, limits) from GA flows. | Product + Legal | **Not started** | Pending docs exposure |
+| P1-6 | Publish and link customer-facing legal/commercial docs (terms, privacy, AUP, pricing, limits) from GA flows. | Product + Legal | **In progress** | Studio `/billing` and the redesigned landing link `/legal/{terms,privacy,acceptable-use,retention,refunds}`; legal review still required |
 | P1-7 | Publish fresh-account paid pilot rehearsal evidence (login, generation, invoice/receipt, output retrieval). | Product + Eng + Support | **Not started** | Not yet executed |
 | P2 | Reconcile roadmap/docs truth after each phase closure and archive evidence row IDs centrally. | Repo docs owners | **In progress** | `COMMERCIAL_GA_REMEDIATION_PLAN.md`, `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md` |
 
@@ -176,6 +176,9 @@ Code progress since this baseline:
 | 2026-06-01 | Plan-aware active-job caps added for free/pro/studio/admin roles | Replace role-derived limits with Dhanam plan state when billing source is live |
 | 2026-06-01 | GPU job debit/refund plumbing added behind `GPU_JOB_CREDIT_DEBITS_ENABLED` | Fund balances, enable for pilot cohort, and reconcile ledger to completed jobs/billing export |
 | 2026-06-01 | GitHub `main` branch protection enabled with required CEQ CI checks and review gate | Keep required checks current as workflow names change |
+| 2026-06-01 | Studio billing page added with Dhanam checkout URL bridge for catalog product `ceq` tiers `pro_artist` and `studio`, gated by `NEXT_PUBLIC_CEQ_CHECKOUT_ENABLED` | Keep checkout disabled until Dhanam entitlement source and paid-run proof are captured |
+| 2026-06-01 | Customer-facing legal/commercial routes added under `/legal/*` and linked from `/billing` | Product/legal review and final policy approval remain required |
+| 2026-06-02 | Public landing redesigned around conversion: outcome-first hero, product proof panel, superpower matrix, simulated deterministic render/cache-hit demo, buyer-safety links, founding-pilot CTAs, and landing event hooks | Deploy to production, connect event sink beyond `CustomEvent`/`dataLayer`, and keep paid CTAs gated until entitlement proof |
 
 ---
 
@@ -361,7 +364,7 @@ Dependency gates:
 - [ ] `/v1/credits/balance` route is 401/403 for unauthenticated users and works with valid user token (currently `404` unauthenticated)
 - [ ] Credit balance surfacing in Studio depends on production `credits` endpoint availability
 - [x] Role-derived premium gating and per-user active-job caps landed
-- [ ] No public plan/checkout flow in CEQ yet
+- [x] Dhanam checkout bridge exists in Studio, feature-flagged off by default until entitlement proof
 - [ ] No Dhanam-backed entitlement source wired into API enforcement
 
 #### Closure status for Priority 2
@@ -556,7 +559,7 @@ Acceptance:
 
 - API bypass tests fail closed for unpaid/premium and cross-account access
 - Abuse controls are test-covered and enabled in prod
-- Legal/commercial docs are linked from customer-facing flows
+- Legal/commercial docs are linked from customer-facing flows, including the public landing and Studio billing surface
 
 ### Track 7 - Launch Cutover
 
@@ -588,7 +591,7 @@ Acceptance:
 7. [ ] **IN PROGRESS** Replace role-derived paid-template/API enforcement with entitlement-backed checks.
 8. [ ] **IN PROGRESS** Finalize queue/rate/spend guardrails in API + worker path.
 9. [ ] **NOT STARTED** Confirm alert routing + rollback drill evidence and link runbooks.
-10. [ ] **NOT STARTED** Publish customer-facing legal/commercial docs (terms/privacy/AUP/retention/recovery) in Studio paths.
+10. [ ] **IN PROGRESS** Publish customer-facing legal/commercial docs (terms/privacy/AUP/retention/recovery) in public landing and Studio paths.
 11. [ ] **NOT STARTED** Execute the paid pilot rehearsal (fresh account, login, generation, output, invoice/receipt path).
 
 ---

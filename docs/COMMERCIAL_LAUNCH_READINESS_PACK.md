@@ -43,6 +43,8 @@ Before commercial GA, collect and archive the following:
 - `POST /v1/render/*` cache-miss billing semantics are coherent for the paid flow.
 - `/v1/credits/*` endpoints are available in production and produce expected auth-aware responses when used in the paid flow.
 - Cancel smoke passes in production and no stale failed completion replay without explicit action.
+- `/billing` checkout buttons are enabled only after Dhanam catalog, entitlement, and paid-run evidence is captured.
+- Public landing conversion QA passes on desktop and mobile: outcome-first hero, product proof panel, simulated render/cache-hit demo, pricing CTAs, buyer-safety links, and no horizontal overflow at 390px width.
 
 Use one date-stamped checklist row for each production run:
 
@@ -71,6 +73,8 @@ Minimum evidence gates for GA-adjacent launch:
 - Browser login on `app.ceq.lol` persists session cookies and loads Studio shell
 - `operations/status` shows callback token configured and alembic revision
 - One authenticated GPU golden path with queue completion + output in gallery
+- Dhanam checkout uses product `ceq` with tiers `pro_artist` and `studio`; `NEXT_PUBLIC_CEQ_CHECKOUT_ENABLED=true` is allowed only after entitlement source proof.
+- `ceq.lol` landing presents the CEQ conversion path: start free, reserve founding price, book studio pilot, and links the commercial/legal surface before paid onboarding.
 
 ### Documents and contracts
 
@@ -176,8 +180,22 @@ Add or confirm links in customer-facing flows for:
 - Retention policy for generated media
 - Refund and support terms
 
-No customer-facing launch should proceed without these links in Studio shell or
-support paths.
+Current Studio routes:
+
+- `/legal/terms`
+- `/legal/privacy`
+- `/legal/acceptable-use`
+- `/legal/retention`
+- `/legal/refunds`
+
+Current customer-facing link surfaces:
+
+- Public landing trust/buyer-safety section
+- Studio `/billing`
+- Studio shell/footer paths
+
+No customer-facing launch should proceed without these links in public landing,
+Studio shell, billing, or support paths.
 
 ## Launch completion criteria
 

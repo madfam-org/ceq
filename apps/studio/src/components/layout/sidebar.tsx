@@ -7,6 +7,7 @@ import {
   Image,
   Video,
   Box,
+  CreditCard,
   Settings,
   FolderOpen,
   Clock,
@@ -27,6 +28,7 @@ const navItems = [
   { href: "/templates", icon: FolderOpen, label: "Templates", shortcut: "⌘3" },
   { href: "/gallery", icon: Image, label: "Gallery", shortcut: "⌘4" },
   { href: "/queue", icon: Clock, label: "Queue", shortcut: "⌘5" },
+  { href: "/billing", icon: CreditCard, label: "Billing", shortcut: "⌘6" },
 ];
 
 const categoryItems = [

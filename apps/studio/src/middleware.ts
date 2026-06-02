@@ -29,6 +29,8 @@ export function isPublicAppPath(pathname: string): boolean {
     pathname.startsWith("/login/") ||
     pathname === "/auth" ||
     pathname.startsWith("/auth/") ||
+    pathname === "/legal" ||
+    pathname.startsWith("/legal/") ||
     pathname === "/api/auth" ||
     pathname.startsWith("/api/auth/")
   );
@@ -74,7 +76,7 @@ export function middleware(request: NextRequest) {
       url.pathname = "/landing";
       return NextResponse.rewrite(url);
     }
-    if (pathname.startsWith("/landing")) {
+    if (pathname.startsWith("/landing") || pathname.startsWith("/legal")) {
       return NextResponse.next();
     }
     return NextResponse.redirect(
