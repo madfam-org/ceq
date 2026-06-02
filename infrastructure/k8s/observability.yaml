@@ -39,6 +39,7 @@ spec:
             service: ceq-api
           annotations:
             summary: CEQ queue depth is above threshold
+            runbook_url: https://github.com/madfam-org/ceq/blob/main/docs/COMMERCIAL_LAUNCH_READINESS_PACK.md#alert-and-incident-readiness
             description: >
               Combined pending+processing job queue depth has been above 120 for 10m.
               Check worker capacity and API backlog.
@@ -50,6 +51,7 @@ spec:
             service: ceq-api
           annotations:
             summary: CEQ has stale running jobs
+            runbook_url: https://github.com/madfam-org/ceq/blob/main/docs/COMMERCIAL_LAUNCH_READINESS_PACK.md#alert-and-incident-readiness
             description: >
               Jobs have remained in running state for over 1h. Validate worker health,
               queue consumers, and GPU process connectivity.
@@ -61,6 +63,7 @@ spec:
             service: ceq-api
           annotations:
             summary: CEQ completion callback dead-letter queue is growing
+            runbook_url: https://github.com/madfam-org/ceq/blob/main/docs/COMMERCIAL_LAUNCH_READINESS_PACK.md#alert-and-incident-readiness
             description: >
               Completion callbacks for worker outputs are not being acknowledged.
               Review dead-letter queue and callback target health.
@@ -73,6 +76,7 @@ spec:
             service: ceq-api
           annotations:
             summary: CEQ webhook delivery failures are high
+            runbook_url: https://github.com/madfam-org/ceq/blob/main/docs/COMMERCIAL_LAUNCH_READINESS_PACK.md#alert-and-incident-readiness
             description: >
               User webhook deliveries are failing repeatedly. Check webhook URLs,
               secret sharing, and downstream endpoint availability.
@@ -84,6 +88,7 @@ spec:
             service: ceq-api
           annotations:
             summary: CEQ alembic revision could not be read
+            runbook_url: https://github.com/madfam-org/ceq/blob/main/docs/COMMERCIAL_LAUNCH_READINESS_PACK.md#alert-and-incident-readiness
             description: >
               API cannot read the current Alembic migration revision. Check DB
               connectivity and migration pre-sync status.

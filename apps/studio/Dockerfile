@@ -16,7 +16,7 @@ COPY packages/ui/package.json ./packages/ui/
 
 # Full install — standalone tracer needs the complete .pnpm store
 RUN corepack enable && corepack prepare pnpm@9.14.4 --activate && \
-    pnpm install --frozen-lockfile || pnpm install
+    pnpm install --frozen-lockfile
 
 # Copy source code
 COPY apps/studio/ ./apps/studio/
