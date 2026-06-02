@@ -3,7 +3,7 @@
 > **Last updated:** 2026-06-01
 > **Audience:** Product, engineering, platform, operators, support
 > **Status:** Planning baseline. CEQ is not commercially GA yet.
-> **Related:** [`DOCS_EVIDENCE_AUDIT_2026-06-01.md`](./DOCS_EVIDENCE_AUDIT_2026-06-01.md), [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md), [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md), [`COMMERCIAL_LAUNCH_READINESS_PACK.md`](./COMMERCIAL_LAUNCH_READINESS_PACK.md)
+> **Related:** [`DOCS_EVIDENCE_AUDIT_2026-06-01.md`](./DOCS_EVIDENCE_AUDIT_2026-06-01.md), [`DOCS_EVIDENCE_AUDIT_2026-06-02.md`](./DOCS_EVIDENCE_AUDIT_2026-06-02.md), [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md), [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md), [`COMMERCIAL_LAUNCH_READINESS_PACK.md`](./COMMERCIAL_LAUNCH_READINESS_PACK.md)
 
 ---
 
@@ -43,9 +43,11 @@ Planning readiness as of 2026-06-01:
 These percentages are planning estimates, not automated measurements. Evidence
 sources are the 2026-06-01 prod audit, `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`,
 local test matrix, and current code/docs state. The latest fully successful
-unauthenticated endpoint matrix snapshot is `ops/evidence/2026-06-01T221752Z-public-prod-endpoints.csv`;
-the previous successful snapshot is `ops/evidence/2026-06-01T221058Z-public-prod-endpoints.csv`.
-Earlier successful reruns remain as `ops/evidence/2026-06-01T2200-public-prod-endpoints.csv` and
+unauthenticated endpoint matrix snapshot is `ops/evidence/2026-06-02-live-public-matrix.csv`;
+the previous successful snapshot is `ops/evidence/2026-06-02T021322Z-public-prod-endpoints.csv`.
+Earlier successful reruns remain as `ops/evidence/2026-06-01T221752Z-public-prod-endpoints.csv`,
+`ops/evidence/2026-06-01T221058Z-public-prod-endpoints.csv`,
+`ops/evidence/2026-06-01T2200-public-prod-endpoints.csv`, and
 `ops/evidence/2026-06-01T212236Z-public-prod-endpoints.csv`.
 
 ### Evidence-weighted GA Score (2026-06-01)
@@ -68,7 +70,7 @@ Use this registry as the canonical closure board for GA-blocking work.
 |----------|--------|-------|--------|------------------|
 | P0-1 | Capture real browser login proof on `app.ceq.lol` with authenticated session bootstrap (`/api/auth/session`, httpOnly cookies, Studio shell load). | Studio + Janua operator | **Complete** | `2026-06-01`: `GET /api/auth/session` returned `user`, `roles`, and `access_token` for `admin@madfam.io`; `ceq_access_token` + `ceq_refresh_token` cookies were present and `httpOnly`; Studio shell route was loaded. |
 | P0-2 | Run `GET /v1/operations/status` with admin JWT and capture callback/webhook/migration/dead-letter readiness. | Platform + API | **In progress** | API JWKS fallback now proceeds to introspection when local JWT claims are incomplete. `POST /api/auth/session` is now proven in prod; production admin `operations/status` capture still pending. |
-| P0-3 | Seed and verify non-empty `/v1/templates/` in production; record stable template UUIDs for smoke runs. | Platform + API | **In progress** (`/v1/templates/` returns seeded catalog in latest evidence snapshot) | `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md` |
+| P0-3 | Seed and verify non-empty `/v1/templates/` in production; record stable template UUIDs for smoke runs. | Platform + API | **In progress** (`/v1/templates/` returns seeded catalog in latest evidence snapshot, including `94df20ca-280f-43a1-baa9-1c8b3f4eae48`) | `ops/evidence/2026-06-02-live-public-matrix.csv` |
 | P0-4 | Run authenticated GPU golden path smoke (`job → callback → output → gallery`) and capture output URL trail. | API + Workers + Platform | **Not started** | Not yet captured |
 | P0-5 | Run active cancellation + multi-modal smoke under `CEQ_STRICT_SMOKE=true` with dead-letter threshold checks. | API + Workers | **Not started** | Not yet captured |
 | P1-1 | Finalize Dhanam-backed plan/checkout path for paid signup and plan changes. | Product + Dhanam + API | **In progress** | Studio checkout bridge now targets Dhanam catalog product `ceq`; enablement still requires entitlement source proof |
@@ -78,7 +80,7 @@ Use this registry as the canonical closure board for GA-blocking work.
 | P1-5 | Confirm alert + rollback drill evidence, link synthetic alert path, and attach runbooks to alert annotations. | Platform + Support | **Not started** | Not yet linked |
 | P1-6 | Publish and link customer-facing legal/commercial docs (terms, privacy, AUP, pricing, limits) from GA flows. | Product + Legal | **In progress** | Studio `/billing` and the redesigned landing link `/legal/{terms,privacy,acceptable-use,retention,refunds}`; legal review still required |
 | P1-7 | Publish fresh-account paid pilot rehearsal evidence (login, generation, invoice/receipt, output retrieval). | Product + Eng + Support | **Not started** | Not yet executed |
-| P2 | Reconcile roadmap/docs truth after each phase closure and archive evidence row IDs centrally. | Repo docs owners | **In progress** | `COMMERCIAL_GA_REMEDIATION_PLAN.md`, `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md` |
+| P2 | Reconcile roadmap/docs truth after each phase closure and archive evidence row IDs centrally. | Repo docs owners | **In progress** | `COMMERCIAL_GA_REMEDIATION_PLAN.md`, `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md`, `docs/DOCS_EVIDENCE_AUDIT_2026-06-02.md` |
 
 ### GA-closure lanes (ROI order)
 
@@ -93,7 +95,7 @@ Track completion with these five high-impact lanes before broader closure.
 | P1-1 | Publish/verify credits balance + entitlement proof for paying cohort; attach paid pilot receipt/invoice evidence. | `In progress` |
 
 No lane is marked complete until evidence is captured, reproducible, and linked from
-`docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md`.
+`docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md` or `docs/DOCS_EVIDENCE_AUDIT_2026-06-02.md`.
 
 ---
 
@@ -140,7 +142,7 @@ Re-verified 2026-06-01:
 | Public smoke | `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` passes |
 | Branch protection | `main` requires six CEQ CI checks, one review, stale-review dismissal, admin enforcement, and conversation resolution |
 | Template catalog (`/v1/templates/`) | Non-empty in latest public check (`/v1/templates/?skip=0&limit=1` returns seeded rows) |
-| Production credits route | `GET /v1/credits/balance` returns 404 when unauthenticated |
+| Production credits route | `GET /v1/credits/balance` returns 401 when unauthenticated |
 
 ### Evidence-backed GA blockers
 
