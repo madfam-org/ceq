@@ -228,6 +228,7 @@ const TIERS = [
       "Watermarked exports",
       "Public render gallery",
     ],
+    pill: "Start free now",
     cta: { label: "Start generating free", href: "/", variant: "secondary" as const },
     highlight: false,
   },
@@ -245,7 +246,8 @@ const TIERS = [
       "Webhook + SDK access",
       "Email support, 24h response",
     ],
-    cta: { label: "Reserve founding price", interest: "ceq_pro_artist" },
+    cta: { label: "Reserve founder price", interest: "ceq_pro_artist" },
+    pill: "Founding windows are limited",
     highlight: true,
   },
   {
@@ -263,6 +265,7 @@ const TIERS = [
       "Audit log + render attestation",
     ],
     cta: { label: "Book studio pilot", interest: "ceq_studio" },
+    pill: "Founding seats capped per quarter",
     highlight: false,
   },
 ];
@@ -302,6 +305,10 @@ const FAQS = [
   {
     q: "Can I bring my own GPU?",
     a: "Yes. Studio-tier deployments can support registered worker nodes when you need dedicated capacity or stronger data boundaries.",
+  },
+  {
+    q: "What ROI should I expect in week one?",
+    a: "Most teams replace their first repetitive asset job within 60 minutes if they have one stable prompt/template pattern. You usually win on consistency first, then spend predictability, then speed.",
   },
   {
     q: "Why is pricing in MXN?",
@@ -387,7 +394,7 @@ function Hero() {
         <div className="flex max-w-3xl flex-col items-start gap-6">
           <Badge variant="outline" className="font-mono text-xs">
             <Zap className="mr-1.5 h-3 w-3 text-primary" />
-            deterministic render pipeline live
+            client-safe generative production
           </Badge>
           <div className="space-y-5">
             <h1 className="text-4xl font-bold leading-tight tracking-tight md:text-6xl">
@@ -395,10 +402,9 @@ function Hero() {
               <span className="gradient-text">ComfyUI graphs.</span>
             </h1>
             <p className="max-w-2xl text-lg leading-relaxed text-muted-foreground md:text-xl">
-              CEQ turns prompts, models, templates, and GPU execution into versioned
-              production workflows. Generate images, cards, audio, and 3D assets
-              through Studio or API with stable URLs, private galleries, and visible
-              credit costs.
+              CEQ turns prompts, models, templates, and GPU execution into
+              versioned production workflows. Build once, run everywhere, and ship
+              to clients with predictable costs and stable assets.
             </p>
           </div>
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
@@ -419,13 +425,13 @@ function Hero() {
               className="sm:w-auto"
             >
               <Button size="lg" variant="outline" className="w-full font-mono sm:w-auto">
-                Book founding pilot
+                Reserve founding access
               </Button>
             </Link>
           </div>
           <p className="max-w-2xl text-xs font-mono leading-5 text-muted-foreground">
-            100 free credits/month. No credit card. Sign in with Janua, then run
-            your first template-backed asset.
+            100 free credits/month. No credit card. Sign in with Janua, then convert
+            your first recurring workflow inside a production-grade loop.
           </p>
         </div>
 
@@ -558,7 +564,7 @@ function SuperpowerMatrix() {
           <p className="text-base leading-7 text-muted-foreground">
             The pain is not that generative AI cannot make images. The pain is making
             the same useful asset again, safely, at a known cost, for a real client or
-            product workflow.
+            a revenue-facing workflow.
           </p>
         </div>
 
@@ -819,12 +825,12 @@ function PricingSection() {
         <div className="mb-10 max-w-3xl">
           <p className="mb-3 text-sm font-mono text-primary">› pricing</p>
           <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">
-            Start free. Reserve the paid workflow when production pain is real.
+            Start free. Reserve paid production capacity before your next deadline.
           </h2>
           <p className="text-base leading-7 text-muted-foreground">
-            Credits make CEQ easier to budget than raw GPU time. Paid checkout remains
-            gated until Dhanam entitlement proof is complete, so founding plans are
-            handled as high-intent onboarding.
+            Credits make CEQ easier to budget than raw GPU time. Paid checkout is coming
+            as entitlement proof is completed, so founders reserve access now to lock
+            first-run priority and pricing.
           </p>
         </div>
 
@@ -836,7 +842,8 @@ function PricingSection() {
 
         <p className="mt-8 text-center text-xs font-mono text-muted-foreground">
           Cache hits reuse the stable output URL and do not consume another render
-          charge. Founding-member pricing locks in for life once billing opens.
+          charge. Founding-member pricing locks in for life once billing opens; pilots
+          are processed in order of reservation.
         </p>
       </div>
     </section>
@@ -856,6 +863,11 @@ function PricingCard({ tier }: { tier: (typeof TIERS)[number] }) {
           Highest intent
         </Badge>
       )}
+      {tier.pill ? (
+        <Badge variant="outline" className="absolute right-4 top-4 text-[10px]">
+          {tier.pill}
+        </Badge>
+      ) : null}
       <CardContent className="flex flex-1 flex-col gap-4 p-6">
         <div>
           <h3 className="font-mono text-lg font-bold">{tier.name}</h3>
@@ -1009,7 +1021,7 @@ function InterestCapture({
                 </h3>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Tell us what you need CEQ to replace. We will prioritize high-intent
-                  production teams and lock founding-member pricing before checkout
+                  production teams and lock founder pricing before checkout
                   opens.
                 </p>
               </div>
