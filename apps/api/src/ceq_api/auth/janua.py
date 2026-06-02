@@ -11,6 +11,7 @@ Migration: PR-1E (introspection -> local JWKS RS256 validation)
 import logging
 import threading
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Annotated, Any
@@ -193,6 +194,26 @@ class JanuaUser:
         return self.roles is not None and "admin" in self.roles
 
 
+def _normalize_roles(value: Any) -> list[str] | None:
+    """Normalize user roles from token claims into a list of strings."""
+    if value is None:
+        return None
+
+    if isinstance(value, str):
+        values = [value]
+    elif isinstance(value, Iterable) and not isinstance(value, (bytes, bytearray, dict)):
+        values = list(value)
+    else:
+        values = [value]
+
+    roles = [
+        str(role).strip().lower().replace("_", "-")
+        for role in values
+        if isinstance(role, (str, UUID, int, float)) and not isinstance(role, dict)
+    ]
+    return roles if roles else None
+
+
 # ---------------------------------------------------------------------------
 # Introspection client (legacy, used as fallback)
 # ---------------------------------------------------------------------------
@@ -239,18 +260,11 @@ async def _validate_token_introspection(token: str) -> JanuaUser | None:
         if roles_raw is None:
             roles_raw = data.get("role")
 
-        roles: list[str] | None = None
-        if roles_raw is not None:
-            if isinstance(roles_raw, list):
-                roles = roles_raw
-            elif isinstance(roles_raw, str):
-                roles = [roles_raw]
-
         user = JanuaUser(
             id=UUID(user_id),
             email=email,
             org_id=UUID(data["org_id"]) if data.get("org_id") else None,
-            roles=roles,
+            roles=_normalize_roles(roles_raw),
         )
         logger.debug("Token validated via introspection for user %s", user.email)
         return user
@@ -324,7 +338,8 @@ def _validate_token_local(token: str) -> JanuaUser | None:
         id=UUID(sub),
         email=email,
         org_id=UUID(payload["org_id"]) if payload.get("org_id") else None,
-        roles=payload.get("roles"),
+        roles=_normalize_roles(payload.get("roles"))
+        or _normalize_roles(payload.get("role")),
     )
     logger.debug(f"Token validated locally (JWKS) for user {user.email}")
     return user
@@ -372,16 +387,11 @@ async def validate_token(token: str) -> JanuaUser | None:
         except jwt.ExpiredSignatureError:
             logger.debug("JWT expired (local validation)")
             return None
-        except jwt.InvalidAudienceError:
-            logger.debug("JWT audience mismatch (local validation)")
-            return None
-        except jwt.InvalidIssuerError:
-            logger.debug("JWT issuer mismatch (local validation)")
-            return None
+        except (jwt.InvalidAudienceError, jwt.InvalidIssuerError):
+            logger.debug("JWT claim mismatch (local validation)")
         except jwt.InvalidTokenError as e:
-            # Covers InvalidSignatureError, DecodeError, etc.
-            logger.debug(f"JWT invalid (local validation): {e}")
-            return None
+            # Covers DecodeError, InvalidSignatureError, etc.
+            logger.debug(f"JWT invalid for local validation; falling back to introspection: {e}")
         except PyJWKClientError as e:
             # JWKS endpoint unreachable - trigger circuit breaker
             logger.warning(f"JWKS fetch failed, falling back to introspection: {e}")
