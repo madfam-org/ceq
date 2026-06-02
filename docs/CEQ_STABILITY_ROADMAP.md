@@ -1,7 +1,8 @@
 # CEQ Stability Roadmap and Remediation Plan
 
-> **Last updated:** 2026-06-01
-> **Status:** Identity wiring deployed; Studio token route accepts Janua client secret; browser proof captured, GPU production smokes remain open
+> **Last updated:** 2026-06-02
+> **Status:** Public API/Studio health is green; historical token-route/browser proof exists; current blockers are Janua ExternalSecret degradation, missing authenticated smoke token, no live worker capacity, GPU production smoke, and non-actionable Enclii metrics/alerts.
+> **Truth layer:** [`README.md`](./README.md), [`CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md`](./CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md), [`DOCS_EVIDENCE_AUDIT_2026-06-02.md`](./DOCS_EVIDENCE_AUDIT_2026-06-02.md)
 > **Session wrap-up:** [`docs/CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md)  
 > **Capped GA demo:** [`docs/GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md)  
 > **Commercial GA:** [`docs/COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md)
@@ -167,7 +168,7 @@ docs, and launch signoff. Track those in
 
 Use this as the roadmap-level priority closure board, synchronized with
 [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md)
-and `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md`.
+and `docs/DOCS_EVIDENCE_AUDIT_2026-06-02.md`.
 
 | Priority | Category | Action | Status | Evidence status |
 |----------|----------|--------|--------|----------------|
@@ -209,7 +210,7 @@ Engineering work landed in-repo (operator-only P0 items remain open):
 | **Phase 5** | WebSocket auth via session bootstrap | ✅ `resolveStreamAuthToken()` + async `subscribeToJob()` |
 | **Phase 6** | `ECOSYSTEM.md` drift fix | ✅ Ports, render status, Janua auth note |
 | **Phase 0** | Janua OAuth client registration | ✅ Janua registered 2026-05-23; CEQ secret mount in `studio-deployment.yaml` |
-| **Phase 0** | Studio token secret + browser proof | ✅ Token route proof green; browser proof captured via `/api/auth/session` |
+| **Phase 0** | Studio token secret + browser proof | ⚠️ Historical token/browser proof exists; current gate is healthy Vault-backed ExternalSecret and repeatable authenticated smoke |
 | **Phase 1** | Production callback/webhook secrets | ⏳ Operator — verify via `operations/status` |
 | **Phase 2** | Authenticated GPU smokes | ⏳ Blocked on Phase 1 |
 | **Phase 4** | Studio Docker regression CI gate | ✅ Closed 2026-05-22 |
@@ -260,10 +261,10 @@ Current planning estimate:
 | Milestone | Readiness | Notes |
 |-----------|-----------|-------|
 | Public technical demo | Ready now | Public edge and API evidence are green |
-| Capped GA demo | ~55-65% | Browser login, template seeding, and one GPU golden path remain open |
+| Capped GA demo | ~55-65% | Public smoke and templates are green; ExternalSecret health, authenticated smoke, operations-status, and one GPU golden path remain open |
 | Full stability | ~50-60% | Strict smoke, alert routing, and governance remain open |
 | Limited commercial pilot | ~50-60% | Credit/entitlement/queue/metering primitives landed; needs funded balances, GPU proof, support workflow |
-| Commercial GA | ~47% | Needs Dhanam billing, prod GPU proof, and alert/support/legal launch pack |
+| Commercial GA | ~55-65% of the way | Needs Dhanam billing, entitlement proof, prod GPU proof, actionable observability, and alert/support/legal launch pack |
 
 Commercial GA gates:
 

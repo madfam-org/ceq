@@ -36,6 +36,15 @@ redirect and should not become the source of truth again.
 - `docs/`
 - `.github/workflows/`
 
+## Current documentation truth
+
+- `docs/README.md` is the documentation map and precedence guide.
+- `docs/CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md` is the current audit wrap-up.
+- `docs/DOCS_EVIDENCE_AUDIT_2026-06-02.md` is the current evidence-backed
+  production snapshot.
+- Older imported or session-specific sections below are historical context when
+  they conflict with the latest evidence audit.
+
 ## LLM context files
 
 - `llms.txt` is the compact context index.

@@ -23,7 +23,7 @@ CEQ is MADFAM's internal content generation platform: a streamlined hacker-centr
 
 **Pillar**: Brand / Asset pillar
 **Type**: service
-**Status**: production (public edge stable; capped GA still pending browser login proof and GPU E2E — `docs/GA_DEMO_DEFINITION.md`; commercial GA still pending billing/credits/entitlements/quotas/support launch work — `docs/COMMERCIAL_GA_REMEDIATION_PLAN.md`; Janua OAuth registered 2026-05-23; Studio token route accepted client secret in the 2026-06-01 audit — `docs/JANUA_OPERATOR.md`)
+**Status**: production public edge stable, not commercial GA. Current truth is in `docs/README.md`, `docs/CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md`, and `docs/DOCS_EVIDENCE_AUDIT_2026-06-02.md`: public smoke is green; `ceq-api` and `ceq-studio` are healthy in Enclii; `ceq-janua-client-secret` ExternalSecret is degraded until Vault `secret/ceq.JANUA_CLIENT_SECRET` is populated; authenticated smoke and GPU E2E remain unproven; commercial GA still needs billing, credits, entitlements, quotas, support, and observability launch work.
 
 ### Deployed services
 

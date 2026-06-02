@@ -10,6 +10,11 @@
 
 > Deploy CEQ to production at ceq.lol via Enclii infrastructure
 
+> **Current truth:** For live readiness, read [`README.md`](./README.md),
+> [`CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md`](./CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md),
+> and [`DOCS_EVIDENCE_AUDIT_2026-06-02.md`](./DOCS_EVIDENCE_AUDIT_2026-06-02.md)
+> before relying on older checklist rows.
+
 ## Prerequisites
 
 - Access to Cloudflare Zero Trust dashboard
@@ -19,11 +24,12 @@
 - GitHub repo write access for secrets
 - Terraform installed (`brew install terraform`)
 
-## Deployment Status (2026-06-01)
+## Deployment Status (2026-06-02)
 
 | Step | Status | Notes |
 |------|--------|-------|
-| Janua OAuth Client | Done (2026-05-23) | Client registered; Studio token route returns `invalid_grant` for a bogus code, proving the client secret is mounted and accepted |
+| Janua OAuth Client | Partially done | Client registered; historical token-route proof returned `invalid_grant`, but current repeatable authenticated smoke is blocked on a real CEQ token |
+| Janua ExternalSecret | Degraded | `ceq-janua-client-secret` Secret exists, but ExternalSecret is `SecretSyncedError` until Vault `secret/ceq.JANUA_CLIENT_SECRET` is populated |
 | Cloudflare Tunnel Routes | Done | ceq.lol, app.ceq.lol, api.ceq.lol, ws.ceq.lol |
 | R2 Bucket + Token | Done | `ceq-assets` with Object Read & Write |
 | secrets.local.yaml | Done | R2 + OAuth done, DB/Redis configured |
@@ -32,7 +38,7 @@
 | Redis Password | Done | Redis configured |
 | GitHub Actions Secret | Done | KUBECONFIG_BASE64 applied |
 | Studio Auth Gate | Done | `app.ceq.lol` no-cookie gate verified with public smoke |
-| Deploy + Verify | Done | GitOps deploy `25853708026` succeeded; digest commit `1eaf6a6` |
+| Deploy + Verify | Public-only done | Public smoke passed; strict authenticated smoke and GPU golden path remain open |
 
 Commercial GA is not declared by this deployment checklist. Paid launch still
 requires billing, credits, server-side entitlements, quotas, support, and launch

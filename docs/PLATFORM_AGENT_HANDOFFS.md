@@ -1,17 +1,17 @@
 # Platform Agent Handoffs — CEQ Studio Login Unblock
 
-> **Last updated:** 2026-06-01
-> **Goal:** Complete CEQ Tier B demo identity gate — real login on `app.ceq.lol`  
+> **Last updated:** 2026-06-02
+> **Goal:** Complete CEQ Tier B demo runtime gates: Vault-backed Janua ExternalSecret, repeatable authenticated smoke, operations status, and GPU proof.
 > **CEQ repo state:** `main` branch state reflected in active commercial GA remediation notes (CI green; K8s wiring on main)
 > **Janua P0:** ✅ OAuth client registered (`jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk`, authorize 302)  
-> **CEQ engineering P0:** ✅ K8s manifests wired; ✅ live Studio token route accepts Janua client secret (2026-06-01); browser proof captured (2026-06-01)
+> **CEQ engineering P0:** K8s manifests wired and fallback K8s Secret sync refreshed; current blocker is Vault-backed ExternalSecret health plus authenticated smoke.
+> **Truth layer:** [`README.md`](./README.md), [`CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md`](./CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md), [`DOCS_EVIDENCE_AUDIT_2026-06-02.md`](./DOCS_EVIDENCE_AUDIT_2026-06-02.md)
 
-> **2026-06-01 audit update:** Live `POST https://app.ceq.lol/api/auth/token`
-> with a bogus authorization code returns Janua `invalid_grant`, not
-> `invalid_client`, so the deployed Studio token route has a Janua client secret
-> accepted by production Janua. Browser login proof is also captured for
-> `admin@madfam.io`; remaining P0 work is runtime operations status and GPU
-> proof.
+> **2026-06-02 audit update:** Public smoke is green and `ceq-api`/`ceq-studio`
+> are healthy, but ExternalSecret `ceq-janua-client-secret` is degraded because
+> Vault `secret/ceq.JANUA_CLIENT_SECRET` is missing. The GitHub fallback sync
+> refreshed the Kubernetes Secret but did not populate Vault. Authenticated
+> smoke remains blocked on a real CEQ auth/admin token; GPU proof remains open.
 
 ---
 

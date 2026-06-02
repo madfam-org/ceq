@@ -5,6 +5,7 @@
 > assets required for paid GA.
 > 
 > **Related:** [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md), [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md), [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md), [`PRODUCTION_DEPLOYMENT.md`](./PRODUCTION_DEPLOYMENT.md)
+> **Current truth layer:** [`README.md`](./README.md), [`CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md`](./CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md), [`DOCS_EVIDENCE_AUDIT_2026-06-02.md`](./DOCS_EVIDENCE_AUDIT_2026-06-02.md)
 
 ---
 
@@ -19,7 +20,7 @@
 
 ### Evidence repository
 
-- 2026-06-01 public smoke evidence: [`ops/evidence/2026-06-01-public-prod-smoke.md`](../ops/evidence/2026-06-01-public-prod-smoke.md)
+- 2026-06-02 public smoke evidence: [`ops/evidence/2026-06-02-live-public-smoke.md`](../ops/evidence/2026-06-02-live-public-smoke.md)
   - `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` is green (limited scope).
   - Fresh public endpoint matrix runs use:
 
@@ -27,8 +28,8 @@
 scripts/capture-public-endpoint-matrix.sh
 ```
 
-- Latest successful snapshot on record: `ops/evidence/2026-06-02-live-public-matrix.csv`
-  (earlier successful snapshots: `2026-06-02T021322Z`, `2026-06-01T221752Z`, `2026-06-01T221058Z`, `2026-06-01T224003Z`).
+- Latest successful public endpoint matrix on record:
+  [`ops/evidence/2026-06-02T041548Z-public-prod-endpoints.csv`](../ops/evidence/2026-06-02T041548Z-public-prod-endpoints.csv).
 
 ### Required evidence for paid launch
 

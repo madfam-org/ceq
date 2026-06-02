@@ -1,19 +1,23 @@
 # CEQ Commercial GA Remediation and Implementation Plan
 
-> **Last updated:** 2026-06-01
+> **Last updated:** 2026-06-02
 > **Audience:** Product, engineering, platform, operators, support
-> **Status:** Planning baseline. CEQ is not commercially GA yet.
-> **Related:** [`DOCS_EVIDENCE_AUDIT_2026-06-01.md`](./DOCS_EVIDENCE_AUDIT_2026-06-01.md), [`DOCS_EVIDENCE_AUDIT_2026-06-02.md`](./DOCS_EVIDENCE_AUDIT_2026-06-02.md), [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md), [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md), [`COMMERCIAL_LAUNCH_READINESS_PACK.md`](./COMMERCIAL_LAUNCH_READINESS_PACK.md)
+> **Status:** Planning baseline. CEQ is live for public demo surfaces but is not commercially GA.
+> **Truth layer:** [`README.md`](./README.md), [`CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md`](./CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md), [`DOCS_EVIDENCE_AUDIT_2026-06-02.md`](./DOCS_EVIDENCE_AUDIT_2026-06-02.md)
+> **Related:** [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md), [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md), [`COMMERCIAL_LAUNCH_READINESS_PACK.md`](./COMMERCIAL_LAUNCH_READINESS_PACK.md)
 
 ---
 
 ## Executive Summary
 
-CEQ can support a technical demo today and is on track for a capped GA demo once
-browser login, runtime secrets, and one authenticated GPU golden path are proven.
+CEQ can support a public technical demo today and is on track for a capped GA
+demo once repeatable authenticated smoke, runtime secret health, and one
+authenticated GPU golden path are proven.
 That is not the same as commercial GA.
 
-**Commercial GA distance:** approximately **48%** as of this audit.
+**Commercial GA readiness:** approximately **55-65% of the way to commercial
+GA** as of the 2026-06-02 evidence audit. This is an evidence-weighted planning
+estimate, not a launch declaration.
 
 - Technical demo and infrastructure readiness: ~100% (live evidence)
 - Capped GA readiness: ~68%
@@ -30,37 +34,38 @@ mostly productization and operations: billing/credits, entitlement enforcement,
 quota and abuse controls, support readiness, alert routing, and repeatable GPU
 capacity proof.
 
-Planning readiness as of 2026-06-01:
+Planning readiness as of 2026-06-02:
 
 | Milestone | Planning readiness | Basis |
 |-----------|--------------------|-------|
 | Public technical demo | Ready now | Public smoke green; landing/API live |
-| Capped GA demo | ~55-65% | Identity token route and browser login proof are now green; seeded-catalog and GPU proof remain open |
-| Full stability | ~50-60% | Core runtime is implemented; strict prod smoke still open |
+| Capped GA demo | ~55-65% | Public surfaces are green; ExternalSecret health, authenticated smoke, operations-status, and GPU proof remain open |
+| Full stability | ~50-60% | Core runtime is implemented; strict prod smoke, worker capacity, and actionable observability remain open |
 | Limited commercial pilot | ~50-60% | Credit/entitlement/queue/metering primitives landed; needs funded balances, GPU proof, and one supportable cohort |
 | Commercial GA | ~45-55% | Needs Dhanam billing, prod GPU proof, alert/support/legal launch pack |
 
 These percentages are planning estimates, not automated measurements. Evidence
-sources are the 2026-06-01 prod audit, `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`,
+sources are the 2026-06-02 prod audit, `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`,
 local test matrix, and current code/docs state. The latest fully successful
-unauthenticated endpoint matrix snapshot is `ops/evidence/2026-06-02-live-public-matrix.csv`;
+unauthenticated endpoint matrix snapshot is `ops/evidence/2026-06-02T041548Z-public-prod-endpoints.csv`;
 the previous successful snapshot is `ops/evidence/2026-06-02T021322Z-public-prod-endpoints.csv`.
 Earlier successful reruns remain as `ops/evidence/2026-06-01T221752Z-public-prod-endpoints.csv`,
 `ops/evidence/2026-06-01T221058Z-public-prod-endpoints.csv`,
 `ops/evidence/2026-06-01T2200-public-prod-endpoints.csv`, and
 `ops/evidence/2026-06-01T212236Z-public-prod-endpoints.csv`.
 
-### Evidence-weighted GA Score (2026-06-01)
+### Evidence-weighted GA Score (2026-06-02)
 
 | GA scope | Weight | Evidence status | Latest evidence |
 |----------|--------|----------------|----------------|
-| Capped GA demo | 30% | 52% | Browser login proof is now captured in production; operations/authenticated GPU path remains unproven in prod. |
+| Capped GA demo | 30% | 55-65% | Public smoke and health are green; ExternalSecret health, authenticated smoke, operations-status, and GPU proof remain unproven in prod. |
 | Full stability | 25% | 52% | Public smoke is green; alert/rollback drill + strict CI gate still pending. |
 | Limited commercial pilot | 25% | 40% | Credits API + billing source exist, but route has no confirmed live auth flow and entitlements are role/entitlement-claim aware. |
-| Commercial GA | 20% | 43% | Product/legal/operations launch controls are drafted, not yet fully proven in production. |
+| Commercial GA | 20% | 55-65% of the way | Product/legal/operations launch controls are drafted; billing, entitlement, support, observability, and GPU proof are not fully proven in production. |
 
-Estimated aggregate readiness remains **48%** (evidence-weighted). This is a
-single-source readiness value, not a prediction of time to GA.
+Estimated aggregate readiness is **55-65% of the way to commercial GA**
+(evidence-weighted). This is a planning estimate, not a prediction of time to GA
+or a launch declaration.
 
 ### GA-Critical Execution Register (as-of 2026-06-01)
 
@@ -70,7 +75,7 @@ Use this registry as the canonical closure board for GA-blocking work.
 |----------|--------|-------|--------|------------------|
 | P0-1 | Capture real browser login proof on `app.ceq.lol` with authenticated session bootstrap (`/api/auth/session`, httpOnly cookies, Studio shell load). | Studio + Janua operator | **Complete** | `2026-06-01`: `GET /api/auth/session` returned `user`, `roles`, and `access_token` for `admin@madfam.io`; `ceq_access_token` + `ceq_refresh_token` cookies were present and `httpOnly`; Studio shell route was loaded. |
 | P0-2 | Run `GET /v1/operations/status` with admin JWT and capture callback/webhook/migration/dead-letter readiness. | Platform + API | **In progress** | API JWKS fallback now proceeds to introspection when local JWT claims are incomplete. `POST /api/auth/session` is now proven in prod; production admin `operations/status` capture still pending. |
-| P0-3 | Seed and verify non-empty `/v1/templates/` in production; record stable template UUIDs for smoke runs. | Platform + API | **In progress** (`/v1/templates/` returns seeded catalog in latest evidence snapshot, including `94df20ca-280f-43a1-baa9-1c8b3f4eae48`) | `ops/evidence/2026-06-02-live-public-matrix.csv` |
+| P0-3 | Seed and verify non-empty `/v1/templates/` in production; record stable template UUIDs for smoke runs. | Platform + API | **In progress** (`/v1/templates/` returns seeded catalog in latest evidence snapshot, including `94df20ca-280f-43a1-baa9-1c8b3f4eae48`) | `ops/evidence/2026-06-02T041548Z-public-prod-endpoints.csv` |
 | P0-4 | Run authenticated GPU golden path smoke (`job → callback → output → gallery`) and capture output URL trail. | API + Workers + Platform | **Not started** | Not yet captured |
 | P0-5 | Run active cancellation + multi-modal smoke under `CEQ_STRICT_SMOKE=true` with dead-letter threshold checks. | API + Workers | **Not started** | Not yet captured |
 | P1-1 | Finalize Dhanam-backed plan/checkout path for paid signup and plan changes. | Product + Dhanam + API | **In progress** | Studio checkout bridge now targets Dhanam catalog product `ceq`; enablement still requires entitlement source proof |
@@ -80,7 +85,7 @@ Use this registry as the canonical closure board for GA-blocking work.
 | P1-5 | Confirm alert + rollback drill evidence, link synthetic alert path, and attach runbooks to alert annotations. | Platform + Support | **Not started** | Not yet linked |
 | P1-6 | Publish and link customer-facing legal/commercial docs (terms, privacy, AUP, pricing, limits) from GA flows. | Product + Legal | **In progress** | Studio `/billing` and the redesigned landing link `/legal/{terms,privacy,acceptable-use,retention,refunds}`; legal review still required |
 | P1-7 | Publish fresh-account paid pilot rehearsal evidence (login, generation, invoice/receipt, output retrieval). | Product + Eng + Support | **Not started** | Not yet executed |
-| P2 | Reconcile roadmap/docs truth after each phase closure and archive evidence row IDs centrally. | Repo docs owners | **In progress** | `COMMERCIAL_GA_REMEDIATION_PLAN.md`, `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md`, `docs/DOCS_EVIDENCE_AUDIT_2026-06-02.md` |
+| P2 | Reconcile roadmap/docs truth after each phase closure and archive evidence row IDs centrally. | Repo docs owners | **In progress** | `docs/README.md`, `COMMERCIAL_GA_REMEDIATION_PLAN.md`, `docs/DOCS_EVIDENCE_AUDIT_2026-06-02.md` |
 
 ### GA-closure lanes (ROI order)
 
@@ -95,7 +100,7 @@ Track completion with these five high-impact lanes before broader closure.
 | P1-1 | Publish/verify credits balance + entitlement proof for paying cohort; attach paid pilot receipt/invoice evidence. | `In progress` |
 
 No lane is marked complete until evidence is captured, reproducible, and linked from
-`docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md` or `docs/DOCS_EVIDENCE_AUDIT_2026-06-02.md`.
+`docs/DOCS_EVIDENCE_AUDIT_2026-06-02.md`.
 
 ---
 

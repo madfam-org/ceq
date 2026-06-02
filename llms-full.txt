@@ -1,6 +1,6 @@
 # Ceq Full LLM Context
 
-Generated: 2026-05-13
+Generated: 2026-06-02
 
 ## Purpose
 
@@ -37,8 +37,10 @@ gap or incident link.
 
 - `README.md`
 - `ECOSYSTEM.md`
+- `docs/README.md`
+- `docs/CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md`
+- `docs/DOCS_EVIDENCE_AUDIT_2026-06-02.md`
 - `docs/CEQ_IDENTITY_AND_DEMO_WRAPUP.md`
-- `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md`
 - `docs/CEQ_STABILITY_ROADMAP.md`
 - `docs/GA_DEMO_DEFINITION.md`
 - `docs/COMMERCIAL_GA_REMEDIATION_PLAN.md`

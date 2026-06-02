@@ -1,11 +1,13 @@
 # CEQ Identity & Capped GA Demo — Session Wrap-Up
 
-> **Last updated:** 2026-06-01
+> **Last updated:** 2026-06-02
 > **Audience:** Engineering, operators, platform agents, stakeholders  
-> **Status:** Identity wiring deployed; Studio token route accepts Janua client secret; browser credential proof captured
+> **Status:** Historical identity proof exists; current production readiness still requires ExternalSecret health, repeatable authenticated smoke, operations-status proof, and GPU golden-path proof.
 > **Readiness:** Partially demoable; Tier B still needs runtime operations-status and GPU golden-path proof ([`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md))
+> **Truth layer:** [`README.md`](./README.md), [`CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md`](./CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md), [`DOCS_EVIDENCE_AUDIT_2026-06-02.md`](./DOCS_EVIDENCE_AUDIT_2026-06-02.md)
 
-This document consolidates the 2026-05-22/23 stabilization session: what was
+This document is historical context. It consolidates the 2026-05-22/23
+stabilization session: what was
 built, what Janua delivered, what operators must still run, and where every
 detail lives.
 
@@ -138,7 +140,7 @@ Execute in order. Full prompts: [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_
 materialized in cluster then; `CEQ_PUBLIC_ONLY=true` production smoke green; Janua authorize 302.
 **Repo/prod audit (2026-06-01):** public smoke remains green and Studio token exchange
 with a bogus code reaches Janua as an accepted client (`invalid_grant`). See
-[`DOCS_EVIDENCE_AUDIT_2026-06-01.md`](./DOCS_EVIDENCE_AUDIT_2026-06-01.md).
+[`DOCS_EVIDENCE_AUDIT_2026-06-02.md`](./DOCS_EVIDENCE_AUDIT_2026-06-02.md).
 
 ### Quick operator commands
 

@@ -11,7 +11,7 @@
 > **Philosophy**: *Wrestling order from the chaos of latent space*
 
 > For current production evidence, deployment state, and remaining gates, use
-> [`DOCS_EVIDENCE_AUDIT_2026-06-01.md`](./DOCS_EVIDENCE_AUDIT_2026-06-01.md),
+> [`DOCS_EVIDENCE_AUDIT_2026-06-02.md`](./DOCS_EVIDENCE_AUDIT_2026-06-02.md),
 > [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md), and
 > [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md). For paid launch scope and
 > commercial GA gates, use
