@@ -44,15 +44,16 @@ export default function LoginPage() {
 
         {/* Hero section */}
         <h1 className="mt-6 text-xl font-semibold text-foreground text-center">
-          CEQ Studio — Generative AI Image Pipeline
+          CEQ Studio — Generative Production Control Plane
         </h1>
 
         {/* Tagline */}
         <p className="mt-2 text-sm text-muted-foreground text-center max-w-sm">
-          Creative Entropy Quantized
+          Reusable ComfyUI workflows, deterministic render APIs,
+          cached outputs, and client-safe galleries.
           <br />
           <span className="text-xs opacity-75">
-            The skunkworks terminal for the generative avant-garde
+            Sign in to run the Studio, queue jobs, and preserve every proof.
           </span>
         </p>
 
@@ -67,7 +68,7 @@ export default function LoginPage() {
           onClick={() => login(returnTo)}
           className="mt-8 px-6 py-2 text-sm border border-border rounded hover:bg-accent transition-colors"
         >
-          Enter the Terminal
+          Enter CEQ Studio
         </button>
       </div>
 
