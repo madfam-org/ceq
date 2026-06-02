@@ -125,7 +125,7 @@ scripts/capture-public-endpoint-matrix.sh
 
 | Step | Action | Proof |
 |------|--------|-------|
-| 1 | Open [ceq.lol](https://ceq.lol) | Marketing landing, host split |
+| 1 | Open [ceq.lol](https://ceq.lol) | Conversion landing, host split, product proof panel, simulated render/cache-hit demo |
 | 2 | Show `curl https://api.ceq.lol/health` | API live |
 | 3 | Show render 401 without auth | Security posture |
 | 4 | `POST /v1/render/card` with Janua JWT (or service account) | Deterministic URL from R2 |

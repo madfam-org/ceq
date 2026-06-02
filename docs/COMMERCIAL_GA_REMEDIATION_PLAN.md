@@ -76,7 +76,7 @@ Use this registry as the canonical closure board for GA-blocking work.
 | P1-3 | Enable and reconcile feature-flagged render/GPU debit-refund flow for a pilot cohort. | API | **In progress** (code paths exist, flags available) | Not yet bound to funded flow |
 | P1-4 | Replace role-derived caps with plan/rate/spend quotas tied to production entitlements. | API + Platform | **In progress** (schema + quotas exist, billing source missing) | No paid traffic evidence |
 | P1-5 | Confirm alert + rollback drill evidence, link synthetic alert path, and attach runbooks to alert annotations. | Platform + Support | **Not started** | Not yet linked |
-| P1-6 | Publish and link customer-facing legal/commercial docs (terms, privacy, AUP, pricing, limits) from GA flows. | Product + Legal | **In progress** | Studio `/billing` links `/legal/{terms,privacy,acceptable-use,retention,refunds}`; legal review still required |
+| P1-6 | Publish and link customer-facing legal/commercial docs (terms, privacy, AUP, pricing, limits) from GA flows. | Product + Legal | **In progress** | Studio `/billing` and the redesigned landing link `/legal/{terms,privacy,acceptable-use,retention,refunds}`; legal review still required |
 | P1-7 | Publish fresh-account paid pilot rehearsal evidence (login, generation, invoice/receipt, output retrieval). | Product + Eng + Support | **Not started** | Not yet executed |
 | P2 | Reconcile roadmap/docs truth after each phase closure and archive evidence row IDs centrally. | Repo docs owners | **In progress** | `COMMERCIAL_GA_REMEDIATION_PLAN.md`, `docs/DOCS_EVIDENCE_AUDIT_2026-06-01.md` |
 
@@ -178,6 +178,7 @@ Code progress since this baseline:
 | 2026-06-01 | GitHub `main` branch protection enabled with required CEQ CI checks and review gate | Keep required checks current as workflow names change |
 | 2026-06-01 | Studio billing page added with Dhanam checkout URL bridge for catalog product `ceq` tiers `pro_artist` and `studio`, gated by `NEXT_PUBLIC_CEQ_CHECKOUT_ENABLED` | Keep checkout disabled until Dhanam entitlement source and paid-run proof are captured |
 | 2026-06-01 | Customer-facing legal/commercial routes added under `/legal/*` and linked from `/billing` | Product/legal review and final policy approval remain required |
+| 2026-06-02 | Public landing redesigned around conversion: outcome-first hero, product proof panel, superpower matrix, simulated deterministic render/cache-hit demo, buyer-safety links, founding-pilot CTAs, and landing event hooks | Deploy to production, connect event sink beyond `CustomEvent`/`dataLayer`, and keep paid CTAs gated until entitlement proof |
 
 ---
 
@@ -558,7 +559,7 @@ Acceptance:
 
 - API bypass tests fail closed for unpaid/premium and cross-account access
 - Abuse controls are test-covered and enabled in prod
-- Legal/commercial docs are linked from customer-facing flows
+- Legal/commercial docs are linked from customer-facing flows, including the public landing and Studio billing surface
 
 ### Track 7 - Launch Cutover
 
@@ -590,7 +591,7 @@ Acceptance:
 7. [ ] **IN PROGRESS** Replace role-derived paid-template/API enforcement with entitlement-backed checks.
 8. [ ] **IN PROGRESS** Finalize queue/rate/spend guardrails in API + worker path.
 9. [ ] **NOT STARTED** Confirm alert routing + rollback drill evidence and link runbooks.
-10. [ ] **IN PROGRESS** Publish customer-facing legal/commercial docs (terms/privacy/AUP/retention/recovery) in Studio paths.
+10. [ ] **IN PROGRESS** Publish customer-facing legal/commercial docs (terms/privacy/AUP/retention/recovery) in public landing and Studio paths.
 11. [ ] **NOT STARTED** Execute the paid pilot rehearsal (fresh account, login, generation, output, invoice/receipt path).
 
 ---
