@@ -50,7 +50,7 @@ external stakeholders **without** claiming full PRD breadth. Caps are intentiona
 
 **GA quality bar** for this demo means:
 
-- No manual `kubectl apply` for routine deploys (GitOps + CI gates)
+- No `kubectl apply` for routine deploys; use GitOps + CI gates instead
 - Public smoke green on every release candidate
 - Real browser login and session cookies on `app.ceq.lol`
 - At least one job: submit → queue → worker → R2 → callback → PostgreSQL → gallery
