@@ -87,7 +87,7 @@ spec:
         matchLabels:
           kubernetes.io/metadata.name: janua
     ports:
-    - port: 4100
+    - port: 8080
       protocol: TCP
   podSelector: {}
   policyTypes:

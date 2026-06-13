@@ -76,11 +76,11 @@ spec:
                   name: ceq-secrets
                   key: JOB_WEBHOOK_SECRET
             - name: JANUA_API_URL
-              value: "http://janua-api.janua.svc.cluster.local:4100"
-            # In-cluster JWKS: Cloudflare returns 403 to Hetzner pod egress on the
-            # public auth.madfam.io URL; Janua serves the same keys internally.
+              value: "http://janua-api.janua.svc.cluster.local"
+            # In-cluster JWKS: public auth.madfam.io returns 403 from cluster egress;
+            # Janua Service is port 80 -> pod 8080 (not 4100).
             - name: JANUA_JWKS_URL
-              value: "http://janua-api.janua.svc.cluster.local:4100/.well-known/jwks.json"
+              value: "http://janua-api.janua.svc.cluster.local/.well-known/jwks.json"
             - name: JANUA_ISSUER
               value: "https://auth.madfam.io"
             - name: JANUA_AUDIENCE
