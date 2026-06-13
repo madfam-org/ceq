@@ -209,6 +209,8 @@ async def _render_asset(
     user: JanuaUser,
     db: AsyncSession,
     storage: StorageClient,
+    *,
+    skip_credits: bool = False,
 ) -> RenderResponse:
     """
     Generic render dispatcher. Works for any registered renderer regardless
@@ -242,7 +244,7 @@ async def _render_asset(
             template=template,
             digest=digest,
         )
-        if settings.render_credit_debits_enabled:
+        if not skip_credits and settings.render_credit_debits_enabled:
             await require_credit_balance(
                 db,
                 user_id=user.id,
@@ -273,7 +275,7 @@ async def _render_asset(
                 detail="render failed: cache write error",
             ) from None
 
-        if settings.render_credit_debits_enabled:
+        if not skip_credits and settings.render_credit_debits_enabled:
             await debit_credits(
                 db,
                 user_id=user.id,

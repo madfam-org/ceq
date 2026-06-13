@@ -36,6 +36,16 @@ export function isPublicAppPath(pathname: string): boolean {
   );
 }
 
+export function isMarketingPublicPath(pathname: string): boolean {
+  return (
+    pathname === "/" ||
+    pathname === "" ||
+    pathname.startsWith("/landing") ||
+    pathname.startsWith("/legal") ||
+    pathname.startsWith("/experience")
+  );
+}
+
 export function hasUsableSessionCookie(request: NextRequest): boolean {
   const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
   const refreshToken = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
@@ -62,21 +72,12 @@ export function middleware(request: NextRequest) {
     request.headers.get("x-forwarded-proto") === "http" ? "http" : "https";
 
   if (!appHost) {
-    // Marketing host (ceq.lol). Root path rewrites server-side to the
-    // dedicated /landing route. The previous design used a CLIENT-side
-    // window.location check inside a "use client" page; Cloudflare cached
-    // the SSR HTML (cache-control: s-maxage=31536000) without a Vary on
-    // Host, so ceq.lol and app.ceq.lol shared one cache entry — and
-    // ceq.lol started serving the studio shell ("›Workflows / ›Queue")
-    // instead of the marketing landing. Splitting onto its own URL gives
-    // each host its own cache entry without needing Vary: Host (which
-    // downstream proxies handle inconsistently).
     if (pathname === "/" || pathname === "") {
       const url = request.nextUrl.clone();
       url.pathname = "/landing";
       return NextResponse.rewrite(url);
     }
-    if (pathname.startsWith("/landing") || pathname.startsWith("/legal")) {
+    if (isMarketingPublicPath(pathname)) {
       return NextResponse.next();
     }
     return NextResponse.redirect(
