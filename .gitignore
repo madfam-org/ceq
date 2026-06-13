@@ -21,6 +21,7 @@ build/
 out/
 *.js.map
 *.d.ts
+!apps/studio/next-env.d.ts
 
 # IDE
 .idea/
