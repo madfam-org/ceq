@@ -41,8 +41,13 @@ export function MainLayout({ children }: MainLayoutProps) {
               <AlertCircle className="h-4 w-4 mt-0.5 text-destructive shrink-0" />
               <p className="text-muted-foreground">
                 Janua login succeeded, but CEQ API rejected the session token.
-                Workflows, queue, billing, and job submission are offline until
-                API auth is restored.
+                Workflows, queue, billing, and job submission stay offline until
+                API auth is restored. If you opened an old Janua sign-in link,
+                return to{" "}
+                <a href="/login" className="underline text-foreground">
+                  app.ceq.lol/login
+                </a>{" "}
+                and sign in again.
               </p>
             </div>
             <Button size="sm" variant="outline" onClick={() => login()}>

@@ -177,13 +177,11 @@ describe("URL Generation", () => {
     expect(url).not.toContain("https%3A%2F%2Fevil.com");
   });
 
-  it("getLogoutUrl generates logout URL", () => {
+  it("getLogoutUrl returns Studio login surface", () => {
     const url = getLogoutUrl();
 
-    expect(url).toContain(AUTH_CONFIG.januaUrl);
-    expect(url).toContain("/logout");
-    expect(url).toContain("client_id=");
-    expect(url).toContain("post_logout_redirect_uri=");
+    expect(url).toContain("/login");
+    expect(url).not.toContain("/logout");
   });
 });
 

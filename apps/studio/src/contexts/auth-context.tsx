@@ -20,12 +20,12 @@ import {
   clearAuth,
   isTokenExpired,
   refreshAccessToken,
-  getLoginUrl,
   getLogoutUrl,
   parseJwt,
   getSessionAuth,
   sanitizeReturnPath,
   probeApiSession,
+  getApiAudienceMismatchMessage,
 } from "@/lib/auth";
 
 interface AuthContextType {
@@ -100,6 +100,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setToken(refreshedToken);
         setUser(refreshedUser);
       } else {
+        const audienceError = getApiAudienceMismatchMessage(session.accessToken);
+        if (audienceError) {
+          setToken(session.accessToken);
+          setUser(session.user);
+          setAuth(session.accessToken, null, session.user);
+          setIsApiAuthorized(false);
+          setIsLoading(false);
+          return;
+        }
+
         setToken(session.accessToken);
         setUser(session.user);
         setAuth(session.accessToken, null, session.user);
@@ -118,19 +128,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
     window.location.href = loginUrl;
   }, []);
 
-  // Logout - clear local state and redirect to Janua logout
+  // Logout - clear local state and return to Studio login
   const logout = useCallback(() => {
-    const logoutUrl = getLogoutUrl();
     clearAuth();
     setUser(null);
     setToken(null);
+    setIsApiAuthorized(null);
     void fetch("/api/auth/logout", {
       method: "POST",
       keepalive: true,
     })
       .catch(() => undefined)
       .finally(() => {
-        window.location.href = logoutUrl;
+        window.location.href = getLogoutUrl();
       });
   }, []);
 

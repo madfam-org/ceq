@@ -18,6 +18,22 @@ export function decodeJwtPayload(token: string): JwtPayload | null {
   }
 }
 
+export function getTokenAudience(token: string): string | null {
+  const payload = decodeJwtPayload(token);
+  const aud = payload?.aud;
+  if (typeof aud === "string" && aud.length > 0) return aud;
+  if (Array.isArray(aud) && typeof aud[0] === "string") return aud[0];
+  return null;
+}
+
+export const CEQ_API_AUDIENCE =
+  process.env.NEXT_PUBLIC_JANUA_AUDIENCE || "ceq-api";
+
+export function hasCeqApiAudience(token: string): boolean {
+  const aud = getTokenAudience(token);
+  return aud === CEQ_API_AUDIENCE;
+}
+
 function asString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }

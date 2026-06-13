@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { getSessionAuth, setAuth } from "@/lib/auth";
+import { getSessionAuth, setAuth, getApiAudienceMismatchMessage } from "@/lib/auth";
 import { sanitizeReturnPath } from "@/lib/auth";
 import { Terminal, Loader2, AlertCircle } from "lucide-react";
 
@@ -62,6 +62,11 @@ export default function AuthCallbackPage() {
 
         if (!session) {
           throw new Error("Session bootstrap failed after token exchange.");
+        }
+
+        const audienceError = getApiAudienceMismatchMessage(session.accessToken);
+        if (audienceError) {
+          throw new Error(audienceError);
         }
 
         setAuth(session.accessToken, tokenPayload.refresh_token || null, session.user);
