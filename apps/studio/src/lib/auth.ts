@@ -5,7 +5,7 @@
  * for the MADFAM ecosystem SSO.
  */
 
-import { isJwtExpired, parseJwtUser } from "@/lib/jwt";
+import { isJwtExpired, parseJwtUser, hasCeqApiAudience, CEQ_API_AUDIENCE } from "@/lib/jwt";
 
 // Auth configuration from environment
 export const AUTH_CONFIG = {
@@ -128,6 +128,22 @@ export function clearAuth(): void {
 }
 
 /**
+ * Probe whether the Studio session can reach authenticated CEQ API routes.
+ */
+export async function probeApiSession(): Promise<boolean> {
+  try {
+    const response = await fetch("/api/proxy/v1/credits/balance", {
+      method: "GET",
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Parse JWT to get user info (without verification - that's done by API)
  */
 export function parseJwt(token: string): User | null {
@@ -158,14 +174,22 @@ export function getLoginUrl(returnTo?: string): string {
 
 /**
  * Generate logout URL
+ *
+ * Janua GET /logout returns 404 in production. CEQ clears local session via
+ * /api/auth/logout and returns users to the Studio login surface.
  */
 export function getLogoutUrl(): string {
-  const params = new URLSearchParams({
-    client_id: AUTH_CONFIG.clientId,
-    post_logout_redirect_uri: AUTH_CONFIG.postLogoutUri,
-  });
+  if (typeof window === "undefined") {
+    return "/login";
+  }
+  return `${window.location.origin}/login`;
+}
 
-  return `${AUTH_CONFIG.januaUrl}/logout?${params}`;
+export function getApiAudienceMismatchMessage(token: string): string | null {
+  if (!token || hasCeqApiAudience(token)) {
+    return null;
+  }
+  return `Session token audience is not ${CEQ_API_AUDIENCE}. Sign in again from CEQ Studio.`;
 }
 
 /**

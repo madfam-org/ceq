@@ -37,6 +37,7 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+ops/smoke-config.env
 
 # Logs
 *.log

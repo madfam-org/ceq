@@ -5,8 +5,13 @@ metadata:
   namespace: ceq
   labels:
     app: ceq-worker
+  annotations:
+    ceq.madfam.io/compute-strategy: "in-cluster-keda-blocked"
+    ceq.madfam.io/blocker: "no-gpu-nodes-on-hetzner-cluster"
+    ceq.madfam.io/production-path: "ceq-orchestrator + vast.ai — see docs/GPU_COMPUTE_STRATEGY.md"
 spec:
-  # GPU workers scale via KEDA, start with 0
+  # In-cluster GPU workers: blocked until Hetzner GPU node + nvidia device plugin.
+  # Production GPU path today is ceq-orchestrator → Vast.ai (worker-orchestrator-deployment.yaml).
   replicas: 0
   selector:
     matchLabels:

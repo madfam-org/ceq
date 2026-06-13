@@ -1,0 +1,138 @@
+# CEQ Vast.ai Orchestrator — CPU-only control plane
+#
+# Scales external Vast.ai GPU workers based on Redis queue depth (DB 14).
+# Does NOT require cluster GPU nodes. Keep ceq-worker Deployment at 0 replicas
+# until in-cluster GPU hardware exists.
+#
+# Requires:
+#   - VAST_API_KEY in ceq-secrets (Vault)
+#   - CEQ_WORKER_REDIS_URL reachable from Vast.ai (public/Tailscale endpoint)
+#   - CEQ_WORKER_API_URL=https://api.ceq.lol (default below)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ceq-orchestrator
+  namespace: ceq
+  labels:
+    app: ceq-orchestrator
+  annotations:
+    ceq.madfam.io/compute-strategy: "vast-external"
+    ceq.madfam.io/docs: "docs/GPU_COMPUTE_STRATEGY.md"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ceq-orchestrator
+  template:
+    metadata:
+      labels:
+        app: ceq-orchestrator
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      imagePullSecrets:
+        - name: ghcr-credentials
+      containers:
+        - name: ceq-orchestrator
+          image: ghcr.io/madfam-org/ceq-worker:latest
+          command: ["python", "-m", "ceq_worker.orchestrator"]
+          env:
+            - name: CEQ_GPU_PROVIDER
+              value: "vast"
+            - name: CEQ_MIN_WORKERS
+              value: "0"
+            - name: CEQ_MAX_WORKERS
+              value: "3"
+            - name: CEQ_MAX_HOURLY_SPEND
+              value: "5.0"
+            - name: CEQ_SCALE_UP_THRESHOLD
+              value: "1"
+            - name: CEQ_IDLE_TIMEOUT
+              value: "300"
+            - name: CEQ_MIN_VRAM_GB
+              value: "16"
+            - name: CEQ_WORKER_API_URL
+              value: "https://api.ceq.lol"
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: REDIS_URL
+            - name: CEQ_WORKER_REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: CEQ_WORKER_REDIS_URL
+                  optional: true
+            - name: VAST_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: VAST_API_KEY
+            - name: FAL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: FAL_API_KEY
+                  optional: true
+            - name: R2_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: R2_ENDPOINT
+            - name: R2_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: R2_ACCESS_KEY
+            - name: R2_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: R2_SECRET_KEY
+            - name: R2_BUCKET_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: R2_BUCKET_NAME
+            - name: API_URL
+              value: "http://ceq-api.ceq.svc.cluster.local"
+            - name: API_JOB_COMPLETION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: JOB_COMPLETION_CALLBACK_TOKEN
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import redis; import os; redis.from_url(os.environ['REDIS_URL']).ping()"
+            initialDelaySeconds: 15
+            periodSeconds: 60
+            timeoutSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import redis; import os; redis.from_url(os.environ['REDIS_URL']).ping()"
+            initialDelaySeconds: 5
+            periodSeconds: 30
+            timeoutSeconds: 10

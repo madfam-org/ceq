@@ -7,7 +7,8 @@ trusting older roadmap, handoff, or deployment notes.
 
 | Document | Use it for |
 |---|---|
-| [`CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md`](./CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md) | Current audit summary, remediations, live blockers, and recommended ROI order |
+| [`CEQ_FULL_REMEDIATION_PLAN_2026-06-12.md`](./CEQ_FULL_REMEDIATION_PLAN_2026-06-12.md) | **Active** phased remediation plan (identity → GPU → strict smoke → commercial GA) |
+| [`CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md`](./CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md) | Audit summary, remediations, live blockers, and recommended ROI order |
 | [`DOCS_EVIDENCE_AUDIT_2026-06-02.md`](./DOCS_EVIDENCE_AUDIT_2026-06-02.md) | Evidence-backed production facts from public smoke, Enclii, GitHub, Kubernetes, policy, and observability checks |
 | [`GA_DEMO_DEFINITION.md`](./GA_DEMO_DEFINITION.md) | Capped GA demo scope and proof requirements |
 | [`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md) | Commercial GA gates and paid-launch remediation plan |
@@ -17,11 +18,13 @@ trusting older roadmap, handoff, or deployment notes.
 
 CEQ has live public surfaces and passing public no-auth smoke. `ceq-api` and
 `ceq-studio` are healthy in Enclii health at 2/2 ready pods, and `/ready`
-returns 200. CEQ is not commercial GA: the Janua ExternalSecret is degraded
-because Vault is missing `secret/ceq.JANUA_CLIENT_SECRET`, authenticated smoke
-is blocked on a real CEQ auth/admin token, worker/GPU golden-path proof is not
-captured, Enclii metrics/alerts are not actionable, and billing/entitlements are
-not paid-launch proven.
+returns 200. A **2026-06-12 live audit** confirmed authenticated API routes
+return 401 because production `ceq-api` lacks Janua JWKS/issuer/audience env
+vars — repo fixes are ready in Phase 0 of
+[`CEQ_FULL_REMEDIATION_PLAN_2026-06-12.md`](./CEQ_FULL_REMEDIATION_PLAN_2026-06-12.md).
+CEQ is not commercial GA: Vault may still be missing secrets, GPU golden-path
+proof is not captured, Enclii metrics/alerts are not actionable, and
+billing/entitlements are not paid-launch proven.
 
 ## Documentation precedence
 
@@ -60,7 +63,8 @@ When documents conflict, prefer this order:
 | [`GETTING_STARTED.md`](./GETTING_STARTED.md) | Product and developer quick start |
 | [`API.md`](./API.md) | API reference |
 | [`TEMPLATES.md`](./TEMPLATES.md) | Template catalog and render API notes |
-| [`VAST_AI_SETUP.md`](./VAST_AI_SETUP.md) | GPU provider setup notes |
+| [`VAST_AI_SETUP.md`](./VAST_AI_SETUP.md) | Vast.ai GPU provider operator runbook |
+| [`GPU_COMPUTE_STRATEGY.md`](./GPU_COMPUTE_STRATEGY.md) | Ecosystem-aligned compute provider strategy (Vast → Furnace) |
 
 ## Evidence artifacts
 

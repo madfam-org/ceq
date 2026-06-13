@@ -96,6 +96,23 @@ class TestWorkerConfig:
         assert settings.ceq_idle_timeout > 0
         assert settings.ceq_max_hourly_spend > 0
 
+    def test_external_worker_url_overrides(self):
+        """External GPU workers can use public Redis/API endpoints."""
+        from ceq_worker.config import Settings
+
+        with patch.dict(
+            os.environ,
+            {
+                "REDIS_URL": "redis://:secret@redis.internal:6379/14",
+                "CEQ_WORKER_REDIS_URL": "rediss://:secret@redis.public:6379/14",
+                "API_URL": "http://ceq-api.ceq.svc.cluster.local",
+                "CEQ_WORKER_API_URL": "https://api.ceq.lol",
+            },
+        ):
+            settings = Settings()
+            assert settings.external_worker_redis_url == "rediss://:secret@redis.public:6379/14"
+            assert settings.external_worker_api_url == "https://api.ceq.lol"
+
     def test_get_settings_cached(self):
         """Test that get_settings returns cached instance."""
         from ceq_worker.config import get_settings
