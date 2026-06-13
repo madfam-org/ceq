@@ -4,6 +4,7 @@ import {
   buildLoginRedirect,
   hasUsableSessionCookie,
   isAppHost,
+  isMarketingPublicPath,
   isPublicAppPath,
 } from "../src/middleware";
 import {
@@ -94,5 +95,12 @@ describe("Studio middleware helpers", () => {
     expect(redirect.toString()).toBe(
       "https://app.ceq.lol/login?returnTo=%2Ftemplates%3Fcategory%3Dsocial"
     );
+  });
+
+  it("allows marketing-only routes on ceq.lol", () => {
+    expect(isMarketingPublicPath("/landing")).toBe(true);
+    expect(isMarketingPublicPath("/experience")).toBe(true);
+    expect(isMarketingPublicPath("/legal/terms")).toBe(true);
+    expect(isMarketingPublicPath("/workflows")).toBe(false);
   });
 });

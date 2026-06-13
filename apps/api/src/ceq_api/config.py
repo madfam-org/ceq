@@ -133,6 +133,9 @@ class Settings(BaseSettings):
     # endpoint will return 503).
     interest_enabled: bool = True
 
+    # Public landing demo — rate-limited /v1/demo/* renders without auth/credits.
+    demo_enabled: bool = True
+
     # Outbound webhook to Phynd-CRM. When CRM_WEBHOOK_URL is empty the
     # `dispatch_interest_to_crm` background task is a no-op — the row is still
     # persisted, we just skip the push. Set both values to wire CRM sync.

@@ -49,6 +49,8 @@ ALLOWED_FEATURES: frozenset[str] = frozenset(
         "training_access",  # Custom model training
         "team_seats",       # Multi-seat collaboration
         "early_access",     # Generic waitlist
+        "ceq_pro_artist",   # Landing pricing — Pro Artist founding tier
+        "ceq_studio",       # Landing pricing — Studio founding tier
     }
 )
 

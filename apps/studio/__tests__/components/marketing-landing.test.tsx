@@ -43,31 +43,122 @@ describe("MarketingLanding", () => {
 
     await user.click(screen.getAllByRole("button", { name: /start generating free/i })[0]);
 
-    expect(authMock.login).toHaveBeenCalledWith("/");
+    expect(authMock.login).toHaveBeenCalledWith("/templates?onboarding=demo");
   });
 
   it("lets visitors switch demo templates", async () => {
     const user = userEvent.setup();
+    global.fetch = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/v1/demo/presets")) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve([
+              {
+                id: "card",
+                label: "Card",
+                title: "Card Standard",
+                api_path: "card",
+                credit_cost: 5,
+                input_summary: "Stratum Chronicle",
+                output_summary: "512×768 PNG",
+              },
+              {
+                id: "audio",
+                label: "Audio",
+                title: "Tone Beep",
+                api_path: "audio",
+                credit_cost: 3,
+                input_summary: "A4 pulse",
+                output_summary: "22.05kHz WAV",
+              },
+            ]),
+        } as Response);
+      }
+      return Promise.resolve({ ok: false } as Response);
+    });
+
     render(<MarketingLanding />);
 
-    expect(screen.getByRole("heading", { name: /card standard/i })).toBeInTheDocument();
+    await vi.waitFor(() => {
+      expect(screen.getByRole("heading", { name: /card standard/i })).toBeInTheDocument();
+    });
 
     await user.click(screen.getByRole("button", { name: /audio/i }));
 
     expect(screen.getByRole("heading", { name: /tone beep/i })).toBeInTheDocument();
-    expect(screen.getByText(/a4 signal/i)).toBeInTheDocument();
   });
 
-  it("shows cache-hit economics after rerunning identical inputs", async () => {
+  it("runs live demo renders against the public API", async () => {
     const user = userEvent.setup();
+    global.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/v1/demo/presets")) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve([
+              {
+                id: "card",
+                label: "Card",
+                title: "Card Standard",
+                api_path: "card",
+                credit_cost: 5,
+                input_summary: "Stratum Chronicle",
+                output_summary: "512×768 PNG",
+              },
+            ]),
+        } as Response);
+      }
+      if (url.includes("/v1/demo/render/card") && init?.method === "POST") {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              url: "https://cdn.ceq.lol/render/card-standard/demo.png",
+              storage_uri: "r2://ceq-assets/render/card-standard/demo.png",
+              hash: "abc123",
+              template: "card-standard",
+              template_version: "1",
+              content_type: "image/png",
+              cached: false,
+            }),
+        } as Response);
+      }
+      if (url.includes("/v1/demo/status")) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              api: "ok",
+              demo_enabled: true,
+              workflow_templates: 4,
+              render_templates: 3,
+              render_template_names: ["card-standard"],
+            }),
+        } as Response);
+      }
+      if (url.includes("/v1/templates/")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ templates: [] }),
+        } as Response);
+      }
+      return Promise.resolve({ ok: false } as Response);
+    });
+
     render(<MarketingLanding />);
 
-    expect(screen.getByText(/cache miss · bill once/i)).toBeInTheDocument();
+    await vi.waitFor(() => {
+      expect(screen.getByRole("button", { name: /run live render/i })).toBeInTheDocument();
+    });
 
-    await user.click(screen.getByRole("button", { name: /run deterministic render/i }));
+    await user.click(screen.getByRole("button", { name: /run live render/i }));
 
-    expect(screen.getByText(/cache hit · no rebill/i)).toBeInTheDocument();
-    expect(screen.getByText(/0 cached/i)).toBeInTheDocument();
+    await vi.waitFor(() => {
+      expect(screen.getByText(/cache miss · bill once/i)).toBeInTheDocument();
+    });
   });
 
   it("links buyer safety docs from the trust section", () => {
