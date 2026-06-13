@@ -121,7 +121,7 @@ spec:
             - name: JANUA_API_URL
               value: "http://janua-api.janua.svc.cluster.local:4100"
             - name: JANUA_JWKS_URL
-              value: "https://auth.madfam.io/.well-known/jwks.json"
+              value: "http://janua-api.janua.svc.cluster.local:4100/.well-known/jwks.json"
             - name: JANUA_ISSUER
               value: "https://auth.madfam.io"
             - name: JANUA_AUDIENCE

@@ -73,3 +73,22 @@ spec:
   podSelector: {}
   policyTypes:
   - Egress
+---
+# Janua SSO + in-cluster JWKS/introspection (default-deny blocks cross-namespace).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-janua-egress
+  namespace: ceq
+spec:
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: janua
+    ports:
+    - port: 4100
+      protocol: TCP
+  podSelector: {}
+  policyTypes:
+  - Egress
