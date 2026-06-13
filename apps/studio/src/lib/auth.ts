@@ -128,6 +128,22 @@ export function clearAuth(): void {
 }
 
 /**
+ * Probe whether the Studio session can reach authenticated CEQ API routes.
+ */
+export async function probeApiSession(): Promise<boolean> {
+  try {
+    const response = await fetch("/api/proxy/v1/credits/balance", {
+      method: "GET",
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Parse JWT to get user info (without verification - that's done by API)
  */
 export function parseJwt(token: string): User | null {

@@ -1,0 +1,65 @@
+# =============================================================================
+# CEQ Post-Deploy Smoke — manual / post-sync verification
+# =============================================================================
+#
+# Runs authenticated production smoke after ArgoCD sync or on demand.
+# Requires GitHub repository secrets:
+#   CEQ_AUTH_TOKEN        — Janua JWT with aud=ceq-api
+#   CEQ_ADMIN_AUTH_TOKEN  — optional; defaults to CEQ_AUTH_TOKEN
+#
+# Does NOT block merges by default. Wire into branch protection once token
+# rotation is automated.
+# =============================================================================
+
+name: CEQ Post-Deploy Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Smoke mode
+        required: true
+        default: default
+        type: choice
+        options:
+          - default
+          - strict
+          - gpu
+          - all
+
+concurrency:
+  group: post-deploy-smoke
+  cancel-in-progress: false
+
+jobs:
+  prod-smoke:
+    name: Production smoke (${{ inputs.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate secrets
+        env:
+          CEQ_AUTH_TOKEN: ${{ secrets.CEQ_AUTH_TOKEN }}
+        run: |
+          if [[ -z "$CEQ_AUTH_TOKEN" ]]; then
+            echo "::error::Missing GitHub secret CEQ_AUTH_TOKEN"
+            exit 1
+          fi
+
+      - name: Run post-deploy verification
+        env:
+          CEQ_AUTH_TOKEN: ${{ secrets.CEQ_AUTH_TOKEN }}
+          CEQ_ADMIN_AUTH_TOKEN: ${{ secrets.CEQ_ADMIN_AUTH_TOKEN }}
+          CEQ_TEMPLATE_ID: d8b30c7e-4501-493f-94c7-5223d7777afb
+          CEQ_TEMPLATE_PARAMS_JSON: '{"prompt":"ci golden path smoke","width":512,"height":512}'
+          CEQ_WRITE_EVIDENCE: "false"
+        run: |
+          chmod +x scripts/post-deploy-verify.sh scripts/production-smoke.sh
+          case "${{ inputs.mode }}" in
+            default) bash scripts/post-deploy-verify.sh ;;
+            strict)  bash scripts/post-deploy-verify.sh --strict ;;
+            gpu)     bash scripts/post-deploy-verify.sh --gpu ;;
+            all)     bash scripts/post-deploy-verify.sh --all ;;
+          esac

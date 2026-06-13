@@ -30,12 +30,20 @@ class Settings(BaseSettings):
 
     # Redis (DB 14 per PORT_ALLOCATION.md)
     redis_url: RedisDsn = Field(default="redis://localhost:6379/14")
+    worker_redis_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("CEQ_WORKER_REDIS_URL", "WORKER_REDIS_URL"),
+    )
     job_queue_key: str = "ceq:jobs:pending"
     job_processing_key: str = "ceq:jobs:processing"
     job_results_key: str = "ceq:jobs:results"
 
     # API
     api_url: str = "http://localhost:5800"
+    worker_api_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("CEQ_WORKER_API_URL", "WORKER_API_URL"),
+    )
     api_job_completion_path: str = "/v1/jobs/{job_id}/outputs/report"
     api_job_completion_token: str = ""
     api_job_completion_timeout_seconds: float = 5.0
@@ -91,6 +99,16 @@ class Settings(BaseSettings):
     ceq_scale_down_threshold: int = Field(default=0)
     ceq_idle_timeout: int = Field(default=300)
     ceq_max_hourly_spend: float = Field(default=5.0)
+
+    @property
+    def external_worker_redis_url(self) -> str:
+        """Redis URL injected into external GPU workers (Vast.ai, etc.)."""
+        return self.worker_redis_url or str(self.redis_url)
+
+    @property
+    def external_worker_api_url(self) -> str:
+        """API URL reachable from external GPU workers."""
+        return self.worker_api_url or self.api_url
 
 
 @lru_cache

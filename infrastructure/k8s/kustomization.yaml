@@ -48,6 +48,7 @@ resources:
 - api-deployment.yaml
 - studio-deployment.yaml
 - worker-deployment.yaml
+- worker-orchestrator-deployment.yaml
 - db-migrate-job.yaml
 - external-secret.yaml
 - network-policies.yaml

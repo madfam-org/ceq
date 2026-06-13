@@ -6,6 +6,66 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
+JANUA_JWT_ENV = (
+    "JANUA_JWKS_URL",
+    "JANUA_ISSUER",
+    "JANUA_AUDIENCE",
+)
+
+JANUA_JWT_VALUES = (
+    'value: "https://auth.madfam.io/.well-known/jwks.json"',
+    'value: "https://auth.madfam.io"',
+    'value: "ceq-api"',
+)
+
+
+def test_api_deployment_has_janua_jwt_validation_env() -> None:
+    manifest = (REPO_ROOT / "infrastructure/k8s/api-deployment.yaml").read_text()
+
+    for name in JANUA_JWT_ENV:
+        assert f"- name: {name}" in manifest
+
+    for value in JANUA_JWT_VALUES:
+        assert value in manifest
+
+
+def test_external_secret_includes_janua_client_secret() -> None:
+    manifest = (REPO_ROOT / "infrastructure/k8s/external-secret.yaml").read_text()
+
+    assert "name: ceq-janua-client-secret" in manifest
+    assert "secretKey: JANUA_CLIENT_SECRET" in manifest
+    assert "property: JANUA_CLIENT_SECRET" in manifest
+
+
+def test_external_secret_includes_gpu_worker_secrets() -> None:
+    manifest = (REPO_ROOT / "infrastructure/k8s/external-secret.yaml").read_text()
+
+    for key in ("VAST_API_KEY", "FAL_API_KEY", "CEQ_WORKER_REDIS_URL"):
+        assert f"secretKey: {key}" in manifest
+        assert f"property: {key}" in manifest
+
+
+def test_orchestrator_deployment_uses_vast_control_plane() -> None:
+    manifest = (
+        REPO_ROOT / "infrastructure/k8s/worker-orchestrator-deployment.yaml"
+    ).read_text()
+
+    assert "name: ceq-orchestrator" in manifest
+    assert "ceq_worker.orchestrator" in manifest
+    assert "CEQ_GPU_PROVIDER" in manifest
+    assert 'value: "vast"' in manifest
+    assert "CEQ_WORKER_API_URL" in manifest
+    assert "VAST_API_KEY" in manifest
+    assert "nvidia.com/gpu" not in manifest
+
+
+def test_worker_deployment_stays_blocked_without_gpu_nodes() -> None:
+    manifest = (REPO_ROOT / "infrastructure/k8s/worker-deployment.yaml").read_text()
+
+    assert "replicas: 0" in manifest
+    assert "no-gpu-nodes-on-hetzner-cluster" in manifest
+    assert "nvidia.com/gpu" in manifest
+
 
 def test_migration_job_has_full_production_runtime_env() -> None:
     manifest = (REPO_ROOT / "infrastructure/k8s/db-migrate-job.yaml").read_text()
@@ -21,6 +81,7 @@ def test_migration_job_has_full_production_runtime_env() -> None:
         "JOB_COMPLETION_CALLBACK_TOKEN",
         "JOB_WEBHOOK_SECRET",
         "JANUA_API_URL",
+        *JANUA_JWT_ENV,
         "FURNACE_API_URL",
     ):
         assert f"- name: {name}" in manifest

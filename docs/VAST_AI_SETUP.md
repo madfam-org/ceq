@@ -4,7 +4,11 @@ Complete guide for setting up Vast.ai GPU infrastructure for CEQ ComfyUI workers
 
 ## Overview
 
-Vast.ai is a P2P GPU marketplace where you can rent GPUs by the second. CEQ uses Vast.ai for immediate GPU worker deployment while Furnace (Enclii internal) infrastructure is being developed.
+Vast.ai is a P2P GPU marketplace where you can rent GPUs by the second. CEQ uses Vast.ai for **production GPU execution today** while Furnace (Enclii internal) infrastructure is being developed.
+
+> **Strategy doc:** [GPU_COMPUTE_STRATEGY.md](./GPU_COMPUTE_STRATEGY.md) — cross-references Tulana (pricing only), solarpunk-foundry port/Redis allocation, and internal-devops GPU decisions.
+
+> **Production deploy:** `infrastructure/k8s/worker-orchestrator-deployment.yaml` runs the Vast.ai orchestrator inside the `ceq` namespace (CPU-only). In-cluster `ceq-worker` stays at 0 replicas until Hetzner GPU nodes exist.
 
 **Key Benefits:**
 - Pay-per-second billing (not hourly minimum)

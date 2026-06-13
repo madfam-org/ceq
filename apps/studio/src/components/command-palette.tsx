@@ -64,7 +64,12 @@ export function CommandPalette() {
     };
 
     document.addEventListener("keydown", down);
-    return () => document.removeEventListener("keydown", down);
+    const openPalette = () => setOpen(true);
+    window.addEventListener("ceq:open-command-palette", openPalette);
+    return () => {
+      document.removeEventListener("keydown", down);
+      window.removeEventListener("ceq:open-command-palette", openPalette);
+    };
   }, [router]);
 
   const runCommand = (command: () => void) => {

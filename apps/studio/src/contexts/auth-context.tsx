@@ -16,7 +16,6 @@ import {
 } from "react";
 import {
   type User,
-  getToken,
   setAuth,
   clearAuth,
   isTokenExpired,
@@ -26,12 +25,14 @@ import {
   parseJwt,
   getSessionAuth,
   sanitizeReturnPath,
+  probeApiSession,
 } from "@/lib/auth";
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isApiAuthorized: boolean | null;
   token: string | null;
   login: (returnTo?: string) => void;
   logout: () => void;
@@ -48,6 +49,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isApiAuthorized, setIsApiAuthorized] = useState<boolean | null>(null);
+
+  const verifyApiSession = useCallback(async (): Promise<boolean> => {
+    let authorized = await probeApiSession();
+    if (!authorized) {
+      const refreshedToken = await refreshAccessToken();
+      if (refreshedToken) {
+        setToken(refreshedToken);
+        const refreshedUser = parseJwt(refreshedToken);
+        if (refreshedUser) {
+          setUser(refreshedUser);
+          setAuth(refreshedToken, null, refreshedUser);
+        }
+        authorized = await probeApiSession();
+      }
+    }
+    setIsApiAuthorized(authorized);
+    return authorized;
+  }, []);
 
   // Initialize auth state from HTTP-only cookie session.
   useEffect(() => {
@@ -57,6 +77,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         clearAuth();
         setUser(null);
         setToken(null);
+        setIsApiAuthorized(null);
         setIsLoading(false);
         return;
       }
@@ -67,6 +88,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           clearAuth();
           setUser(null);
           setToken(null);
+          setIsApiAuthorized(false);
           setIsLoading(false);
           return;
         }
@@ -83,11 +105,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setAuth(session.accessToken, null, session.user);
       }
 
+      await verifyApiSession();
       setIsLoading(false);
     };
 
     initAuth();
-  }, []);
+  }, [verifyApiSession]);
 
   // Login - redirect to Janua
   const login = useCallback((returnTo?: string) => {
@@ -149,6 +172,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     user,
     isAuthenticated: !!user && !!token,
     isLoading,
+    isApiAuthorized,
     token,
     login,
     logout,
