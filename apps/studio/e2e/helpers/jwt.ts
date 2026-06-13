@@ -3,6 +3,7 @@ export interface MockJwtClaims {
   email?: string;
   name?: string;
   picture?: string;
+  aud?: string;
   exp?: number;
 }
 
@@ -21,6 +22,7 @@ export function createMockJwt(claims: MockJwtClaims): string {
     sub: "user-e2e-1",
     email: "studio-e2e@madfam.io",
     name: "Studio E2E",
+    aud: "ceq-api",
     exp: Math.floor(Date.now() / 1000) + 3600,
     ...claims,
   });

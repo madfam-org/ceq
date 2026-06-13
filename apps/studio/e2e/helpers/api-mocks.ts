@@ -28,6 +28,17 @@ export async function installStudioApiMocks(page: Page): Promise<void> {
     });
   });
 
+  await page.route("**/api/proxy/v1/credits/balance**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        balance: 100,
+        currency: "credits",
+      }),
+    });
+  });
+
   await page.route("**/api/proxy/health**", async (route) => {
     await route.fulfill({
       status: 200,

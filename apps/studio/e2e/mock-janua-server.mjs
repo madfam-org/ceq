@@ -26,6 +26,7 @@ function createMockJwt(claims = {}) {
     sub: "user-e2e-1",
     email: "studio-e2e@madfam.io",
     name: "Studio E2E",
+    aud: "ceq-api",
     exp: Math.floor(Date.now() / 1000) + 3600,
     ...claims,
   });
