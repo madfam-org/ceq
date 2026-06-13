@@ -13,7 +13,7 @@ JANUA_JWT_ENV = (
 )
 
 JANUA_JWT_VALUES = (
-    'value: "http://janua-api.janua.svc.cluster.local:4100/.well-known/jwks.json"',
+    'value: "http://janua-api.janua.svc.cluster.local/.well-known/jwks.json"',
     'value: "https://auth.madfam.io"',
     'value: "ceq-api"',
 )
@@ -86,7 +86,7 @@ def test_migration_job_has_full_production_runtime_env() -> None:
     ):
         assert f"- name: {name}" in manifest
 
-    assert 'value: "http://janua-api.janua.svc.cluster.local:4100"' in manifest
+    assert 'value: "http://janua-api.janua.svc.cluster.local"' in manifest
     assert "optional: true" not in manifest
 
 
@@ -95,4 +95,4 @@ def test_network_policy_allows_janua_egress() -> None:
 
     assert "name: allow-janua-egress" in manifest
     assert "kubernetes.io/metadata.name: janua" in manifest
-    assert "port: 4100" in manifest
+    assert "port: 8080" in manifest

@@ -119,9 +119,9 @@ spec:
                   name: ceq-secrets
                   key: JOB_WEBHOOK_SECRET
             - name: JANUA_API_URL
-              value: "http://janua-api.janua.svc.cluster.local:4100"
+              value: "http://janua-api.janua.svc.cluster.local"
             - name: JANUA_JWKS_URL
-              value: "http://janua-api.janua.svc.cluster.local:4100/.well-known/jwks.json"
+              value: "http://janua-api.janua.svc.cluster.local/.well-known/jwks.json"
             - name: JANUA_ISSUER
               value: "https://auth.madfam.io"
             - name: JANUA_AUDIENCE
