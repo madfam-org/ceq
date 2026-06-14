@@ -1,0 +1,2 @@
+- [ ] public smoke (FAILED)
+- [ ] authenticated smoke (SKIPPED — no CEQ_AUTH_TOKEN)
