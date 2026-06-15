@@ -3,6 +3,7 @@ import { JetBrains_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { Toaster } from "@/components/ui/sonner";
+import { EcosystemBannerClient } from "@/components/EcosystemBannerClient";
 
 const fontMono = JetBrains_Mono({
   subsets: ["latin"],
@@ -46,11 +47,12 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body
-        className={`${fontMono.variable} ${fontSans.variable} font-mono antialiased min-h-screen bg-background`}
+        className={`${fontMono.variable} ${fontSans.variable} font-mono antialiased min-h-screen bg-background pb-8`}
       >
         <Providers>
           {children}
           <Toaster />
+          <EcosystemBannerClient />
         </Providers>
       </body>
     </html>
