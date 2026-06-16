@@ -37,12 +37,14 @@ def test_external_secret_includes_janua_client_secret() -> None:
     assert "property: JANUA_CLIENT_SECRET" in manifest
 
 
-def test_external_secret_includes_gpu_worker_secrets() -> None:
+def test_external_secret_orchestrator_reads_vast_from_vault() -> None:
     manifest = (REPO_ROOT / "infrastructure/k8s/external-secret.yaml").read_text()
 
-    for key in ("VAST_API_KEY", "FAL_API_KEY", "CEQ_WORKER_REDIS_URL"):
-        assert f"secretKey: {key}" in manifest
-        assert f"property: {key}" in manifest
+    assert "name: ceq-orchestrator-secrets" in manifest
+    assert "name: vault-store" in manifest
+    assert "secretKey: VAST_API_KEY" in manifest
+    assert "key: secret/ceq" in manifest
+    assert "property: vast_api_key" in manifest
 
 
 def test_orchestrator_deployment_uses_vast_control_plane() -> None:
