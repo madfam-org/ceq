@@ -2,7 +2,7 @@
   "name": "@ceq/sdk",
   "version": "0.1.0",
   "description": "Client SDK for the CEQ asset-generation platform (ceq.lol). Render thumbnails, cards, and other generative assets deterministically.",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "private": false,
   "type": "module",
   "main": "./dist/index.cjs",

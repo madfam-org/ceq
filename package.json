@@ -2,6 +2,7 @@
   "name": "ceq",
   "version": "0.1.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "description": "Creative Entropy Quantized - The skunkworks terminal for the generative avant-garde",
   "repository": {
     "type": "git",
