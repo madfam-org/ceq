@@ -137,3 +137,9 @@ try {
 Every render is content-addressed: `hash = sha256(template + data + template_version)`. Identical inputs → identical URLs. The R2 cache means repeated calls (same data) skip the actual render and return instantly (`cached: true`).
 
 When a template's visual output changes, we bump `template_version` so old cached assets aren't served.
+
+## License
+
+MIT © Innovaciones MADFAM SAS de C.V. The `@ceq/sdk` client is intentionally
+MIT-licensed (permissive) so third parties can integrate it freely, while the
+ceq server/core is AGPL-3.0-only. See `LICENSE` in this package.
