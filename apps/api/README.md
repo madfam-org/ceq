@@ -431,4 +431,5 @@ kubectl port-forward -n ceq deployment/ceq-api 5800:5800
 
 ## License
 
-PROPRIETARY - MADFAM
+AGPL-3.0-only — see the repository root [LICENSE](../../LICENSE)
+(RFC 0024 P1.4; the `@ceq/sdk` client package is separately MIT-licensed).

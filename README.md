@@ -304,6 +304,10 @@ This project is licensed under the GNU Affero General Public License v3.0
 (AGPL-3.0-only), per the MADFAM public-repo licensing policy (RFC 0024 P1.4).
 See [LICENSE](./LICENSE) for the full text.
 
+**Exception:** the [`@ceq/sdk`](./packages/sdk/) client package is
+MIT-licensed so third parties can integrate it freely — see
+[packages/sdk/LICENSE](./packages/sdk/LICENSE).
+
 Copyright (c) 2026 Innovaciones MADFAM SAS de C.V.
 
 ---
