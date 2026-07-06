@@ -316,4 +316,5 @@ Per [PORT_ALLOCATION.md](https://github.com/madfam-io/solarpunk-foundry/blob/mai
 
 ## License
 
-PROPRIETARY - MADFAM
+AGPL-3.0-only — see the repository root [LICENSE](../../LICENSE)
+(RFC 0024 P1.4; the `@ceq/sdk` client package is separately MIT-licensed).
