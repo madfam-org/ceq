@@ -27,11 +27,13 @@ async def init_db() -> None:
     """
     global _engine, _session_factory
 
+    # Pool caps come from settings (env-overridable), never hardcoded here —
+    # budget rationale on the fields in config.py.
     _engine = create_async_engine(
         str(settings.database_url),
         echo=settings.debug,
-        pool_size=5,
-        max_overflow=10,
+        pool_size=settings.database_pool_size,
+        max_overflow=settings.database_max_overflow,
         pool_pre_ping=True,
     )
 

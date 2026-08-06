@@ -39,6 +39,15 @@ class Settings(BaseSettings):
     database_url: str = Field(
         default="postgresql+asyncpg://ceq:ceq_dev@localhost:5432/ceq_dev"
     )
+    # Connection budget vs the SHARED postgres.data.svc: max_connections=100
+    # for the ENTIRE cluster, ~90 in use at steady state, and a cluster-wide
+    # exhaustion incident on 2026-07-22. Budget for ceq-api: 2 replicas x
+    # (pool 5 + overflow 5) = 20 absolute max against a measured steady state
+    # of ~8. Raise per-env via DATABASE_POOL_SIZE / DATABASE_MAX_OVERFLOW
+    # (no env prefix configured), not by editing code. (Same pattern as
+    # fortuna and janua.)
+    database_pool_size: int = Field(default=5)
+    database_max_overflow: int = Field(default=5)
 
     # Redis (DB 14 per PORT_ALLOCATION.md)
     redis_url: RedisDsn = Field(default="redis://localhost:6379/14")
