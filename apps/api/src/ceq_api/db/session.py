@@ -35,6 +35,11 @@ async def init_db() -> None:
         pool_size=settings.database_pool_size,
         max_overflow=settings.database_max_overflow,
         pool_pre_ping=True,
+        # pgbouncer (transaction pooling) compatibility: unnamed prepared
+        # statements are per-transaction and pool-safe; named-cache entries
+        # break when transactions land on different server connections.
+        # Harmless single extra round-trip when connecting direct.
+        connect_args={"statement_cache_size": 0},
     )
 
     _session_factory = async_sessionmaker(

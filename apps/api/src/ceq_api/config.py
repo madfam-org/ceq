@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     # of ~8. Raise per-env via DATABASE_POOL_SIZE / DATABASE_MAX_OVERFLOW
     # (no env prefix configured), not by editing code. (Same pattern as
     # fortuna and janua.)
+    # Set when the runtime routes through pgbouncer (transaction pooling):
+    # migrations (ArgoCD PreSync job -> alembic) must keep a DIRECT postgres
+    # connection. Unset => alembic uses database_url (direct deployments
+    # unchanged).
+    direct_database_url: str | None = Field(default=None)
     database_pool_size: int = Field(default=5)
     database_max_overflow: int = Field(default=5)
 
