@@ -70,13 +70,13 @@ resources:
 # `ghcr.io/madfam-org/ceq-{api,studio,worker}:latest`; kustomize rewrites
 # those mutable references to the immutable digest entries below.
 images:
-- digest: sha256:6a24a662cd0eff7ab031e556780b26f07a3d1410fd49273c63c23cb92bd7c4a0
+- digest: sha256:ec4bc1f843a7e85cee0e9e48ce83afbd736c30692664a7dab574611636711b9a
   name: ghcr.io/madfam-org/ceq-api
   newName: ghcr.io/madfam-org/ceq-api
-- digest: sha256:625196f8d645efff1459da55587cf534fc289740f7b4da7bbd2927501302bb12
+- digest: sha256:0cd057ebe5716c221bdd50b64026264841aedc4945e8e67018c3616fa2c47db8
   name: ghcr.io/madfam-org/ceq-studio
   newName: ghcr.io/madfam-org/ceq-studio
-- digest: sha256:0b6ffdf7747cd8ab5fc33cf3ca85a84f424baf43fcc84164a58c7af4b475767f
+- digest: sha256:d23ea14c5a5092d1a764e945d2ee2013aa76ae8f01e5d983742f0cbe9a1d3f8f
   name: ghcr.io/madfam-org/ceq-worker
   newName: ghcr.io/madfam-org/ceq-worker
 
