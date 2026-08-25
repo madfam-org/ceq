@@ -429,7 +429,25 @@ class QueueConsumer:
 
 
 async def main() -> None:
-    """Main entry point for queue consumer."""
+    """Main entry point for the worker.
+
+    Dispatches on configuration:
+
+    - ``CEQ_LEASE_URL`` + worker service credentials set -> **lease mode**, the
+      HTTPS pull path for external GPU boxes (``ceq_worker.lease``). Redis is
+      never contacted for job intake, which is what lets the queue stay
+      cluster-internal.
+    - Otherwise -> **Redis mode**, unchanged, the default for in-cluster workers.
+
+    Both modes contend on the same ``ceq:jobs:pending`` list, so they can run
+    side by side during a migration without double-processing a job.
+    """
+    if settings.lease_mode_enabled:
+        from ceq_worker.lease import main as lease_main
+
+        await lease_main()
+        return
+
     consumer = QueueConsumer()
     await consumer.initialize()
 

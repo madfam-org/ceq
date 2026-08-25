@@ -100,6 +100,36 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Worker job-lease API (`/v1/worker/*`).
+    #
+    # SEPARATE scope from `service_principal_scope` on purpose. `ceq:render` is
+    # the *submit* capability handed to batch drivers (fashion-cabinet, the
+    # studio's own machine client); `ceq:worker` is the *execute* capability
+    # handed to GPU workers. They are different trust levels: a render client
+    # holds someone's workload budget, a worker client holds every tenant's job
+    # payloads. Splitting them means leaking a batch-driver secret cannot turn
+    # into "read and complete arbitrary users' jobs", and a compromised Vast
+    # instance cannot enqueue billable work. Neither scope implies the other —
+    # `get_worker_principal` checks ONLY `worker_lease_scope`.
+    worker_lease_enabled: bool = True
+    worker_lease_scope: str = Field(
+        default="ceq:worker",
+        validation_alias=AliasChoices("WORKER_LEASE_SCOPE", "CEQ_WORKER_LEASE_SCOPE"),
+    )
+    # Visibility timeout: seconds a lease survives without a heartbeat before the
+    # reaper returns the job to `ceq:jobs:pending`. Must exceed the worker's
+    # heartbeat interval by a comfortable margin — a Vast instance doing a cold
+    # model pull can stall well past a minute.
+    worker_lease_ttl_seconds: int = Field(default=300, ge=10, le=3600)
+    # Max wall-clock a single lease may be extended to across heartbeats. Bounds
+    # a wedged-but-heartbeating worker so a job cannot be held forever.
+    worker_lease_max_seconds: int = Field(default=3600, ge=60)
+    # Delivery attempts before a failed job is dead-lettered instead of requeued.
+    worker_lease_max_attempts: int = Field(default=3, ge=1, le=10)
+    # Service principals executing jobs get their own limiter ceiling: a lease
+    # poll loop is far chattier than a submit call.
+    rate_limit_worker_lease: str = "600/minute"
+
     # R2 Storage (Cloudflare)
     r2_endpoint: str = ""
     r2_access_key: str = ""

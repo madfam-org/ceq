@@ -13,6 +13,7 @@ from ceq_api.routers import (
     render,
     synthesis,
     templates,
+    worker,
     workflows,
 )
 
@@ -29,5 +30,6 @@ __all__ = [
     "render",
     "synthesis",
     "templates",
+    "worker",
     "workflows",
 ]

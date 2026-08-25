@@ -51,6 +51,55 @@ class Settings(BaseSettings):
     api_job_completion_retry_backoff_seconds: float = 1.0
     job_completion_dead_letter_key: str = "ceq:jobs:completion:dead"
 
+    # --- Lease mode (HTTPS job pull) -------------------------------------
+    #
+    # When `lease_url` AND the service credentials are set, `ceq-worker` pulls
+    # jobs from `POST {lease_url}/v1/worker/lease` over authenticated HTTPS
+    # instead of connecting to Redis. This is what lets a Vast.ai instance run
+    # without `ceq:jobs:pending` being exposed on the public internet.
+    #
+    # Redis mode remains the DEFAULT and is completely untouched: an in-cluster
+    # worker with no CEQ_LEASE_URL behaves exactly as before.
+    lease_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("CEQ_LEASE_URL", "LEASE_URL"),
+    )
+    # Janua confidential client used to mint the `ceq:worker` token. This is a
+    # DIFFERENT client from any `ceq:render` batch driver — executing jobs and
+    # submitting jobs are separate capabilities.
+    janua_token_url: str = Field(
+        default="https://auth.madfam.io/api/v1/oauth/token",
+        validation_alias=AliasChoices("CEQ_JANUA_TOKEN_URL", "JANUA_TOKEN_URL"),
+    )
+    janua_client_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("CEQ_WORKER_CLIENT_ID", "JANUA_CLIENT_ID"),
+    )
+    janua_client_secret: str = Field(
+        default="",
+        validation_alias=AliasChoices("CEQ_WORKER_CLIENT_SECRET", "JANUA_CLIENT_SECRET"),
+    )
+    janua_scope: str = Field(
+        default="ceq:worker",
+        validation_alias=AliasChoices("CEQ_WORKER_SCOPE", "JANUA_SCOPE"),
+    )
+    janua_audience: str = Field(
+        default="",
+        validation_alias=AliasChoices("CEQ_WORKER_AUDIENCE", "JANUA_AUDIENCE"),
+    )
+    # Re-mint this many seconds BEFORE `exp` so a long request never starts with
+    # a token that expires mid-flight.
+    token_refresh_leeway_seconds: int = 60
+    # Idle backoff between empty lease polls (the API answers 204 immediately;
+    # this is what stops an empty queue becoming a hot loop).
+    lease_poll_interval_seconds: float = 5.0
+    lease_request_timeout_seconds: float = 30.0
+    # Requested visibility timeout. The API clamps this to its own ceiling.
+    lease_ttl_seconds: int = 300
+    # Heartbeat cadence is taken from the API's response; this is the fallback
+    # when the response omits it.
+    lease_heartbeat_interval_seconds: int = 60
+
     # R2 Storage
     r2_endpoint: str = ""
     r2_access_key: str = ""
@@ -109,6 +158,16 @@ class Settings(BaseSettings):
     def external_worker_api_url(self) -> str:
         """API URL reachable from external GPU workers."""
         return self.worker_api_url or self.api_url
+
+    @property
+    def lease_mode_enabled(self) -> bool:
+        """Whether this worker should pull jobs over HTTPS instead of Redis.
+
+        All three of URL + client id + secret are required: a half-configured
+        lease setup must fall back to Redis mode loudly rather than silently
+        starting a worker that can never authenticate.
+        """
+        return bool(self.lease_url and self.janua_client_id and self.janua_client_secret)
 
 
 @lru_cache
