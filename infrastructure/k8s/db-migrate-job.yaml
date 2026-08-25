@@ -63,6 +63,7 @@ spec:
             - |
               set -eu
               : "${DATABASE_URL:?DATABASE_URL missing from ceq-secrets}"
+              : "${DIRECT_DATABASE_URL:?DIRECT_DATABASE_URL missing from ceq-secrets — DDL must not run through pgbouncer}"
               : "${REDIS_URL:?REDIS_URL missing from ceq-secrets}"
               : "${R2_ENDPOINT:?R2_ENDPOINT missing from ceq-secrets}"
               : "${R2_ACCESS_KEY:?R2_ACCESS_KEY missing from ceq-secrets}"
@@ -83,6 +84,18 @@ spec:
                 secretKeyRef:
                   name: ceq-secrets
                   key: DATABASE_URL
+            # DDL stays on a DIRECT postgres:5432 session — alembic prefers
+            # this over DATABASE_URL (apps/api/src/ceq_api/alembic/env.py).
+            # Transaction pooling breaks session-scoped migration state
+            # (advisory locks, multi-statement DDL transactions). Rendered by
+            # the ExternalSecret from Vault's untouched value; without this
+            # key alembic would have silently run migrations through the
+            # pooler once DATABASE_URL was flipped.
+            - name: DIRECT_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-secrets
+                  key: DIRECT_DATABASE_URL
             - name: REDIS_URL
               valueFrom:
                 secretKeyRef:

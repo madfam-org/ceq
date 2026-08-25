@@ -1,5 +1,6 @@
 """Async database session management with SQLAlchemy."""
 
+import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -11,6 +12,9 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from ceq_api.config import get_settings
+from ceq_api.db.url import is_pooled_url, normalize_async_database_url
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -27,18 +31,40 @@ async def init_db() -> None:
     """
     global _engine, _session_factory
 
+    # The runtime URL is rendered by the ExternalSecret template, which rewrites
+    # only host:port and passes any Vault-held query string through verbatim.
+    # asyncpg forwards unknown URL query params into connect() as kwargs, so a
+    # stray `?pgbouncer=true` / `?sslmode=require` is a hard connect failure —
+    # every checkout raises, /ready goes database:error and all DB routes 500.
+    # Normalize before the engine ever sees it. See ceq_api/db/url.py.
+    raw_url = str(settings.database_url)
+    db_url, dropped = normalize_async_database_url(raw_url)
+    if dropped:
+        logger.warning(
+            "DATABASE_URL carried asyncpg-incompatible query params %s; "
+            "stripped before connect (pgbouncer-safe normalization)",
+            sorted(set(dropped)),
+        )
+
     # Pool caps come from settings (env-overridable), never hardcoded here —
     # budget rationale on the fields in config.py.
     _engine = create_async_engine(
-        str(settings.database_url),
+        db_url,
         echo=settings.debug,
         pool_size=settings.database_pool_size,
         max_overflow=settings.database_max_overflow,
         pool_pre_ping=True,
-        # pgbouncer (transaction pooling) compatibility: unnamed prepared
-        # statements are per-transaction and pool-safe; named-cache entries
-        # break when transactions land on different server connections.
-        # Harmless single extra round-trip when connecting direct.
+        # pgbouncer (transaction pooling) compatibility.
+        #
+        # statement_cache_size=0 disables asyncpg's *named* prepared-statement
+        # cache. Under transaction pooling a server connection is handed to a
+        # different client between transactions and pgbouncer issues DISCARD
+        # ALL, so any named statement asyncpg believes it prepared is gone —
+        # every reuse would raise InvalidSQLStatementName.
+        #
+        # server_settings is deliberately NOT set: pgbouncer rejects startup
+        # parameters outside its ignore_startup_parameters allowlist with
+        # ProtocolViolationError, which fails the connection outright.
         connect_args={"statement_cache_size": 0},
     )
 
@@ -49,10 +75,10 @@ async def init_db() -> None:
         autoflush=False,
     )
 
-    # Extract host from URL for logging
-    db_url = str(settings.database_url)
+    # Extract host from URL for logging (never the credentials)
     host_part = db_url.split("@")[1].split("/")[0] if "@" in db_url else "localhost"
-    print(f"   Database connected: {host_part}")
+    route = "pooled/pgbouncer" if is_pooled_url(db_url) else "direct"
+    print(f"   Database connected: {host_part} ({route})")
 
 
 async def close_db() -> None:
