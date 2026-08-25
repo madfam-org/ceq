@@ -47,8 +47,10 @@ def _load_builtins() -> None:
     from ceq_api.render.renderers.audio_tone_beep import ToneBeepRenderer
     from ceq_api.render.renderers.card import CardStandardRenderer
     from ceq_api.render.renderers.card_plate_3d import CardPlateRenderer
+    from ceq_api.render.renderers.hyperobject_card import HyperobjectCardRenderer
 
     registry.register(CardStandardRenderer())
+    registry.register(HyperobjectCardRenderer())
     registry.register(ToneBeepRenderer())
     registry.register(CardPlateRenderer())
 
