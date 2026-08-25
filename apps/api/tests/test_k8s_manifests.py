@@ -117,6 +117,45 @@ def test_network_policy_allows_janua_egress() -> None:
     assert "port: 8080" in manifest
 
 
+# --- pgbouncer adoption (move 2) contracts -------------------------------
+#
+# Backstop for the 2026-08-24 outage. The runtime DATABASE_URL is rendered
+# through the pooler while DDL must stay on a direct 5432 session.
+
+
+def test_migration_job_receives_direct_database_url() -> None:
+    """Alembic prefers DIRECT_DATABASE_URL; the Job must actually supply it.
+
+    Without this env the PreSync migrate Job would fall through to the pooled
+    DATABASE_URL and run DDL through transaction pooling.
+    """
+    manifest = (REPO_ROOT / "infrastructure/k8s/db-migrate-job.yaml").read_text()
+
+    assert "- name: DIRECT_DATABASE_URL" in manifest
+    assert "key: DIRECT_DATABASE_URL" in manifest
+
+
+def test_external_secret_renders_both_pooled_and_direct_urls() -> None:
+    manifest = (REPO_ROOT / "infrastructure/k8s/external-secret.yaml").read_text()
+
+    assert "DIRECT_DATABASE_URL:" in manifest
+    assert "pgbouncer.data.svc.cluster.local:6432" in manifest
+    # mergePolicy must stay Merge or the non-templated keys vanish.
+    assert "mergePolicy: Merge" in manifest
+
+
+def test_external_secret_host_rewrite_is_namespace_agnostic() -> None:
+    """A plain string `replace` silently no-op'd on other host spellings.
+
+    The rewrite must anchor on the postgres service host pattern so a Vault
+    value in any namespace (or without an explicit port) still flips.
+    """
+    manifest = (REPO_ROOT / "infrastructure/k8s/external-secret.yaml").read_text()
+
+    assert "regexReplaceAll" in manifest
+    assert 'replace "postgres.data.svc.cluster.local:5432"' not in manifest
+
+
 # --------------------------------------------------------------------------
 # Kyverno probe + image-pin contract (R7, docs/DOCS_EVIDENCE_AUDIT_2026-06-02)
 # --------------------------------------------------------------------------
