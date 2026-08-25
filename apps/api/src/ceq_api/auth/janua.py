@@ -790,6 +790,92 @@ async def get_service_or_user(
     return principal
 
 
+async def get_worker_principal(
+    request: Request,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Depends(bearer_scheme),
+    ] = None,
+) -> JanuaUser:
+    """Authenticate a GPU **worker** service principal for ``/v1/worker/*``.
+
+    This is deliberately the narrowest dependency in the codebase:
+
+    - Only ``client_credentials`` tokens are accepted. A human token is a 403
+      even for an admin — leasing is a machine capability, and a browser session
+      reaching this surface means something is wired wrong, not that a person
+      should be allowed to claim another tenant's job.
+    - The token must carry ``worker_lease_scope`` (default ``ceq:worker``),
+      which is a DIFFERENT scope from ``service_principal_scope``
+      (``ceq:render``). A render client holds a submit budget; a worker client
+      reads every tenant's job payloads and writes their results. Neither
+      implies the other, so this check never consults ``ceq:render``.
+
+    Audience binding (``JANUA_AUDIENCE``) happens upstream in the JWKS decode,
+    so a worker token minted for another product never reaches this function.
+
+    Note the deliberate asymmetry with ``get_current_user`` /
+    ``get_service_or_user``: those return a mock principal when
+    ``janua_enabled`` is False (a local-development convenience). This one does
+    NOT. Leasing reads and writes every tenant's job payloads, and this surface
+    is reachable from the public internet by design — an auth-disabled
+    deployment must fail closed here, not hand out jobs to anyone who asks.
+    Local development against the lease API uses a real Janua dev client.
+    """
+    if not settings.worker_lease_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Worker lease API is disabled (WORKER_LEASE_ENABLED=false).",
+        )
+
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Signal lost. Worker credentials required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    principal = await validate_token(credentials.credentials)
+
+    if principal is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials. Signal corrupted.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not principal.is_service_principal:
+        logger.warning(
+            "Human principal %s denied on worker lease surface", principal.id
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "The worker lease surface accepts machine credentials only. "
+                "Mint a client_credentials token with the worker scope."
+            ),
+        )
+
+    required = settings.worker_lease_scope
+    if required and not principal.has_scope(required):
+        logger.warning(
+            "Service principal %s denied on worker lease surface: missing scope "
+            "%r (has %s)",
+            principal.client_id,
+            required,
+            sorted(principal.scopes),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Service credentials lack the required scope {required!r}.",
+        )
+
+    # Own limiter bucket, keyed by client_id — a lease poll loop is far chattier
+    # than a submit call and must not evict human callers.
+    request.state.service_client_id = principal.client_id
+    return principal
+
+
 async def get_optional_user(
     credentials: Annotated[
         HTTPAuthorizationCredentials | None,

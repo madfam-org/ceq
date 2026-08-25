@@ -53,6 +53,7 @@ from ceq_api.routers import (  # noqa: E402
     render,
     synthesis,
     templates,
+    worker,
     workflows,
 )
 
@@ -211,6 +212,10 @@ app.include_router(operations.router, prefix="/v1/operations", tags=["operations
 app.include_router(synthesis.router, prefix="/v1/synthesis", tags=["synthesis"])
 app.include_router(printability.router, prefix="/v1/printability", tags=["printability"])
 app.include_router(intent.router, prefix="/v1/intent", tags=["intent"])
+# GPU workers running OUTSIDE the cluster (Vast.ai) lease jobs here over
+# authenticated HTTPS instead of connecting to Redis directly. Gated on a Janua
+# service principal holding the dedicated `ceq:worker` scope.
+app.include_router(worker.router, prefix="/v1/worker", tags=["worker"])
 
 
 @app.get("/")

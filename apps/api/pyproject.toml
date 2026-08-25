@@ -37,6 +37,9 @@ dev = [
     "mypy>=1.8.0",
     "httpx>=0.27.0",
     "aiosqlite>=0.20.0",  # In-memory SQLite for tests
+    # [lua] extra is REQUIRED: the worker job-lease claim/reap paths are Lua
+    # scripts, and plain fakeredis answers EVAL with "unknown command".
+    "fakeredis[lua]>=2.21.0",
 ]
 
 [build-system]

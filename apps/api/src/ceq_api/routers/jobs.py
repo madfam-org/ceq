@@ -384,9 +384,33 @@ async def report_job_outputs(
 
     This endpoint is internal to CEQ workers. It makes job completion durable in
     PostgreSQL while Redis remains the real-time status transport.
+
+    Redis-mode workers reach this over a shared-secret header. Lease-mode
+    workers reach the same logic through ``/v1/worker/jobs/{id}/complete``,
+    which authenticates with a Janua ``ceq:worker`` token and calls
+    ``persist_job_completion`` directly. One implementation, two front doors.
     """
     _validate_worker_callback_token(x_ceq_worker_token)
+    return await persist_job_completion(job_id, data, db)
 
+
+async def persist_job_completion(
+    job_id: UUID,
+    data: JobCompletionReport,
+    db: AsyncSession,
+) -> JobCompletionReportResponse:
+    """Make a worker's terminal report durable, whatever transport delivered it.
+
+    This is the single definition of "a job finished": it writes job status and
+    timestamps, upserts outputs on ``(job_id, storage_uri)`` (which is what makes
+    a re-run after a lost lease idempotent rather than duplicating rows), refunds
+    credits on failure/cancel, fires the user's completion webhook, and mirrors
+    the final state into Redis for pollers and WebSocket listeners.
+
+    Extracted from ``report_job_outputs`` so the HTTPS lease surface
+    (``/v1/worker/*``) shares it verbatim instead of growing a parallel copy that
+    could drift on billing or webhook behavior.
+    """
     allowed_statuses = {status_value.value for status_value in JobStatusEnum}
     if data.status not in allowed_statuses:
         raise HTTPException(
