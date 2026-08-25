@@ -1,0 +1,63 @@
+# Kyverno PolicyException — CEQ batch Jobs are exempt from readiness probes.
+#
+# WHY THIS EXISTS
+# The cluster's `require-probes` ClusterPolicy matches `kind: Pod` and excludes
+# only namespaces labelled `enclii.dev/type` in [infrastructure, build, data].
+# The `ceq` namespace is `enclii.dev/type: application`, so every CEQ pod —
+# including the pods created by run-to-completion Jobs — is evaluated, and each
+# probe-less Job pod produces a policy report. Those reports were part of the
+# probe violations counted in docs/DOCS_EVIDENCE_AUDIT_2026-06-02.md.
+#
+# WHY AN EXCEPTION RATHER THAN A PROBE
+# `ceq-db-migrate` runs `alembic upgrade head` and exits; `ceq-seed-templates`
+# seeds the DB and exits. A readiness probe on a container that is designed to
+# terminate is meaningless — nothing routes traffic to a Job pod — and adding
+# one only creates new ways for a migration to be marked unhealthy while it is
+# legitimately doing work. The long-running Deployments (ceq-api, ceq-studio,
+# ceq-worker, ceq-orchestrator) all carry real probes instead; this exception is
+# deliberately scoped so it can never cover them.
+#
+# This mirrors the pattern the platform already uses for its own bounded jobs
+# (enclii/infra/k8s/production/replicaset-cleanup-cronjob.yaml and
+# enclii/apps/status/k8s/*/cronjob-policy-exception.yaml), including the
+# `autogen-*` rule names — Kyverno generates those variants for Pod-producing
+# controllers, and omitting them leaves the Job-owned pods still reported.
+#
+# NOTE: `require-probes` is validationFailureAction: Audit, so these were
+# reports, never blocked applies. This exception removes the noise so a real
+# probe regression is visible instead of buried.
+apiVersion: kyverno.io/v2beta1
+kind: PolicyException
+metadata:
+  name: ceq-batch-job-probe-exceptions
+  namespace: ceq
+  labels:
+    app: ceq
+    app.kubernetes.io/name: ceq
+    app.kubernetes.io/component: batch
+    app.kubernetes.io/part-of: madfam-platform
+  annotations:
+    policies.kyverno.io/description: >-
+      CEQ database migration and template seeding are bounded one-shot Jobs.
+      Readiness probes are not meaningful for containers that exit after the
+      migration or seed completes.
+    policies.kyverno.io/severity: low
+spec:
+  match:
+    any:
+      - resources:
+          kinds:
+            - Pod
+            - Job
+          # Name globs cover the Job plus the pods it generates
+          # (`ceq-db-migrate-<hash>`).
+          names:
+            - "ceq-db-migrate*"
+            - "ceq-seed-templates*"
+          namespaces:
+            - ceq
+  exceptions:
+    - policyName: require-probes
+      ruleNames:
+        - require-readiness-probe
+        - autogen-require-readiness-probe

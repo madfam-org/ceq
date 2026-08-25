@@ -54,6 +54,9 @@ resources:
 - external-secret.yaml
 - network-policies.yaml
 - observability.yaml
+# Kyverno exception for the bounded one-shot Jobs (migration + seed), which
+# cannot carry meaningful readiness probes. See policy-exceptions.yaml.
+- policy-exceptions.yaml
 
 # Image customization. CI's deploy.yaml workflow rewrites these entries
 # via `kustomize edit set image <name>=<name>@sha256:...` on every build,
@@ -69,6 +72,21 @@ resources:
 # Keep `name` and `newName` in dash-form. Deployment manifests reference
 # `ghcr.io/madfam-org/ceq-{api,studio,worker}:latest`; kustomize rewrites
 # those mutable references to the immutable digest entries below.
+#
+# WHY `:latest` STAYS IN THE BASE MANIFESTS (verified 2026-08-24):
+# Kyverno's `disallow-latest-tag` and `require-image-digest` both match
+# `kind: Pod` — they evaluate the RENDERED image, after kustomize applies the
+# digests below, not the literal text of the Deployment files. Rendering this
+# bundle yields 5/5 containers as `@sha256:...` and 0 `:latest`, so both
+# policies already pass. The `:latest` strings here are placeholder join-keys
+# for `kustomize edit set image`, never what the cluster pulls.
+#
+# Do NOT "fix" this by hardcoding a digest into the Deployment files. Kustomize
+# would still override it (tested), so the hardcoded value would be dead but
+# authoritative-looking config: a second place digests appear that the GitOps
+# workflow never updates, guaranteed to drift from the real pin below.
+# `apps/api/tests/test_k8s_manifests.py::test_rendered_manifests_*` pins the
+# rendered-output invariant so this cannot regress silently.
 images:
 - digest: sha256:ec4bc1f843a7e85cee0e9e48ce83afbd736c30692664a7dab574611636711b9a
   name: ghcr.io/madfam-org/ceq-api

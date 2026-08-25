@@ -1,19 +1,55 @@
+# Enclii manifest — ceq (Creative Entropy Quantized).
+#
+# Was STATUS-ONLY until 2026-08-24. The status block alone made every Enclii
+# CLI/API verb that parses a Service document fail schema validation with
+# `spec.build.type: must be one of: auto, dockerfile, buildpack` — which is
+# why `enclii service-secret` could not operate on CEQ during the 2026-06-02
+# evidence audit (docs/DOCS_EVIDENCE_AUDIT_2026-06-02.md). The status entries
+# below are byte-for-byte the ones that were already live; everything else is
+# additive, so status.madfam.io projection is unchanged.
+#
+# DEPLOY PATH IS UNCHANGED. CEQ deploys through GitOps: .github/workflows/
+# deploy.yaml builds + pushes to GHCR, pins digests into
+# infrastructure/k8s/kustomization.yaml, and ArgoCD's `ceq-services`
+# application reconciles. This manifest describes the services so Enclii
+# tooling can *read* CEQ (secrets, domains, status, network); it does not
+# switch CEQ onto the Enclii build/deploy pipeline. Ports and health paths
+# are therefore declared to match the live k8s manifests exactly, not to
+# replace them — see the per-service notes.
+#
+# Port block 5800-5899 (PORT_ALLOCATION.md): api 5800, studio 5801,
+# workers 5810-5819.
+# TWO READERS, TWO DOCUMENTS — do not collapse this file.
+#
+#   * switchyard-api (status projection, domain registration) parses ONLY the
+#     FIRST document and returns early when it is `kind: Project`
+#     (internal/manifest/enclii_yaml.go::ParseEncliiYAML). So `status:`,
+#     `network:`, and the routable hostnames MUST live in the Project doc
+#     below, or status.madfam.io silently loses its CEQ entries.
+#   * the CLI (packages/cli/internal/spec) decodes EVERY document and skips
+#     non-Service ones, selecting by `--service <metadata.name>`. So
+#     `build:` / `runtime:` must live in the per-service documents.
+#
+# The two are complementary, not duplicated: the Project doc declares WHERE
+# traffic goes, the Service docs declare HOW each image is built and run.
 apiVersion: enclii.dev/v1
-kind: Service
+kind: Project
 metadata:
   name: ceq
-  project: ceq
 spec:
-  # Status-only declaration. CEQ's runtime + network sections will be
-  # added when the service is fully onboarded for deploy through the
-  # platform pipeline.
-  #
-  # Until then, the entries below are the zero-touch source-of-truth
-  # for status.madfam.io. The platform regenerate handler
+  # Manual promotion: CEQ burns real GPU spend (Vast.ai) on the render path
+  # and a bad promote costs money, not just uptime.
+  promotion:
+    pattern: manual
+    min_soak_minutes: 15
+    require_smoke_pass: true
+
+  # Status-page projection. These entries are the zero-touch source-of-truth
+  # for status.madfam.io; the platform regenerate handler
   # (`POST /v1/admin/status/regenerate`, enclii#162) projects them into
-  # `apps/status/k8s/madfam/configmap.yaml`. This replaces the manual
-  # configmap edit that landed in enclii#160 (zero-touch policy
-  # violation, see internal-devops/rfcs/0014 for the policy).
+  # apps/status/k8s/madfam/configmap.yaml. The "CEQ Studio" entry is preserved
+  # byte-for-byte from the previous status-only manifest so the projection does
+  # not change shape; the API entry is the new second public surface.
   status:
     enabled: true
     entries:
@@ -22,3 +58,221 @@ spec:
         group: CEQ
         family: Content & Creative
         description: ComfyUI creative engine
+      - name: CEQ API
+        url: https://api.ceq.lol/health
+        href: https://api.ceq.lol
+        group: CEQ
+        family: Content & Creative
+        description: ceq API — orchestration and render pipeline
+
+  # Routable hostnames, grouped by the service that answers them. The worker
+  # appears in neither list: it has no ingress and no domain.
+  services:
+    - name: ceq-studio
+      port: 5801
+      domains:
+        - host: ceq.lol
+          primary: true
+        - host: app.ceq.lol
+    - name: ceq-api
+      port: 5800
+      domains:
+        - host: api.ceq.lol
+        - host: ws.ceq.lol
+
+  # NetworkPolicy generation input. NO NetworkPolicy is generated into this
+  # repo from here today — infrastructure/k8s/network-policies.yaml is the
+  # live source (ceq#28). This block declares the same intent so the two can
+  # be reconciled rather than drifting silently.
+  network:
+    services:
+      - name: ceq-api
+        port: 5800
+        ingress: [cloudflare-tunnel]
+        # janua: in-cluster JWKS fetch (public auth.madfam.io returns 403 from
+        # cluster egress). https: Cloudflare R2 + Vast.ai. pgbouncer: runtime
+        # DATABASE_URL routes through pgbouncer (ceq#72).
+        egress: [dns, https, postgres, pgbouncer, redis, janua]
+      - name: ceq-studio
+        port: 5801
+        ingress: [cloudflare-tunnel]
+        egress: [dns, https, janua]
+      - name: ceq-worker
+        port: 5810
+        egress: [dns, https, redis]
+---
+# ceq-api — FastAPI orchestration + render pipeline. The public API surface
+# (api.ceq.lol) and the in-cluster target for studio + workers.
+apiVersion: enclii.dev/v1
+kind: Service
+metadata:
+  name: ceq-api
+  project: ceq
+  description: ceq API — workflow orchestration, job queue, and the deterministic R2-cached render pipeline
+# Status entries live in the Project document above (switchyard reads only the
+# first document). Do not re-add a `status:` block here — it would be dead
+# config that looks authoritative.
+spec:
+  build:
+    type: dockerfile
+    dockerfile: apps/api/Dockerfile
+    context: ./apps/api
+    source:
+      git:
+        repository: https://github.com/madfam-org/ceq
+        branch: main
+        # GitOps owns the rollout (ArgoCD reconciles digest pins committed by
+        # deploy.yaml). Enclii must not race it with a second deploy path.
+        autoDeploy: false
+
+  runtime:
+    port: 5800
+    replicas: 2
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "384Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+    # /health is liveness (no dependency checks). /ready validates Postgres +
+    # Redis and is what the k8s readinessProbe uses.
+    healthCheck: /health
+
+  domains:
+    - name: api.ceq.lol
+      environment: production
+      tlsEnabled: true
+    # WebSocket job-progress surface — same Service, same port.
+    - name: ws.ceq.lol
+      environment: production
+      tlsEnabled: true
+
+  network:
+    services:
+      - name: ceq-api
+        port: 5800
+        ingress: [cloudflare-tunnel]
+        # janua: in-cluster JWKS fetch (public auth.madfam.io returns 403 from
+        # cluster egress). https: Cloudflare R2 + Vast.ai. pgbouncer: runtime
+        # DATABASE_URL routes through pgbouncer (ceq#72).
+        egress: [dns, https, postgres, pgbouncer, redis, janua]
+
+  dependencies:
+    - platform: janua
+      reason: identity — JWT validation for the API (issuer auth.madfam.io, audience ceq-api)
+    - platform: enclii
+      reason: hosting, TLS, domains, secrets, shared Postgres + Redis
+---
+# ceq-studio — Next.js frontend. Serves BOTH the public landing (ceq.lol) and
+# the auth-gated studio (app.ceq.lol) from one Deployment.
+apiVersion: enclii.dev/v1
+kind: Service
+metadata:
+  name: ceq-studio
+  project: ceq
+  description: ceq Studio — Next.js landing + auth-gated creative workspace
+spec:
+  build:
+    type: dockerfile
+    dockerfile: apps/studio/Dockerfile
+    # Monorepo build: context is the repo root (pnpm workspace deps), NOT the
+    # app dir. Matches deploy.yaml's `context: .` + `file: ./apps/studio/Dockerfile`.
+    context: .
+    source:
+      git:
+        repository: https://github.com/madfam-org/ceq
+        branch: main
+        autoDeploy: false
+
+  runtime:
+    port: 5801
+    replicas: 2
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "128Mi"
+      limits:
+        cpu: "250m"
+        memory: "256Mi"
+    # Next.js app router serves `/` for both hosts; there is no dedicated
+    # health route, so `/` is the honest probe target (matches the k8s probes).
+    healthCheck: /
+
+  domains:
+    - name: ceq.lol
+      environment: production
+      tlsEnabled: true
+    - name: app.ceq.lol
+      environment: production
+      tlsEnabled: true
+
+  network:
+    services:
+      - name: ceq-studio
+        port: 5801
+        ingress: [cloudflare-tunnel]
+        # janua: OAuth token exchange from the server-side route handlers.
+        egress: [dns, https, janua]
+
+  dependencies:
+    - platform: janua
+      reason: identity — OAuth client jnc_2EJwBz8xGVsGYOO2r3ck5CJH7YrQw4Yk (authorization_code + refresh_token)
+    - platform: enclii
+      reason: hosting, TLS, domains, secrets
+---
+# ceq-worker — headless GPU job consumer. NO INGRESS and NO DOMAIN: it reads
+# Redis DB 14 and calls back into ceq-api; nothing routes to it.
+#
+# replicas: 0 is deliberate and load-bearing — in-cluster GPU workers are
+# blocked until a Hetzner GPU node + nvidia device plugin exist. The live
+# production GPU path is ceq-orchestrator → Vast.ai. See
+# docs/GPU_COMPUTE_STRATEGY.md and worker-deployment.yaml.
+apiVersion: enclii.dev/v1
+kind: Service
+metadata:
+  name: ceq-worker
+  project: ceq
+  description: ceq worker — ComfyUI GPU job consumer (Redis DB 14); scaled by KEDA, 0 replicas until GPU nodes exist
+spec:
+  build:
+    type: dockerfile
+    dockerfile: apps/workers/Dockerfile
+    context: ./apps/workers
+    source:
+      git:
+        repository: https://github.com/madfam-org/ceq
+        branch: main
+        autoDeploy: false
+
+  runtime:
+    # Port block 5810-5819 per PORT_ALLOCATION.md. The worker binds nothing —
+    # `spec.runtime.port` is a required field (validator rejects <=0), so this
+    # declares the block's first port as its nominal identity. The k8s
+    # Deployment carries an explicit `ports: []` to match.
+    port: 5810
+    replicas: 0
+    minReplicas: 0
+    # Ceiling mirrors the KEDA ScaledObject's maxReplicaCount.
+    maxReplicas: 4
+    resources:
+      requests:
+        cpu: "4"
+        memory: "16Gi"
+      limits:
+        cpu: "8"
+        memory: "32Gi"
+    # No HTTP surface: the queue consumer is probed by an exec Redis PING in
+    # the k8s Deployment. `healthCheck` is intentionally omitted rather than
+    # pointed at a path that does not exist.
+
+  # No `domains:` and no `ingress:` — the worker is not routable.
+  network:
+    services:
+      - name: ceq-worker
+        port: 5810
+        egress: [dns, https, redis]
+
+  dependencies:
+    - platform: enclii
+      reason: shared Redis (DB 14) and R2 credentials
