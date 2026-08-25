@@ -15,7 +15,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Annotated, Any
-from uuid import UUID
+from uuid import UUID, uuid5
 
 import httpx
 import jwt
@@ -179,20 +179,104 @@ def _get_jwks_client() -> CachedJWKSClient | None:
 # Data model
 # ---------------------------------------------------------------------------
 
+# Namespace for deriving a stable synthetic principal id from a Janua client_id.
+# A service principal has NO row in any user table, but `JanuaUser.id` is written
+# to `jobs.user_id` / `outputs.user_id` / credit-ledger rows, so it must be a UUID
+# and it must be STABLE across token re-mints — otherwise a batch driver's own
+# jobs would become invisible to it after each ~1h token refresh. UUIDv5 over the
+# client_id gives exactly that: deterministic, collision-free, and never colliding
+# with a Janua-issued human user id (different namespace, random v4).
+SERVICE_PRINCIPAL_NAMESPACE = UUID("ce900000-0000-5ce9-9ce9-000000000001")
+
+
 @dataclass
 class JanuaUser:
-    """Authenticated user from Janua."""
+    """Authenticated principal from Janua.
+
+    Two shapes flow through this type:
+
+    - **Human user** — an authorization_code token. ``id`` is the Janua user
+      UUID (``sub``); ``client_id``/``scopes`` are None/empty.
+    - **Service principal** — a ``client_credentials`` token (machine-to-machine,
+      no browser session). ``is_service_principal`` is True, ``client_id`` holds
+      the Janua confidential-client id, ``scopes`` holds the granted scopes, and
+      ``id`` is a deterministic UUIDv5 derived from ``client_id`` (there is no
+      user row behind it — see ``SERVICE_PRINCIPAL_NAMESPACE``).
+
+    Everything user-shaped (``email``, ``org_id``, ``roles``) is still populated
+    for service principals from the token's own claims, so existing code paths
+    that read them keep working unchanged.
+    """
 
     id: UUID
     email: str
     org_id: UUID | None = None
     roles: list[str] | None = None
     entitlements: list[str] | None = None
+    # Service-principal fields. Absent/empty for human users — the additive
+    # contract is that nothing about a human token's mapping changed.
+    client_id: str | None = None
+    scopes: frozenset[str] = frozenset()
+    is_service_principal: bool = False
 
     @property
     def is_admin(self) -> bool:
         """Check if user has admin role."""
         return self.roles is not None and "admin" in self.roles
+
+    @property
+    def principal_key(self) -> str:
+        """Stable rate-limiter / logging identity for this principal.
+
+        Service principals key on ``client_id`` so they land in their own
+        limiter bucket rather than sharing the human-user bucket namespace.
+        """
+        if self.is_service_principal and self.client_id:
+            return f"service:{self.client_id}"
+        return f"user:{self.id}"
+
+    def has_scope(self, scope: str) -> bool:
+        """Whether this principal was granted ``scope``.
+
+        Human users are not scope-gated by this helper (they authorize through
+        roles/entitlements), so this only ever returns True for a scope the
+        token actually carries.
+        """
+        return scope in self.scopes
+
+
+def service_principal_id(client_id: str) -> UUID:
+    """Deterministic synthetic principal UUID for a Janua machine client."""
+    return uuid5(SERVICE_PRINCIPAL_NAMESPACE, client_id)
+
+
+def _normalize_scopes(value: Any) -> frozenset[str]:
+    """Normalize an OAuth ``scope`` claim into a set.
+
+    Janua emits a space-delimited string (RFC 6749 §3.3); some issuers emit a
+    list. Both are accepted.
+    """
+    if value is None:
+        return frozenset()
+    if isinstance(value, str):
+        return frozenset(part for part in value.split() if part)
+    if isinstance(value, Iterable) and not isinstance(value, (bytes, bytearray, dict)):
+        return frozenset(str(part).strip() for part in value if str(part).strip())
+    return frozenset()
+
+
+def _is_client_credentials_payload(payload: dict[str, Any]) -> bool:
+    """Whether a decoded Janua JWT is a machine (client_credentials) token.
+
+    Janua's ``_get_client_credentials_claims`` stamps BOTH ``token_use`` and
+    ``actor_type``; we accept either marker so a claim-set tweak upstream does
+    not silently drop machine callers to the human path (where ``UUID(sub)``
+    would blow up on ``service-account:<client_id>``).
+    """
+    return (
+        payload.get("token_use") == "client_credentials"
+        or payload.get("actor_type") == "service_account"
+    )
 
 
 def _normalize_roles(value: Any) -> list[str] | None:
@@ -321,6 +405,74 @@ async def _validate_token_introspection(token: str) -> JanuaUser | None:
 # Local JWKS RS256 validation (primary, <1ms)
 # ---------------------------------------------------------------------------
 
+class ServicePrincipalRejectedError(Exception):
+    """A verified client_credentials token could not be accepted.
+
+    Terminal: there is no user behind a machine token, so falling back to
+    introspection (a *userinfo* lookup) can never rescue it.
+    """
+
+
+def _service_principal_from_payload(payload: dict[str, Any]) -> JanuaUser | None:
+    """Map a verified Janua ``client_credentials`` payload to a service principal.
+
+    The token's signature, issuer and **audience** were already verified by the
+    caller's ``jwt.decode`` — audience is what binds the machine client to ceq
+    specifically, so a token minted for another product's audience never gets
+    this far.
+
+    Returns None (-> 401) when the machine path is disabled or the claim set is
+    unusable. Scope authorization is deliberately NOT done here: a valid machine
+    token *authenticates*, and the per-endpoint dependency
+    (``get_service_or_user``) decides *authorization* — so a scope miss surfaces
+    as a 403 rather than a 401.
+    """
+    if not settings.service_principals_enabled:
+        logger.warning(
+            "Rejected client_credentials token: service principals disabled "
+            "(SERVICE_PRINCIPALS_ENABLED=false)"
+        )
+        return None
+
+    client_id = payload.get("client_id")
+    if not client_id:
+        # Fall back to the `service-account:<client_id>` sub form.
+        sub = str(payload.get("sub") or "")
+        if sub.startswith("service-account:"):
+            client_id = sub.split(":", 1)[1]
+    if not client_id:
+        logger.warning("client_credentials token missing client_id/sub identity")
+        return None
+
+    client_id = str(client_id)
+    org_id_raw = payload.get("org_id") or payload.get("tenant_id")
+    org_id: UUID | None = None
+    if org_id_raw:
+        try:
+            org_id = UUID(str(org_id_raw))
+        except (ValueError, AttributeError, TypeError):
+            logger.debug("client_credentials token carried non-UUID org_id %r", org_id_raw)
+
+    principal = JanuaUser(
+        id=service_principal_id(client_id),
+        email=str(payload.get("email") or f"{client_id}@service.auth.madfam.io"),
+        org_id=org_id,
+        roles=_normalize_roles(payload.get("roles")),
+        entitlements=_normalize_entitlements(
+            payload.get("entitlements") or payload.get("tier")
+        ),
+        client_id=client_id,
+        scopes=_normalize_scopes(payload.get("scope")),
+        is_service_principal=True,
+    )
+    logger.debug(
+        "Token validated locally (JWKS) for service principal %s (scopes=%s)",
+        client_id,
+        sorted(principal.scopes),
+    )
+    return principal
+
+
 def _validate_token_local(token: str) -> JanuaUser | None:
     """Validate token locally using JWKS RS256 public keys.
 
@@ -369,6 +521,19 @@ def _validate_token_local(token: str) -> JanuaUser | None:
         key,
         **decode_kwargs,
     )
+
+    # --- Service principal (client_credentials) branch -------------------
+    # Machine tokens carry `sub: "service-account:<client_id>"`, which is not a
+    # UUID; they must never reach the human mapping below. This branch is
+    # TERMINAL: a machine token that this branch rejects raises
+    # ServicePrincipalRejectedError rather than returning None, so `validate_token`
+    # does not waste an introspection round-trip asking Janua's *userinfo*
+    # endpoint about a token that has no user behind it.
+    if _is_client_credentials_payload(payload):
+        principal = _service_principal_from_payload(payload)
+        if principal is None:
+            raise ServicePrincipalRejectedError
+        return principal
 
     # Extract user from JWT claims
     sub = payload.get("sub")
@@ -440,6 +605,11 @@ async def validate_token(token: str) -> JanuaUser | None:
             # JWKS was configured and decoded token but did not produce a user.
             # Fall through to introspection for claim-shape or identity
             # normalization fallback.
+        except ServicePrincipalRejectedError:
+            # Terminal by construction — a machine token has no user to look up.
+            # Not a JWKS failure, so the breaker is untouched.
+            _jwks_breaker.record_success()
+            return None
         except jwt.ExpiredSignatureError:
             logger.debug("JWT expired (local validation)")
             return None
@@ -532,7 +702,92 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # A machine token authenticates, but `get_current_user` is the *human*
+    # dependency: it backs user-specific surfaces (workflows, assets, credits,
+    # outputs, operations) where "the current user" means a person with a row.
+    # Service principals must opt in per-endpoint via `get_service_or_user`
+    # so that adding the machine path never silently widens an existing route.
+    if user.is_service_principal:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Service credentials are not accepted on this endpoint. "
+                "Machine callers are limited to the render, jobs, and template "
+                "surfaces."
+            ),
+        )
+
     return user
+
+
+async def get_service_or_user(
+    request: Request,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Depends(bearer_scheme),
+    ] = None,
+) -> JanuaUser:
+    """Authenticate a human user **or** a Janua service principal.
+
+    This is the dependency for the machine-reachable surface (render, jobs,
+    templates). Behavior:
+
+    - Human token -> identical to ``get_current_user`` (no change at all).
+    - ``client_credentials`` token -> accepted only when it carries the
+      configured scope (``SERVICE_PRINCIPAL_SCOPE``, default ``ceq:render``).
+      A valid token without that scope is a **403**, not a 401: it authenticated
+      fine, it just is not authorized here.
+
+    Audience is enforced upstream in the JWKS decode (``JANUA_AUDIENCE``), so a
+    machine token minted for a different product never reaches this check.
+    """
+    # Dev-mode / no-credentials / invalid-token handling is identical to the
+    # human path, so reuse it — but bypass its service-principal rejection.
+    if not settings.janua_enabled:
+        return JanuaUser(
+            id=UUID("00000000-0000-0000-0000-000000000001"),
+            email="dev@ceq.local",
+            org_id=None,
+            roles=["user"],
+        )
+
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Signal lost. Authentication required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    principal = await validate_token(credentials.credentials)
+
+    if principal is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials. Signal corrupted.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if principal.is_service_principal:
+        required = settings.service_principal_scope
+        if required and not principal.has_scope(required):
+            logger.warning(
+                "Service principal %s denied: missing scope %r (has %s)",
+                principal.client_id,
+                required,
+                sorted(principal.scopes),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    f"Service credentials lack the required scope {required!r}."
+                ),
+            )
+        # Surface the machine identity to the limiter key function and request
+        # logs. `request.state.user_id` stays unset for service principals so
+        # they never share the human-user limiter bucket.
+        request.state.service_client_id = principal.client_id
+
+    return principal
 
 
 async def get_optional_user(
@@ -542,14 +797,20 @@ async def get_optional_user(
     ] = None,
 ) -> JanuaUser | None:
     """
-    Get the current user if authenticated, None otherwise.
+    Get the current **human** user if authenticated, None otherwise.
 
-    Used for endpoints that work with or without auth.
+    Used for endpoints that work with or without auth. Service principals are
+    treated as anonymous here rather than as a user: an optional-auth endpoint
+    that personalizes on "is there a user?" must not start personalizing for a
+    machine client. Machine callers use ``get_service_or_user`` instead.
     """
     if credentials is None:
         return None
 
-    return await validate_token(credentials.credentials)
+    principal = await validate_token(credentials.credentials)
+    if principal is not None and principal.is_service_principal:
+        return None
+    return principal
 
 
 def require_auth(user: Annotated[JanuaUser, Depends(get_current_user)]) -> JanuaUser:

@@ -80,6 +80,26 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("JANUA_AUDIENCE", "JANUA_AUDIENCE_ID"),
     )  # e.g. ceq-api
 
+    # Janua service principals (client_credentials / machine-to-machine).
+    #
+    # Batch and machine callers cannot hold a browser session, so they mint a
+    # short-lived RS256 token from Janua's `client_credentials` grant (ADR-006,
+    # the same edge pattern as fashion-cabinet -> yantra4d). Those tokens carry
+    # `token_use: "client_credentials"`, `sub: "service-account:<client_id>"`
+    # (NOT a user UUID), `actor_type: "service_account"` and a `scope` string.
+    #
+    # A service token is accepted only when it carries `service_principal_scope`
+    # AND its audience matches `janua_audience` (audience validation happens in
+    # the normal JWKS decode). Set `service_principals_enabled=False` to hard-off
+    # the whole path — human-user auth is unaffected either way.
+    service_principals_enabled: bool = True
+    service_principal_scope: str = Field(
+        default="ceq:render",
+        validation_alias=AliasChoices(
+            "SERVICE_PRINCIPAL_SCOPE", "CEQ_SERVICE_PRINCIPAL_SCOPE"
+        ),
+    )
+
     # R2 Storage (Cloudflare)
     r2_endpoint: str = ""
     r2_access_key: str = ""
@@ -114,6 +134,11 @@ class Settings(BaseSettings):
     rate_limit_default: str = "100/minute"
     rate_limit_uploads: str = "10/minute"
     rate_limit_jobs: str = "30/minute"
+    # Service principals get their OWN limiter bucket, keyed by client_id, so a
+    # 720-object backfill cannot starve human users out of the shared default
+    # bucket. The global per-identity default (100/minute) still applies on top;
+    # this is the ceiling for the service identity specifically.
+    rate_limit_service_principal: str = "100/minute"
 
     # Security
     max_request_size_mb: int = 1  # Default max request size

@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ceq_api.auth.janua import JanuaUser, get_current_user, validate_token
+from ceq_api.auth.janua import JanuaUser, get_service_or_user, validate_token
 from ceq_api.config import get_settings
 from ceq_api.db.redis import get_redis, publish_job_update
 from ceq_api.db.session import get_db
@@ -250,7 +250,7 @@ async def _remove_pending_job(redis: Any, job_id: UUID) -> int:
 @router.get("/", response_model=JobListResponse)
 async def list_jobs(
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[JanuaUser, Depends(get_current_user)],
+    user: Annotated[JanuaUser, Depends(get_service_or_user)],
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     status_filter: str | None = Query(None, description="Filter by status"),
@@ -304,7 +304,7 @@ async def list_jobs(
 async def get_job(
     job_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[JanuaUser, Depends(get_current_user)],
+    user: Annotated[JanuaUser, Depends(get_service_or_user)],
 ) -> JobStatusResponse:
     """
     Get job status.
@@ -336,7 +336,7 @@ async def get_job(
 async def poll_job_status(
     job_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[JanuaUser, Depends(get_current_user)],
+    user: Annotated[JanuaUser, Depends(get_service_or_user)],
 ) -> JobStatusResponse:
     """
     Poll job status from Redis (faster than DB).
@@ -548,7 +548,7 @@ async def report_job_outputs(
 async def cancel_job(
     job_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[JanuaUser, Depends(get_current_user)],
+    user: Annotated[JanuaUser, Depends(get_service_or_user)],
 ) -> None:
     """
     Cancel a job.
@@ -671,6 +671,23 @@ async def stream_job_progress(
         logger.warning(f"WebSocket connection rejected for job {job_id}: no valid token")
         return
 
+    # Service principals reach this socket through the same jobs surface as the
+    # HTTP endpoints, so they answer to the same scope gate. `validate_token`
+    # only authenticates; authorization is enforced here (mirrors
+    # `get_service_or_user`, which FastAPI dependencies cannot supply to a
+    # query-param-authenticated WebSocket).
+    if user.is_service_principal:
+        required_scope = settings.service_principal_scope
+        if required_scope and not user.has_scope(required_scope):
+            await websocket.close(code=4003, reason="Insufficient scope")
+            logger.warning(
+                "WebSocket rejected for job %s: service principal %s lacks scope %r",
+                job_id,
+                user.client_id,
+                required_scope,
+            )
+            return
+
     # Verify user owns this job (requires DB check)
     from ceq_api.db.session import async_session_maker
 
@@ -786,7 +803,7 @@ async def stream_job_progress(
 async def list_job_outputs(
     job_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[JanuaUser, Depends(get_current_user)],
+    user: Annotated[JanuaUser, Depends(get_service_or_user)],
 ) -> list[OutputResponse]:
     """
     List outputs from a completed job.

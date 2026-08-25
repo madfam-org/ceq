@@ -22,8 +22,23 @@ def get_client_identifier(request: Request) -> str:
     """
     Get client identifier for rate limiting.
 
-    Uses user ID if authenticated, otherwise falls back to IP address.
+    Precedence: service principal (machine client) > authenticated user >
+    X-Forwarded-For > peer address.
+
+    Service principals get a ``service:<client_id>`` key, which is a DISTINCT
+    namespace from the ``user:<uuid>`` keys humans get. That separation is the
+    point: a batch backfill running under one machine client consumes its own
+    bucket and can never evict human callers from theirs.
     """
+    # Machine caller (Janua client_credentials) — set by get_service_or_user.
+    # Typed check rather than truthiness: `request.state` is a plain namespace in
+    # production, but test doubles hand back auto-created attributes for ANY
+    # name, and a stray non-string here would silently reroute a human's
+    # requests into a service bucket.
+    service_client_id = getattr(request.state, "service_client_id", None)
+    if isinstance(service_client_id, str) and service_client_id:
+        return f"service:{service_client_id}"
+
     # Check for authenticated user (set by auth middleware)
     if hasattr(request.state, "user_id"):
         return f"user:{request.state.user_id}"
@@ -34,6 +49,16 @@ def get_client_identifier(request: Request) -> str:
         return forwarded_for.split(",")[0].strip()
 
     return get_remote_address(request)
+
+
+def service_principal_rate_limit() -> str:
+    """The per-client_id limit applied to machine callers.
+
+    Read at request time (not import time) so an operator can retune
+    ``RATE_LIMIT_SERVICE_PRINCIPAL`` without a code change. A 720-object
+    backfill at the 100/minute default finishes in ~8 minutes.
+    """
+    return get_settings().rate_limit_service_principal
 
 
 # Initialize rate limiter
