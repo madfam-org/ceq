@@ -103,6 +103,53 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: [ALL]
+          # Probes are required by Kyverno `require-probes` even at replicas: 0.
+          # That policy is validationFailureAction: Audit, so a probe-less
+          # template was reported, never blocked — which is exactly why this
+          # gap survived: it produced report noise instead of a failed sync.
+          # The gap is still real. `require-probes` matches `kind: Pod` and
+          # excludes only namespaces labelled enclii.dev/type in
+          # [infrastructure, build, data]; `ceq` is `application`, so every pod
+          # this template ever creates is evaluated — and the cluster's
+          # Enforce-mode `require-health-probes` demands httpGet on Deployments
+          # for any namespace lacking that label. Scaling this workload without
+          # probes is a latent failure, not a cosmetic one.
+          #
+          # This container runs `python -m ceq_worker.queue`: a headless Redis
+          # DB-14 queue consumer with NO HTTP listener (Dockerfile CMD; note
+          # the explicit `ports: []` above). An httpGet probe would therefore
+          # fail permanently. The exec Redis PING mirrors the pattern already
+          # proven on ceq-orchestrator (worker-orchestrator-deployment.yaml),
+          # and matches what the consumer itself does on startup
+          # (QueueConsumer.initialize -> redis.from_url(REDIS_URL)): if Redis
+          # is unreachable the worker cannot claim jobs, so "can reach Redis"
+          # is the honest definition of ready for this workload.
+          #
+          # `redis` is a first-party dependency of the worker image
+          # (apps/workers/pyproject.toml: redis>=5.0.0), so the probe needs no
+          # extra tooling in the container.
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import redis; import os; redis.from_url(os.environ['REDIS_URL']).ping()"
+            # GPU workers pull large models on cold start; keep the liveness
+            # window wide so a slow warm-up is never mistaken for a hang.
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import redis; import os; redis.from_url(os.environ['REDIS_URL']).ping()"
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
           volumeMounts:
             - name: models
               mountPath: /opt/models
