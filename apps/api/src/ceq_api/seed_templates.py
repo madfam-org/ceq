@@ -1,9 +1,56 @@
 """
 Seed templates derived from ZHO-ZHO-ZHO/ComfyUI-Workflows-ZHO collection.
 These templates provide production-ready workflows for CEQ users.
+
+Two sources feed `SEED_TEMPLATES`:
+
+1. The inline literals below (the original 13 ZHO-derived templates).
+2. Checked-in workflow JSON under the repo-root `templates/` tree, loaded by
+   `_load_file_templates()`. Historically those files were authored but never
+   loaded anywhere, so they never reached the `templates` DB table — see
+   `docs/TEMPLATES.md`. New graphs should be authored as JSON files and listed
+   in `_FILE_TEMPLATES` so the file stays the single source of truth instead of
+   being hand-transcribed into Python (which drifts).
+
+Note the key rename: the JSON files carry the ComfyUI graph under `workflow`
+(LiteGraph export shape), while the `Template` model column is `workflow_json`.
+`_load_file_templates()` performs that mapping.
 """
 
+import json
+from pathlib import Path
 from typing import Any
+
+# Repo-root `templates/` directory: apps/api/src/ceq_api/ -> up 4 -> repo root.
+_TEMPLATES_DIR = Path(__file__).resolve().parents[4] / "templates"
+
+# Workflow JSON files that should be seeded into the DB Template table.
+# Paths are relative to `_TEMPLATES_DIR`.
+_FILE_TEMPLATES: tuple[str, ...] = ("3d/hyperobject-texture.json",)
+
+
+def _load_file_templates() -> list[dict[str, Any]]:
+    """
+    Load checked-in workflow JSON files into seed-template dicts.
+
+    Missing files are skipped rather than raising: the API image does not ship
+    the repo-root `templates/` tree, and importing this module must not explode
+    at runtime just because the seed corpus is absent. `seed_db` is a
+    developer/operator entrypoint run from a checkout.
+    """
+    loaded: list[dict[str, Any]] = []
+    for relative in _FILE_TEMPLATES:
+        path = _TEMPLATES_DIR / relative
+        if not path.is_file():
+            continue
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        entry = {k: v for k, v in raw.items() if k != "workflow"}
+        # File convention stores the graph under `workflow`; the DB column and
+        # the inline literals below both use `workflow_json`.
+        entry["workflow_json"] = raw.get("workflow", raw.get("workflow_json", {}))
+        loaded.append(entry)
+    return loaded
+
 
 # Template definitions based on ZHO workflows collection
 SEED_TEMPLATES: list[dict[str, Any]] = [
@@ -395,6 +442,10 @@ SEED_TEMPLATES: list[dict[str, Any]] = [
         },
     },
 ]
+
+# Append file-backed graphs (GPU lane). Kept after the literals so the inline
+# corpus keeps its original ordering and indices.
+SEED_TEMPLATES.extend(_load_file_templates())
 
 
 def get_templates_by_category(category: str) -> list[dict[str, Any]]:

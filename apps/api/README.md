@@ -139,6 +139,98 @@ Response shape (same for cache hit + miss):
 
 Clients should prefer the `@ceq/sdk` package (`packages/sdk`) over raw HTTP.
 
+#### Built-in deterministic templates
+
+| Template | Family | Output | Notes |
+|---|---|---|---|
+| `card-standard` | image | 512×768 PNG | Game-facing card face: title, subtitle, glyph, rarity badge |
+| `hyperobject-card` | image | 512×768 PNG | Cross-surface hyperobject portrait — see below |
+| `tone-beep` | audio | 16-bit PCM WAV | Parametric sine + ADSR envelope |
+| `card-plate` | 3D | GLB (glTF 2.0) | Parametric rounded-rectangle plate |
+
+Reach `hyperobject-card` through `POST /v1/render/thumbnail` with an explicit
+`template` (the `/card` endpoint defaults to `card-standard`).
+
+#### `hyperobject-card`
+
+A portrait for an entity that exists across several ecosystem surfaces at once
+— a yantra4d commons cartridge, a fashion-cabinet rank, a Selva species. Where
+`card-standard` renders one game-facing face, this template carries
+cross-surface identity: classification, palette, vector silhouette, provenance,
+and per-locale names.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `name` | string | yes | Primary name; ellipsized to fit beside the tier pill |
+| `domain_or_family` | string | yes | Classification line, letterspaced small caps |
+| `secondary_name` | string | no | Sub-title under the accent rule |
+| `tier_or_rarity` | string | no | Short tag rendered as a top-right pill |
+| `accent` | hex string | no | Default `#7C5CFF`; drives gradient, rule, pill, glyph |
+| `palette` | hex string[] | no | Up to 3 chips; extra entries dropped, not rejected |
+| `silhouette` | `[[x, y], ...]` | no | Normalized 0..1 polyline, drawn as the hero glyph |
+| `description` | string | no | Wrapped, max 3 lines |
+| `provenance_line` | string | no | e.g. `yantra4d commons · CERN-OHL-W` |
+| `locale_lines` | `[{lang, text}]` | no | Small per-locale name lines |
+
+Silhouette handling — a hyperobject without a vector form is still legitimate,
+so degenerate geometry falls back to a monogram rather than erroring:
+
+- absent, empty, or fewer than 3 *distinct* points → monogram fallback (first
+  character of `name`)
+- more than 200 points → decimated with a fixed stride (deterministic)
+- coordinates outside 0..1 → clamped, since exporters emit small out-of-range
+  values from float rounding
+- non-`[x, y]` entries or non-numeric coordinates → `ValueError` → HTTP 422
+
+Example:
+
+```json
+{
+  "template": "hyperobject-card",
+  "data": {
+    "name": "Hyperobject 100",
+    "secondary_name": "Cartridge · sandbox",
+    "domain_or_family": "yantra4d commons",
+    "tier_or_rarity": "T1",
+    "accent": "#7C5CFF",
+    "palette": ["#7C5CFF", "#3CE0C0", "#FFB03C"],
+    "silhouette": [[0.5, 0.05], [0.95, 0.5], [0.5, 0.95], [0.05, 0.5]],
+    "description": "A form that exists across surfaces at once.",
+    "provenance_line": "yantra4d commons · CERN-OHL-W",
+    "locale_lines": [{"lang": "es", "text": "Hiperobjeto 100"}]
+  }
+}
+```
+
+Batch callers (bulk portrait generation over a catalogue) should authenticate
+with a Janua `client_credentials` service principal rather than a user session
+— see [`docs/SERVICE_CREDENTIALS.md`](../../docs/SERVICE_CREDENTIALS.md).
+`/v1/render/thumbnail` is on the service-reachable surface.
+
+#### Bump-version discipline
+
+Renders are content-addressed at `render/{template}/{hash}.{ext}` in R2 and
+treated as **immutable** — the hash covers `{template, version, data}` only, so
+the cache cannot notice that a renderer's *code* changed. Any edit that moves a
+pixel (layout, fonts, colors, silhouette rasterization) therefore requires
+bumping the renderer's `version` in the same commit. Skipping the bump serves
+stale assets forever to every caller that already cached a URL.
+
+Bump = every existing cached render for that template is orphaned (not deleted)
+and the next request re-renders under a new hash. Do not bump for changes that
+cannot alter bytes (docstrings, comments, type annotations, tests).
+
+### GPU lane (parked)
+
+`templates/3d/hyperobject-texture.json` is the GPU-lane counterpart to
+`hyperobject-card`: a FLUX.1 DEV ComfyUI graph producing seamless texture maps
+for hyperobject meshes. It is a *ComfyUI workflow*, not a deterministic
+renderer — it runs through `/v1/jobs/*` on a GPU worker, not `/v1/render/*`.
+
+**Parked until the `ceq.gpu-golden-path` gate clears.** The row is seeded so
+the catalogue is complete and the template is forkable, but no GPU capacity is
+allocated to run it. See `docs/TEMPLATES.md` and `docs/GPU_COMPUTE_STRATEGY.md`.
+
 ### Health
 
 | Method | Endpoint | Description |

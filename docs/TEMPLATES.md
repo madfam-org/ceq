@@ -18,12 +18,22 @@ The API also has a separate deterministic render-template registry for
 | `templates/social/instantid-portrait.json` | social | InstantID portrait workflow |
 | `templates/video/hunyuan-video.json` | video | Hunyuan video workflow |
 | `templates/3d/triposr-image-to-3d.json` | 3d | TripoSR image-to-3D workflow |
+| `templates/3d/hyperobject-texture.json` | 3d | FLUX texture/material maps for hyperobject meshes. **GPU lane — parked until the `ceq.gpu-golden-path` gate clears.** Seeded into the DB (see below) |
 | `templates/utility/image-upscaler.json` | utility | Image upscale workflow |
 | `templates/utility/sdxl-txt2img.json` | utility | SDXL text-to-image workflow |
 
+> Historically every file in this table was authored but never loaded anywhere,
+> so none of them reached the `templates` DB table — the seeded corpus below was
+> a separate set of Python literals. `hyperobject-texture.json` is the first
+> file wired into the seeder via `_FILE_TEMPLATES` in `seed_templates.py`, so
+> the file itself is the single source of truth for that graph. The other five
+> files remain unwired; wiring them is a follow-up, not a side effect of this
+> change.
+
 ## Seeded Database Templates
 
-The production seed script currently defines 13 templates:
+The production seed script currently defines 14 templates — 13 inline literals
+plus 1 loaded from a checked-in workflow JSON file:
 
 | Category | Template | VRAM | Primary inputs |
 |----------|----------|------|----------------|
@@ -37,6 +47,7 @@ The production seed script currently defines 13 templates:
 | 3d | CRM 3D Model Generator | 16GB | image, remove_background, mesh_resolution |
 | 3d | Sketch to 3D | 20GB | sketch, prompt, enhance_sketch |
 | 3d | LayerDiffusion + TripoSR | 20GB | prompt, negative_prompt, seed |
+| 3d | Hyperobject Texture (FLUX) | 24GB | prompt, negative_prompt, width, height, steps, cfg, seed — **GPU lane, parked** |
 | utility | APISR 4x Upscale | 8GB | image, scale |
 | utility | YoloWorld + SAM Segmentation | 12GB | image, categories, confidence_threshold |
 | utility | Differential Diffusion Inpaint | 12GB | image, mask, prompt, negative_prompt, denoise_strength, seed |
@@ -99,8 +110,14 @@ catalog.
 | Template | Endpoint | Output | Evidence |
 |----------|----------|--------|----------|
 | `card-standard` | `/v1/render/card`, `/thumbnail` | 512x768 PNG | `CardStandardRenderer` |
+| `hyperobject-card` | `/v1/render/thumbnail` | 512x768 PNG | `HyperobjectCardRenderer` |
 | `tone-beep` | `/v1/render/audio` | 16-bit PCM WAV at 22.05kHz | `ToneBeepRenderer` |
 | `card-plate` | `/v1/render/3d` | GLB / glTF 2.0 binary | `CardPlateRenderer` |
+
+`hyperobject-card` renders a cross-surface hyperobject portrait (silhouette
+glyph, palette chips, provenance and locale lines). It has no default endpoint —
+callers name it explicitly on `/thumbnail`. Full input contract and the
+bump-version discipline: `apps/api/README.md#render-generative-assets`.
 
 The render API is deterministic and R2-cached. In production it requires Janua
 auth; unauthenticated `/v1/render/card` returned `401` in the 2026-06-01 public

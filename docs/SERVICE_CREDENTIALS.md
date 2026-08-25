@@ -165,6 +165,29 @@ token into the environment. `POST /api/v1/oauth/token` with
 Send an honest `User-Agent`: urllib's default is on Cloudflare's
 banned-signature list (Error 1010 at the auth edge).
 
+### What a batch driver renders
+
+The deterministic render templates a service principal can drive — including
+`hyperobject-card`, the cross-surface portrait template intended for exactly
+this batch shape (one portrait per catalogue entry) — are documented in
+[`apps/api/README.md`](../apps/api/README.md#render-generative-assets), with
+per-template input fields and the bump-version discipline.
+
+Two properties matter when sizing a backfill:
+
+- **Renders are content-addressed and immutable.** Re-running a driver over an
+  unchanged catalogue is close to free: every call is a cache hit, no bytes are
+  re-rendered, and no credits are debited. Drivers should be safe to re-run
+  rather than carefully resumed.
+- **A template `version` bump invalidates every cached render for that
+  template.** The first run after a bump re-renders the whole catalogue at full
+  cost. Check the render section before scheduling a large backfill immediately
+  after a template change.
+
+Note that `POST /v1/render/card` defaults to `card-standard`; a driver wanting
+`hyperobject-card` must call `POST /v1/render/thumbnail` and name the template
+explicitly.
+
 ---
 
 ## Rate limiting

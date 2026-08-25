@@ -1,0 +1,168 @@
+{
+  "name": "Hyperobject Texture (FLUX)",
+  "description": "GPU lane (parked until the ceq.gpu-golden-path gate clears). FLUX.1 DEV seamless texture/material map generation for hyperobject meshes. Pairs with the deterministic `hyperobject-card` render template: the card is the CPU-lane portrait, this graph is the GPU-lane surface.",
+  "category": "3d",
+  "tags": ["3d", "flux", "texture", "material", "hyperobject", "gpu-lane", "parked"],
+  "model_requirements": ["flux1-dev.safetensors", "clip_l.safetensors", "t5xxl_fp16.safetensors"],
+  "vram_requirement_gb": 24,
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "prompt": {
+        "type": "string",
+        "description": "Texture description, e.g. 'weathered basalt, tight grain, seamless tiling'"
+      },
+      "negative_prompt": {
+        "type": "string",
+        "default": "seams, text, watermark, lighting, shadows",
+        "description": "Traits to suppress; keep baked lighting out of an albedo map"
+      },
+      "width": {
+        "type": "integer",
+        "default": 1024,
+        "minimum": 512,
+        "maximum": 2048,
+        "description": "Texture width in pixels"
+      },
+      "height": {
+        "type": "integer",
+        "default": 1024,
+        "minimum": 512,
+        "maximum": 2048,
+        "description": "Texture height in pixels"
+      },
+      "steps": {
+        "type": "integer",
+        "default": 20,
+        "minimum": 1,
+        "maximum": 50,
+        "description": "Sampling steps"
+      },
+      "cfg": {
+        "type": "number",
+        "default": 3.5,
+        "minimum": 1.0,
+        "maximum": 10.0,
+        "description": "Classifier-free guidance scale"
+      },
+      "seed": {
+        "type": "integer",
+        "default": -1,
+        "description": "-1 for random seed; pin an integer to reproduce a texture"
+      }
+    },
+    "required": ["prompt"]
+  },
+  "workflow": {
+    "last_node_id": 7,
+    "last_link_id": 9,
+    "nodes": [
+      {
+        "id": 1,
+        "type": "CheckpointLoaderSimple",
+        "pos": [50, 100],
+        "size": [300, 100],
+        "inputs": [],
+        "outputs": [
+          {"name": "MODEL", "type": "MODEL", "links": [1]},
+          {"name": "CLIP", "type": "CLIP", "links": [2, 3]},
+          {"name": "VAE", "type": "VAE", "links": [7]}
+        ],
+        "widgets_values": ["flux1-dev.safetensors"]
+      },
+      {
+        "id": 2,
+        "type": "CLIPTextEncode",
+        "pos": [400, 100],
+        "size": [300, 150],
+        "inputs": [
+          {"name": "clip", "type": "CLIP", "link": 2}
+        ],
+        "outputs": [
+          {"name": "CONDITIONING", "type": "CONDITIONING", "links": [4]}
+        ],
+        "widgets_values": ["{{prompt}}, seamless tileable texture, flat even lighting, orthographic surface detail"]
+      },
+      {
+        "id": 3,
+        "type": "CLIPTextEncode",
+        "pos": [400, 300],
+        "size": [300, 150],
+        "inputs": [
+          {"name": "clip", "type": "CLIP", "link": 3}
+        ],
+        "outputs": [
+          {"name": "CONDITIONING", "type": "CONDITIONING", "links": [5]}
+        ],
+        "widgets_values": ["{{negative_prompt}}"]
+      },
+      {
+        "id": 4,
+        "type": "EmptyLatentImage",
+        "pos": [400, 500],
+        "size": [300, 100],
+        "inputs": [],
+        "outputs": [
+          {"name": "LATENT", "type": "LATENT", "links": [6]}
+        ],
+        "widgets_values": ["{{width}}", "{{height}}", 1]
+      },
+      {
+        "id": 5,
+        "type": "KSampler",
+        "pos": [750, 200],
+        "size": [300, 250],
+        "inputs": [
+          {"name": "model", "type": "MODEL", "link": 1},
+          {"name": "positive", "type": "CONDITIONING", "link": 4},
+          {"name": "negative", "type": "CONDITIONING", "link": 5},
+          {"name": "latent_image", "type": "LATENT", "link": 6}
+        ],
+        "outputs": [
+          {"name": "LATENT", "type": "LATENT", "links": [8]}
+        ],
+        "widgets_values": ["{{seed}}", "fixed", "{{steps}}", "{{cfg}}", "euler", "normal", 1.0]
+      },
+      {
+        "id": 6,
+        "type": "VAEDecode",
+        "pos": [1100, 250],
+        "size": [200, 80],
+        "inputs": [
+          {"name": "samples", "type": "LATENT", "link": 8},
+          {"name": "vae", "type": "VAE", "link": 7}
+        ],
+        "outputs": [
+          {"name": "IMAGE", "type": "IMAGE", "links": [9]}
+        ],
+        "widgets_values": []
+      },
+      {
+        "id": 7,
+        "type": "SaveImage",
+        "pos": [1350, 250],
+        "size": [300, 250],
+        "inputs": [
+          {"name": "images", "type": "IMAGE", "link": 9}
+        ],
+        "outputs": [],
+        "widgets_values": ["hyperobject_texture"]
+      }
+    ],
+    "links": [
+      [1, 1, 0, 5, 0, "MODEL"],
+      [2, 1, 1, 2, 0, "CLIP"],
+      [3, 1, 1, 3, 0, "CLIP"],
+      [4, 2, 0, 5, 1, "CONDITIONING"],
+      [5, 3, 0, 5, 2, "CONDITIONING"],
+      [6, 4, 0, 5, 3, "LATENT"],
+      [7, 1, 2, 6, 1, "VAE"],
+      [8, 5, 0, 6, 0, "LATENT"],
+      [9, 6, 0, 7, 0, "IMAGE"]
+    ],
+    "groups": [],
+    "config": {},
+    "extra": {},
+    "version": 0.4
+  }
+}
