@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ceq_api.auth import JanuaUser, get_current_user
+from ceq_api.auth import JanuaUser, get_service_or_user
 from ceq_api.config import get_settings
 from ceq_api.credit_ledger import debit_credits, require_credit_balance
 from ceq_api.db import get_db
@@ -73,7 +73,7 @@ class RenderResponse(BaseModel):
 )
 async def render_card(
     request: RenderRequest,
-    user: Annotated[JanuaUser, Depends(get_current_user)],
+    user: Annotated[JanuaUser, Depends(get_service_or_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     storage: Annotated[StorageClient, Depends(get_storage)],
 ) -> RenderResponse:
@@ -98,7 +98,7 @@ async def render_card(
 )
 async def render_thumbnail(
     request: RenderRequest,
-    user: Annotated[JanuaUser, Depends(get_current_user)],
+    user: Annotated[JanuaUser, Depends(get_service_or_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     storage: Annotated[StorageClient, Depends(get_storage)],
 ) -> RenderResponse:
@@ -125,7 +125,7 @@ class TemplateInfo(BaseModel):
     summary="List available render templates",
 )
 async def list_templates(
-    user: Annotated[JanuaUser, Depends(get_current_user)],
+    user: Annotated[JanuaUser, Depends(get_service_or_user)],
 ) -> list[TemplateInfo]:
     return [
         TemplateInfo(
@@ -154,7 +154,7 @@ async def list_templates(
 )
 async def render_audio(
     request: RenderRequest,
-    user: Annotated[JanuaUser, Depends(get_current_user)],
+    user: Annotated[JanuaUser, Depends(get_service_or_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     storage: Annotated[StorageClient, Depends(get_storage)],
 ) -> RenderResponse:
@@ -185,7 +185,7 @@ async def render_audio(
 )
 async def render_3d(
     request: RenderRequest,
-    user: Annotated[JanuaUser, Depends(get_current_user)],
+    user: Annotated[JanuaUser, Depends(get_service_or_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     storage: Annotated[StorageClient, Depends(get_storage)],
 ) -> RenderResponse:

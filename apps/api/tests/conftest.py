@@ -114,7 +114,7 @@ def mock_storage():
 @pytest.fixture
 def app(db_session, mock_user, mock_redis, mock_storage) -> FastAPI:
     """Create test FastAPI application with mocked dependencies."""
-    from ceq_api.auth import get_current_user
+    from ceq_api.auth import get_current_user, get_service_or_user
     from ceq_api.db import get_db
     from ceq_api.db.redis import get_redis
     from ceq_api.main import app as main_app
@@ -134,6 +134,12 @@ def app(db_session, mock_user, mock_redis, mock_storage) -> FastAPI:
 
     main_app.dependency_overrides[get_db] = override_get_db
     main_app.dependency_overrides[get_current_user] = override_get_current_user
+    # The render/jobs surface authenticates through `get_service_or_user` so it
+    # also accepts machine callers. Overriding it with the SAME `mock_user`
+    # keeps every existing test asserting human behavior on those routes —
+    # service-principal behavior is covered explicitly in
+    # tests/test_service_principals.py.
+    main_app.dependency_overrides[get_service_or_user] = override_get_current_user
     main_app.dependency_overrides[get_redis] = override_get_redis
     main_app.dependency_overrides[get_storage] = override_get_storage
 

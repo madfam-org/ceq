@@ -164,6 +164,10 @@ Clients should prefer the `@ceq/sdk` package (`packages/sdk`) over raw HTTP.
 | `JOB_WEBHOOK_MAX_ATTEMPTS` | No | `3` | Webhook delivery attempts for retryable failures |
 | `JOB_WEBHOOK_RETRY_BACKOFF_SECONDS` | No | `1.0` | Linear retry backoff base in seconds |
 | `MAX_ACTIVE_JOBS_PER_USER` | No | `5` | Queued/running job cap per user; set `0` to disable |
+| `JANUA_AUDIENCE` | Recommended | | Expected `aud` claim (e.g. `ceq-api`). Binds machine tokens to CEQ |
+| `SERVICE_PRINCIPALS_ENABLED` | No | `true` | Accept Janua `client_credentials` (machine) tokens |
+| `SERVICE_PRINCIPAL_SCOPE` | No | `ceq:render` | Scope a machine token must carry for render/jobs |
+| `RATE_LIMIT_SERVICE_PRINCIPAL` | No | `100/minute` | Per-`client_id` limit for machine callers (separate bucket from humans) |
 
 Worker completion callback notes:
 
@@ -274,6 +278,50 @@ Role claim handling is intentionally defensive:
 - Entitlement claims are also supported. `entitlements`, `plan`, `plan_id`,
   `subscription`, and `subscription_tier` (including list-style variants) map
   into paid access during entitlement evaluation.
+
+### Service principals (machine-to-machine)
+
+Batch and machine callers cannot hold a browser session, so they authenticate
+with a Janua **`client_credentials`** token instead of a user JWT (ADR-006 — the
+same edge pattern as fashion-cabinet → yantra4d). The full operator recipe is
+[`docs/SERVICE_CREDENTIALS.md`](../../docs/SERVICE_CREDENTIALS.md).
+
+Accepted claim shape (emitted by Janua's `_get_client_credentials_claims`):
+
+| Claim | Value |
+|-------|-------|
+| `sub` | `service-account:<client_id>` — **not** a UUID |
+| `client_id` | the confidential client's id |
+| `token_use` | `client_credentials` |
+| `actor_type` | `service_account` |
+| `scope` | space-delimited; must include `SERVICE_PRINCIPAL_SCOPE` |
+| `aud` | must equal `JANUA_AUDIENCE` |
+| `ceq_tier` | `madfam`, emitted for any `ceq:`-namespaced scope |
+| `roles` | `["service_account"]` |
+
+Two dependencies express the split:
+
+- `get_current_user` — **humans only.** A machine token here is a **403**.
+  Backs workflows, assets, credits, outputs, operations, and template
+  fork/run.
+- `get_service_or_user` — humans **or** service principals. Backs
+  `/v1/render/*` and `/v1/jobs/*`. A machine token missing the required scope
+  is a **403** (it authenticated, it is just not authorized), not a 401.
+
+A service principal has no user-table row. `JanuaUser.id` is a deterministic
+**UUIDv5 of the client_id**, so a re-minted token (service tokens live ~1h and
+are re-minted ~60s before expiry) maps to the same principal and the driver's
+own jobs stay visible to it across refreshes. Job/output ownership checks
+(`job.user_id == user.id`) therefore isolate each machine client to its own
+namespace for free.
+
+Quotas and entitlements are unchanged: a service principal carries
+`roles: ["service_account"]` and `tier: "community"`, so it lands on the free
+tier and premium-template gating still fails closed.
+
+Rate limiting uses a **separate bucket**: machine callers key on
+`service:<client_id>`, humans on `user:<uuid>`. A backfill therefore cannot
+evict human callers from their bucket. See `RATE_LIMIT_SERVICE_PRINCIPAL`.
 
 ## Monetization gating (InterestGate)
 
