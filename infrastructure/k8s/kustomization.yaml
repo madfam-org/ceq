@@ -88,13 +88,13 @@ resources:
 # `apps/api/tests/test_k8s_manifests.py::test_rendered_manifests_*` pins the
 # rendered-output invariant so this cannot regress silently.
 images:
-- digest: sha256:65d82367440e5a0f49864e9b93ce4ff8f5fda83f87ec25c2f8b89782212fabae
+- digest: sha256:9e2bc213d1c820dc976703cf3b337e9deb3bc3eb4e30b1e118a4d8822c9f0675
   name: ghcr.io/madfam-org/ceq-api
   newName: ghcr.io/madfam-org/ceq-api
-- digest: sha256:ffea772ab847b4dcad9607870fb71dbcbe320f43dffb2c35694edb1e38abf3e8
+- digest: sha256:20e1ec449f3ca18862fdcb89cbc801bf8b846cd723fe58ae7ad976dd00ac87e4
   name: ghcr.io/madfam-org/ceq-studio
   newName: ghcr.io/madfam-org/ceq-studio
-- digest: sha256:27887702e86e0526f57562fdb6f00e3c788bb35675eab4d5446ecc60af25f840
+- digest: sha256:d43f6675d2bf30ee5f25b4eb01c526a790cdda990598b9e67417edcc61f11756
   name: ghcr.io/madfam-org/ceq-worker
   newName: ghcr.io/madfam-org/ceq-worker
 
