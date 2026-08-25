@@ -43,6 +43,8 @@ labels:
   # needed. Old config + leaked token (R1 audit) removed in this commit.
   # - cloudflared.yaml
   # seed-templates-job.yaml is intentionally excluded — manual one-shot only.
+# Kyverno exception for the bounded one-shot Jobs (migration + seed), which
+# cannot carry meaningful readiness probes. See policy-exceptions.yaml.
 resources:
 - namespace.yaml
 - api-deployment.yaml
@@ -54,8 +56,6 @@ resources:
 - external-secret.yaml
 - network-policies.yaml
 - observability.yaml
-# Kyverno exception for the bounded one-shot Jobs (migration + seed), which
-# cannot carry meaningful readiness probes. See policy-exceptions.yaml.
 - policy-exceptions.yaml
 
 # Image customization. CI's deploy.yaml workflow rewrites these entries
@@ -88,13 +88,13 @@ resources:
 # `apps/api/tests/test_k8s_manifests.py::test_rendered_manifests_*` pins the
 # rendered-output invariant so this cannot regress silently.
 images:
-- digest: sha256:ec4bc1f843a7e85cee0e9e48ce83afbd736c30692664a7dab574611636711b9a
+- digest: sha256:e7bd3699414f864cf39cbec6eee06b2d93d9615edbbc1372025728cfce44a3b4
   name: ghcr.io/madfam-org/ceq-api
   newName: ghcr.io/madfam-org/ceq-api
-- digest: sha256:0cd057ebe5716c221bdd50b64026264841aedc4945e8e67018c3616fa2c47db8
+- digest: sha256:e12cd3f4755ab825663709935642b6d101931826a97078894295e0a8044a0040
   name: ghcr.io/madfam-org/ceq-studio
   newName: ghcr.io/madfam-org/ceq-studio
-- digest: sha256:d23ea14c5a5092d1a764e945d2ee2013aa76ae8f01e5d983742f0cbe9a1d3f8f
+- digest: sha256:a0e99b4bc039fd823a906c5701626029ceceeb248cdc4e90022d75550a2cf8ff
   name: ghcr.io/madfam-org/ceq-worker
   newName: ghcr.io/madfam-org/ceq-worker
 
