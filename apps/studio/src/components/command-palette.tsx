@@ -20,6 +20,7 @@ import {
   FolderOpen,
   Clock,
   Sparkles,
+  Gauge,
   Plus,
   Play,
   Search,
@@ -58,6 +59,10 @@ export function CommandPalette() {
           case "5":
             e.preventDefault();
             router.push("/queue");
+            break;
+          case "6":
+            e.preventDefault();
+            router.push("/benchmarks");
             break;
         }
       }
@@ -133,6 +138,13 @@ export function CommandPalette() {
             <Clock className="mr-2 h-4 w-4" />
             <span>Queue</span>
             <span className="ml-auto text-xs text-muted-foreground">⌘5</span>
+          </CommandItem>
+          <CommandItem
+            onSelect={() => runCommand(() => router.push("/benchmarks"))}
+          >
+            <Gauge className="mr-2 h-4 w-4" />
+            <span>Benchmarks</span>
+            <span className="ml-auto text-xs text-muted-foreground">⌘6</span>
           </CommandItem>
         </CommandGroup>
 
