@@ -66,6 +66,7 @@ When documents conflict, prefer this order:
 | [`TEMPLATES.md`](./TEMPLATES.md) | Template catalog and render API notes |
 | [`VAST_AI_SETUP.md`](./VAST_AI_SETUP.md) | Vast.ai GPU provider operator runbook |
 | [`GPU_COMPUTE_STRATEGY.md`](./GPU_COMPUTE_STRATEGY.md) | Ecosystem-aligned compute provider strategy (Vast → Furnace) |
+| [`BENCHMARKS_AGGREGATOR.md`](./BENCHMARKS_AGGREGATOR.md) | The Studio `/benchmarks` best-value-SOTA aggregator: model schema, scoring, seed catalog, auto-refresh roadmap |
 
 ## Evidence artifacts
 
