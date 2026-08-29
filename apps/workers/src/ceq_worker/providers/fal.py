@@ -53,13 +53,21 @@ FAL_MODEL_ENDPOINTS: dict[str, str] = {
     "comfyui": "fal-ai/comfy/run",
 }
 
-# Default fal.ai pricing (approximate $/image for standard models)
+# fal.ai pricing, refreshed 2026-08-28 against https://fal.ai/pricing and the
+# per-model pages. fal now bills IMAGE models per MEGAPIXEL (rounded up to the
+# nearest MP), so for a standard ~1MP generation these $/MP figures are also the
+# effective $/image. The previous constants here were stale 2024-era $/image
+# estimates (schnell was $0.015 ≈ 5x the current $0.003/MP), which skewed the
+# router's cost estimates high. Sources: FLUX.1 schnell $0.003/MP
+# (fal.ai/models/fal-ai/flux/schnell, ~333 img/$1); FLUX.1 dev $0.025/MP standard
+# ($0.075/MP with ControlNets/LoRAs); Qwen $0.02/MP; fast-SDXL ~$0.02/img.
+# Verify at deploy time — fal adjusts pricing and adds models.
 FAL_PRICING: dict[str, float] = {
-    "fal-ai/flux/schnell": 0.015,
-    "fal-ai/flux/dev": 0.025,
+    "fal-ai/flux/schnell": 0.003,
+    "fal-ai/flux/dev": 0.025,  # $0.075/MP with ControlNets/LoRAs (see fal-ai/flux-lora)
     "fal-ai/fast-sdxl": 0.020,
     "fal-ai/triposr": 0.050,
-    "fal-ai/comfy/run": 0.030,  # varies by workflow complexity
+    "fal-ai/comfy/run": 0.030,  # varies by workflow complexity + compute time
 }
 
 
