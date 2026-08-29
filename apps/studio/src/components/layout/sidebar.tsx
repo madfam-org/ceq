@@ -12,6 +12,7 @@ import {
   FolderOpen,
   Clock,
   Sparkles,
+  Gauge,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -28,7 +29,8 @@ const navItems = [
   { href: "/templates", icon: FolderOpen, label: "Templates", shortcut: "⌘3" },
   { href: "/gallery", icon: Image, label: "Gallery", shortcut: "⌘4" },
   { href: "/queue", icon: Clock, label: "Queue", shortcut: "⌘5" },
-  { href: "/billing", icon: CreditCard, label: "Billing", shortcut: "⌘6" },
+  { href: "/benchmarks", icon: Gauge, label: "Benchmarks", shortcut: "⌘6" },
+  { href: "/billing", icon: CreditCard, label: "Billing", shortcut: "⌘7" },
 ];
 
 const categoryItems = [
