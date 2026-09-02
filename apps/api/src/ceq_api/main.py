@@ -41,6 +41,7 @@ from ceq_api.logging import setup_logging  # noqa: E402
 from ceq_api.middleware import setup_middleware  # noqa: E402
 from ceq_api.routers import (  # noqa: E402
     assets,
+    brand_kits,
     credits,
     demo,
     health,
@@ -202,6 +203,7 @@ app.include_router(workflows.router, prefix="/v1/workflows", tags=["workflows"])
 app.include_router(jobs.router, prefix="/v1/jobs", tags=["jobs"])
 app.include_router(templates.router, prefix="/v1/templates", tags=["templates"])
 app.include_router(assets.router, prefix="/v1/assets", tags=["assets"])
+app.include_router(brand_kits.router, prefix="/v1/brand-kits", tags=["brand-kits"])
 app.include_router(outputs.router, prefix="/v1/outputs", tags=["outputs"])
 app.include_router(render.router, prefix="/v1/render", tags=["render"])
 app.include_router(demo.router)
