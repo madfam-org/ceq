@@ -79,6 +79,34 @@ on `/v1/workflows/{id}/run`, so fork-then-run cannot bypass the gate.
 | `POST` | `/v1/assets` | Upload asset |
 | `GET` | `/v1/assets/{id}` | Get asset |
 
+`/v1/assets` is per-principal **scratch** (a user's own ML checkpoints/LoRAs,
+keyed by `user_id`). For a client's curated, multi-tenant **brand book**, see the
+Brand-kit DAM below — a separate, tenant-scoped, durable surface.
+
+### Brand-kit DAM (`/v1/brand-kits`)
+
+ceq is the ecosystem's designated **client-brand DAM** — the system-of-record for
+a client's source brand book (palette, typography, logos, usage rules) and the
+binary brand assets behind it. Tenant is derived from the Janua token (never the
+URL); the surface has **no destructive verbs** (append / soft-update only).
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/v1/brand-kits/clients` | admin | Onboard a tenant (bind a Janua org to a Client) |
+| `GET` | `/v1/brand-kits/me/client` | tenant | The caller's resolved tenant |
+| `GET` | `/v1/brand-kits` | tenant | List the caller tenant's kits |
+| `POST` | `/v1/brand-kits` | tenant | Create/initialize a kit |
+| `GET` | `/v1/brand-kits/{id}` | tenant | Structured kit (palette/type/logos/guidelines) |
+| `PATCH` | `/v1/brand-kits/{id}` | tenant | Soft-update (bumps `version`); `is_active:false` soft-deactivates |
+| `POST` | `/v1/brand-kits/{id}/assets` | tenant | Upload a binary brand asset (multipart) → R2 |
+| `GET` | `/v1/brand-kits/{id}/assets` | tenant | List a kit's binary assets |
+| `GET` | `/v1/brand-kits/{id}/assets/{assetId}` | tenant | One asset + presigned download URL |
+| `GET` | `/v1/brand-kits/{id}/tokens` | tenant | **Resolved token export — the consumer contract** |
+
+The `/tokens` export is what MAP, crea-frontend, and ceq's renderer pull to align
+on brand. Full model, tenancy rule, R2 layout, and token-export contract:
+[`docs/BRAND_DAM.md`](docs/BRAND_DAM.md).
+
 ### Outputs
 
 | Method | Endpoint | Description |
