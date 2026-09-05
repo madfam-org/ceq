@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Creative Entropy Quantized - ComfyUI GPU Worker"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "PROPRIETARY" }
+license = { text = "AGPL-3.0-only" }
 authors = [{ name = "MADFAM", email = "engineering@madfam.io" }]
 
 dependencies = [
