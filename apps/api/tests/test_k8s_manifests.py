@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
+from sqlalchemy.engine.url import make_url
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 K8S_DIR = REPO_ROOT / "infrastructure/k8s"
@@ -387,3 +389,206 @@ def test_enclii_health_paths_match_k8s_probes() -> None:
     # The worker has no HTTP surface, so it must declare no healthCheck rather
     # than a path that does not exist.
     assert "healthCheck" not in services["ceq-worker"]["runtime"]
+
+
+# --- ExternalSecret DATABASE_URL render contract ---------------------------
+#
+# Backstop for the 2026-09-05 -> 09-09 outage (root-caused 2026-09-09).
+#
+# `test_external_secret_host_rewrite_is_namespace_agnostic` above only asserts
+# the SUBSTRING "regexReplaceAll" appears in the manifest. That is exactly the
+# assertion that stayed green through the outage: the function name was right,
+# its ARGUMENT ORDER was wrong. sprig's signature is
+#
+#     regexReplaceAll <regex> <s> <repl>
+#
+# and Go templates append a piped value as the LAST argument, so
+#
+#     {{ .DATABASE_URL | regexReplaceAll "<regex>" "<repl>" }}
+#
+# binds s="<repl>" and repl=.DATABASE_URL. The regex never matches the literal
+# replacement string, so the render collapses to the bare host fragment
+# "@pgbouncer.data.svc.cluster.local:6432" — no scheme, credentials, or dbname.
+# Every ceq-api pod then crash-looped in create_async_engine with
+# `sqlalchemy.exc.ArgumentError: Could not parse SQLAlchemy URL from given URL
+# string` (1254 restarts) while the PreSync migrate Job stayed green, because
+# alembic reads the untemplated DIRECT_DATABASE_URL.
+#
+# So these tests RENDER the template instead of grepping it. The renderer below
+# implements only the two Go/sprig behaviours this one expression depends on —
+# positional args and pipeline-appends-last — which is precisely the semantics
+# that was misread. CI has no Go toolchain, so a faithful mini-renderer is the
+# only way to make this a per-push gate rather than a deploy-time discovery.
+
+_GO_TEMPLATE_RE = re.compile(r"\{\{(.+?)\}\}")
+_GO_TOKEN_RE = re.compile(r'"((?:[^"\\]|\\.)*)"|(\S+)')
+
+
+def _go_tokenize(expr: str) -> list[tuple[str, str]]:
+    """Split a template action into ("str"|"ref", value) tokens."""
+    tokens: list[tuple[str, str]] = []
+    for quoted, bare in _GO_TOKEN_RE.findall(expr.strip()):
+        if bare:
+            tokens.append(("ref", bare))
+        else:
+            tokens.append(("str", quoted.replace('\\"', '"')))
+    return tokens
+
+
+def _render_go_template(template: str, context: dict[str, str]) -> str:
+    """Render the ExternalSecret's `regexReplaceAll` expression like sprig does.
+
+    Supports the two forms that matter here:
+      {{ regexReplaceAll <regex> <s> <repl> }}   -- explicit, correct
+      {{ <x> | regexReplaceAll <a> <b> }}        -- piped, appends <x> LAST
+    plus a bare `{{ .KEY }}` passthrough.
+    """
+
+    def resolve(token: tuple[str, str]) -> str:
+        kind, value = token
+        if kind == "str":
+            return value
+        if value.startswith("."):
+            key = value[1:]
+            if key not in context:
+                raise AssertionError(f"template references unknown key {value}")
+            return context[key]
+        raise AssertionError(f"unsupported template token {value!r}")
+
+    def render_action(expr: str) -> str:
+        stages = [s.strip() for s in expr.split("|")]
+        carried: str | None = None
+        for stage in stages:
+            tokens = _go_tokenize(stage)
+            if not tokens:
+                raise AssertionError(f"empty template stage in {expr!r}")
+            head_kind, head = tokens[0]
+            if head_kind == "ref" and head.startswith("."):
+                # A bare value stage: it is the pipeline's initial input.
+                assert carried is None, f"unsupported chained value in {expr!r}"
+                assert len(tokens) == 1, f"unsupported call form in {expr!r}"
+                carried = resolve(tokens[0])
+                continue
+            assert head == "regexReplaceAll", (
+                f"renderer only models regexReplaceAll, got {head!r}"
+            )
+            args = [resolve(t) for t in tokens[1:]]
+            if carried is not None:
+                # Go appends the piped value as the FINAL argument.
+                args.append(carried)
+            assert len(args) == 3, (
+                f"regexReplaceAll takes (regex, s, repl); got {len(args)} in {expr!r}"
+            )
+            regex, subject, repl = args
+            carried = re.sub(regex, repl, subject)
+        assert carried is not None
+        return carried
+
+    return _GO_TEMPLATE_RE.sub(lambda m: render_action(m.group(1)), template)
+
+
+def _external_secret_template_data() -> dict[str, str]:
+    """Pull the `target.template.data` mapping out of the ceq-secrets ES."""
+    manifest = (K8S_DIR / "external-secret.yaml").read_text()
+    templates: dict[str, str] = {}
+    for line in manifest.splitlines():
+        stripped = line.strip()
+        for key in ("DATABASE_URL", "DIRECT_DATABASE_URL"):
+            prefix = f"{key}: "
+            if stripped.startswith(prefix) and "{{" in stripped:
+                value = stripped[len(prefix) :].strip()
+                if value.startswith("'") and value.endswith("'"):
+                    value = value[1:-1]
+                templates[key] = value
+    assert "DATABASE_URL" in templates, "ceq-secrets must template DATABASE_URL"
+    assert "DIRECT_DATABASE_URL" in templates
+    return templates
+
+
+VAULT_URL_SHAPES = (
+    "postgresql://ceq:pw@postgres.data.svc.cluster.local:5432/ceq_production",
+    "postgresql+asyncpg://ceq:pw@postgres.data.svc.cluster.local:5432/ceq_production",
+    # Port omitted, and a different namespace — the shapes the regex anchor
+    # was introduced (#73) to cover.
+    "postgresql://ceq:pw@postgres.foundry.svc.cluster.local/ceq_production",
+    # Vault-held query string must survive the rewrite verbatim; the app strips
+    # pooler-unsafe params later (ceq_api/db/url.py).
+    "postgresql://ceq:pw@postgres.data.svc.cluster.local:5432/ceq_production?sslmode=require",
+)
+
+
+def test_renderer_reproduces_the_2026_09_05_outage_shape() -> None:
+    """Guard the guard: the renderer must model the bug it exists to catch.
+
+    If this ever stops failing, the renderer has drifted from Go's
+    pipeline-appends-last semantics and every test below becomes vacuous.
+    """
+    broken = (
+        '{{ .DATABASE_URL | regexReplaceAll '
+        '"@postgres[.][a-z0-9-]+[.]svc[.]cluster[.]local(:[0-9]+)?" '
+        '"@pgbouncer.data.svc.cluster.local:6432" }}'
+    )
+    rendered = _render_go_template(
+        broken, {"DATABASE_URL": VAULT_URL_SHAPES[0]}
+    )
+    assert rendered == "@pgbouncer.data.svc.cluster.local:6432"
+    assert urlsplit(rendered).scheme == ""
+
+
+@pytest.mark.parametrize("vault_url", VAULT_URL_SHAPES)
+def test_external_secret_database_url_renders_a_parseable_url(
+    vault_url: str,
+) -> None:
+    """The rendered runtime URL must be a real DSN, not a host fragment."""
+    template = _external_secret_template_data()["DATABASE_URL"]
+    rendered = _render_go_template(template, {"DATABASE_URL": vault_url})
+
+    parts = urlsplit(rendered)
+    assert parts.scheme.startswith("postgres"), (
+        f"rendered DATABASE_URL lost its scheme: {rendered!r}"
+    )
+    assert parts.hostname == "pgbouncer.data.svc.cluster.local"
+    assert parts.port == 6432
+    # Credentials and database name must survive the host-only rewrite.
+    assert parts.username == "ceq"
+    assert parts.password == "pw"
+    assert parts.path == "/ceq_production"
+
+    # And SQLAlchemy — the layer that actually raised in production — agrees.
+    assert make_url(rendered).host == "pgbouncer.data.svc.cluster.local"
+
+
+@pytest.mark.parametrize("vault_url", VAULT_URL_SHAPES)
+def test_external_secret_direct_url_is_vaults_value_untouched(
+    vault_url: str,
+) -> None:
+    """DDL must keep the direct 5432 session exactly as Vault holds it."""
+    template = _external_secret_template_data()["DIRECT_DATABASE_URL"]
+    assert _render_go_template(template, {"DATABASE_URL": vault_url}) == vault_url
+
+
+def test_external_secret_database_url_is_not_a_pipeline() -> None:
+    """Belt and braces: the piped form is the exact shape that outaged prod.
+
+    The render tests above already fail on it, but this names the mistake so a
+    future editor reaching for `| regexReplaceAll` gets told why, not just that.
+    """
+    template = _external_secret_template_data()["DATABASE_URL"]
+    assert "| regexReplaceAll" not in template, (
+        "Piping into regexReplaceAll binds the URL to its `repl` parameter "
+        "(sprig: regexReplaceAll <regex> <s> <repl>; Go appends the piped "
+        "value last). Pass .DATABASE_URL explicitly in the 2nd position."
+    )
+
+
+def test_query_string_survives_the_host_rewrite() -> None:
+    """The rewrite is host-only; ceq_api/db/url.py owns param stripping."""
+    template = _external_secret_template_data()["DATABASE_URL"]
+    rendered = _render_go_template(
+        template,
+        {
+            "DATABASE_URL": "postgresql://ceq:pw@postgres.data.svc.cluster.local"
+            ":5432/ceq_production?sslmode=require"
+        },
+    )
+    assert rendered.endswith("?sslmode=require")

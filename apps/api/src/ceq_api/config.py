@@ -3,6 +3,7 @@
 import logging
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import AliasChoices, Field, RedisDsn, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -239,6 +240,34 @@ class Settings(BaseSettings):
             db_url = str(self.database_url)
             if "localhost" in db_url or "ceq_dev" in db_url:
                 errors.append("DATABASE_URL appears to be a development URL")
+
+            # Structural validation — the URL must actually be a URL.
+            #
+            # DATABASE_URL is not authored by hand: it is rendered by a Go
+            # template in the ExternalSecret (infrastructure/k8s/
+            # external-secret.yaml). A template bug can therefore hand us a
+            # syntactically valid *string* that is not a usable DSN at all.
+            # That is not hypothetical: between 2026-08-24 (#73) and
+            # 2026-09-09 a mis-ordered `regexReplaceAll` rendered the whole
+            # value as the bare fragment `@pgbouncer.data.svc.cluster.local:6432`
+            # — no scheme, no credentials, no database — and every ceq-api pod
+            # crash-looped inside `create_async_engine` with
+            # `sqlalchemy.exc.ArgumentError: Could not parse SQLAlchemy URL`,
+            # a traceback that names neither DATABASE_URL nor the template.
+            #
+            # Failing here instead turns a 20-frame SQLAlchemy stack into one
+            # line that names the variable and the rendering layer, so the next
+            # occurrence is diagnosable from `kubectl logs` alone.
+            parsed_db = urlsplit(db_url)
+            if not parsed_db.scheme or not parsed_db.hostname:
+                errors.append(
+                    "DATABASE_URL is not a parseable database URL "
+                    f"(scheme={parsed_db.scheme or '<missing>'}, "
+                    f"host={parsed_db.hostname or '<missing>'}). "
+                    "It is rendered by the ExternalSecret Go template in "
+                    "infrastructure/k8s/external-secret.yaml — check that "
+                    "template's output, not Vault."
+                )
 
             if errors:
                 error_msg = "Production configuration errors:\n" + "\n".join(f"  - {e}" for e in errors)

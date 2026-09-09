@@ -61,6 +61,67 @@ class TestConfigValidation:
         error_msg = str(exc_info.value)
         assert "DATABASE_URL appears to be a development URL" in error_msg
 
+    @pytest.mark.parametrize(
+        "rendered",
+        [
+            # The exact value the ExternalSecret rendered from 2026-08-24 (#73)
+            # until the 2026-09-09 fix: a mis-ordered `regexReplaceAll` bound
+            # the URL to the template's `repl` slot, so the whole DSN collapsed
+            # to the bare replacement fragment.
+            "@pgbouncer.data.svc.cluster.local:6432",
+            # Neighbouring collapse shapes from the same class of template bug.
+            "pgbouncer.data.svc.cluster.local:6432",
+            "postgresql://",
+        ],
+    )
+    def test_production_rejects_unparseable_database_url(self, rendered):
+        """A template-mangled DATABASE_URL must fail loudly at config time.
+
+        Regression guard for the 2026-09-05 outage: this value reached
+        `create_async_engine` and raised `sqlalchemy.exc.ArgumentError: Could
+        not parse SQLAlchemy URL from given URL string` — a traceback naming
+        neither the variable nor the ExternalSecret that produced it. Every
+        ceq-api pod in the new ReplicaSet crash-looped (1254 restarts over four
+        days) while the PreSync migrate Job stayed green, because alembic reads
+        the untemplated DIRECT_DATABASE_URL.
+        """
+        from ceq_api.config import Settings
+
+        with pytest.raises(ValueError) as exc_info:
+            Settings(
+                environment="production",
+                r2_endpoint="https://r2.example.com",
+                r2_access_key="test-key",
+                r2_secret_key="test-secret",
+                job_completion_callback_token="test-callback-token",
+                janua_api_url="https://api.janua.dev",
+                database_url=rendered,
+            )
+
+        error_msg = str(exc_info.value)
+        assert "DATABASE_URL is not a parseable database URL" in error_msg
+        # The message must point at the layer that actually renders the value,
+        # so the next occurrence is diagnosable from `kubectl logs` alone.
+        assert "external-secret.yaml" in error_msg
+
+    def test_production_accepts_the_correctly_rendered_pooled_url(self):
+        """The shape the fixed template emits must still validate."""
+        from ceq_api.config import Settings
+
+        settings = Settings(
+            environment="production",
+            database_url=(
+                "postgresql+asyncpg://ceq:secret"
+                "@pgbouncer.data.svc.cluster.local:6432/ceq_production"
+            ),
+            r2_endpoint="https://r2.example.com",
+            r2_access_key="test-key",
+            r2_secret_key="test-secret",
+            job_completion_callback_token="test-callback-token",
+            janua_api_url="https://api.janua.dev",
+        )
+        assert settings.is_production
+
     def test_production_valid_config(self):
         """Test valid production configuration."""
         from ceq_api.config import Settings
