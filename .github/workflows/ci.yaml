@@ -160,6 +160,27 @@ jobs:
       - name: Tests (studio)
         run: pnpm --filter @ceq/studio test -- --run
 
+      # Next copies its internal `x-middleware-rewrite` onto the CLIENT response
+      # for every rewrite, so `GET /` on ceq.lol used to answer every anonymous
+      # visitor with `x-middleware-rewrite: /landing`. The fix is
+      # apps/studio/server-entry.mjs; this is the only assertion that can see
+      # whether it works, because the header is written by Next's router server
+      # and the middleware's own response MUST carry it (that is where Next reads
+      # the rewrite from).
+      #
+      # The build is needed for the standalone tree. It also runs in the
+      # studio-docker job, but that one needs Docker and proves the image starts
+      # rather than that the server is clean.
+      - name: Build (studio)
+        run: pnpm --filter @ceq/studio build
+
+      # Boots on 0.0.0.0, the hostname apps/studio/Dockerfile sets. Booting
+      # 127.0.0.1 would exercise a configuration in which the bug is still live —
+      # Next would proxy the rewrite instead of routing it — so the hostname is
+      # part of the test, not setup.
+      - name: Response header smoke (studio standalone)
+        run: bash scripts/studio-standalone-header-smoke.sh
+
   studio-docker:
     name: Studio · Docker smoke
     runs-on: ubuntu-latest

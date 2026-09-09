@@ -60,6 +60,20 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/studio/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/studio/.next/static ./apps/studio/.next/static
 COPY --from=builder /app/apps/studio/public ./apps/studio/public
 
+# The process entry, and why the CMD below names it rather than server.js.
+#
+# Next 14.2.35 copies its internal router signal `x-middleware-rewrite` onto the
+# CLIENT response for every rewrite, with no origin check — so `GET /` on
+# ceq.lol answers every anonymous visitor with `x-middleware-rewrite: /landing`.
+# Measured on this repo's own standalone output. It cannot be removed inside
+# src/middleware.ts (Next reads the rewrite out of that very response object, so
+# deleting it there cancels the rewrite and serves a blank 200) and the
+# next.config.mjs `headers()` entries are applied earlier in the route list than
+# the branch that writes it. server-entry.mjs drops it on the Node response
+# after routing is already decided. See that file's header for the two lines of
+# Next this rests on.
+COPY --from=builder --chown=nextjs:nodejs /app/apps/studio/server-entry.mjs ./apps/studio/server-entry.mjs
+
 # Fix broken pnpm symlinks: copy .pnpm store and recreate links
 # Next.js 14 standalone doesn't trace .pnpm/ into output
 RUN rm -rf node_modules
@@ -77,10 +91,39 @@ EXPOSE 5801
 
 USER nextjs
 
-# Fail the image build if the standalone entrypoint is missing.
-RUN test -f apps/studio/server.js
+# Fail the image build if either entrypoint is missing or the filter has been
+# gutted.
+#
+# The CMD names a file; nothing else checks that the file exists, still filters,
+# or still hands over to the server it wraps — and all three failures look
+# identical at runtime: a container that starts, passes its healthcheck, and
+# publishes the internal route name of every rewrite. Do not weaken any of these
+# to a warning, which is the same as deleting them but harder to notice.
+RUN set -eu; \
+    test -f apps/studio/server.js || { \
+      echo "FATAL: apps/studio/server.js missing (outputFileTracingRoot layout)." >&2; \
+      exit 1; \
+    }; \
+    entry="apps/studio/server-entry.mjs"; \
+    if [ ! -f "$entry" ]; then \
+      echo "FATAL: $entry is missing from the image." >&2; \
+      echo "The CMD starts it, so the container cannot boot at all." >&2; \
+      exit 1; \
+    fi; \
+    if ! grep -q 'x-middleware-rewrite' "$entry"; then \
+      echo "FATAL: $entry no longer filters x-middleware-rewrite." >&2; \
+      echo "The pod would start, pass its healthcheck, and answer every visitor" >&2; \
+      echo "to ceq.lol with the internal route the middleware chose." >&2; \
+      exit 1; \
+    fi; \
+    if ! grep -qE "await import\(['\"]\./server\.js['\"]\)" "$entry"; then \
+      echo "FATAL: $entry does not hand over to ./server.js." >&2; \
+      echo "The container would install a filter and then serve nothing." >&2; \
+      exit 1; \
+    fi; \
+    echo "studio entrypoint and response-header filter present"
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD wget -q --spider http://localhost:5801/ || exit 1
 
-CMD ["node", "apps/studio/server.js"]
+CMD ["node", "apps/studio/server-entry.mjs"]
