@@ -436,7 +436,7 @@ See `/Users/aldoruizluna/labspace/claudedocs/ECOSYSTEM_AUDIT_2026-04-23.md` for 
 
 ## Known Issues — Stabilization Sweep 2026-05-04
 
-A multi-hour stabilization run on 2026-05-04 closed several ceq-side ArgoCD-sync bugs and tightened the deploy chain. See `internal-devops/runbooks/2026-05-03-builder-upgrade-ccx33.md` for the broader infra context (CCX33 builder swap that started the same session).
+A multi-hour stabilization run on 2026-05-04 closed several ceq-side ArgoCD-sync bugs and tightened the deploy chain. The broader infra context (a CI builder node swap that started the same session) is recorded in the private operations record (`madfam-org/internal-devops` runbooks, 2026-05-03 builder upgrade).
 
 - ~~**🔴 ArgoCD ceq-services pointed at deleted manifest path**~~ — Closed 2026-05-04 via enclii#192. The repo had moved manifests from `infra/k8s/production/` to `infrastructure/k8s/` in PR ceq#20 but ArgoCD's project config still pointed at the old path → `ComparisonError: app path does not exist`. Updated to track `infrastructure/k8s/`.
 - ~~**🔴 db-migrate-job blocked by Kyverno**~~ — Closed 2026-05-04 via ceq#24, ceq#25. Migration Job lacked pod-level + container-level securityContext (Kyverno `restrict-capabilities` + `block-host-ports`) and the `ceq` namespace was missing the `enclii.dev/type: application` exemption label. Fixed both.
