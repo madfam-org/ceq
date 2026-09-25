@@ -38,6 +38,7 @@ from prometheus_client import make_asgi_app  # noqa: E402
 
 from ceq_api.config import get_settings  # noqa: E402
 from ceq_api.logging import setup_logging  # noqa: E402
+from ceq_api.metrics_guard import InternalOnlyMetricsMiddleware  # noqa: E402
 from ceq_api.middleware import setup_middleware  # noqa: E402
 from ceq_api.routers import (  # noqa: E402
     assets,
@@ -193,9 +194,14 @@ app.add_middleware(
 # Setup security and observability middleware
 setup_middleware(app)
 
-# Prometheus metrics at /metrics
+# Prometheus metrics at /metrics (served at /metrics/, the scrape path). Port
+# 5800 is also what cloudflared publishes as api.ceq.lol, so the guard -- added
+# last, so it runs first -- answers 404 on every /metrics path unless the
+# request comes from an in-cluster scraper (pod-IP / *.svc Host, no Cloudflare
+# edge headers). See ceq_api/metrics_guard.py.
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
+app.add_middleware(InternalOnlyMetricsMiddleware)
 
 # Routers
 app.include_router(health.router, tags=["health"])
