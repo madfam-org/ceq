@@ -92,3 +92,32 @@ spec:
   podSelector: {}
   policyTypes:
   - Egress
+---
+# Prometheus scrape: admit the `monitoring` namespace to ceq-api's metrics
+# port only. Both scrapers live there: the main annotation-driven Prometheus
+# and the operator-managed `rules-eval` that evaluates ceq-api-stability-alerts
+# (ServiceMonitor ceq-api -> container port 5800, path /metrics/). Without
+# this, default-deny refuses every scrape and those alerts evaluate on no data.
+#
+# BARE namespaceSelector on purpose: a from-entry that combines
+# namespaceSelector AND podSelector has rendered as deny-all on this k3s
+# cluster (kube-router), so do not narrow it to the Prometheus pods that way.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-scrape
+  namespace: ceq
+spec:
+  podSelector:
+    matchLabels:
+      app: ceq-api
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+    ports:
+    - port: 5800
+      protocol: TCP
+  policyTypes:
+  - Ingress

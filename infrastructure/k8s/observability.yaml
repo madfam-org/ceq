@@ -17,7 +17,9 @@ spec:
     - port: http
       interval: 30s
       scrapeTimeout: 10s
-      path: /metrics
+      # Trailing slash: prometheus_client's ASGI app is mounted at /metrics,
+      # so /metrics itself is a 307 to /metrics/.
+      path: /metrics/
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
