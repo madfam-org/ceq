@@ -119,6 +119,60 @@ def test_network_policy_allows_janua_egress() -> None:
     assert "port: 8080" in manifest
 
 
+def test_monitoring_can_scrape_api_metrics_port() -> None:
+    """Prometheus (namespace `monitoring`) must reach ceq-api's metrics port.
+
+    `ceq` runs default-deny ingress; without this policy every scrape is
+    refused and ceq-api-stability-alerts evaluate on no data. The from-entry
+    must be a BARE namespaceSelector: combining it with a podSelector has
+    rendered as deny-all on this k3s cluster.
+    """
+    yaml = pytest.importorskip("yaml", reason="PyYAML not installed in this lane")
+
+    policies = {
+        d["metadata"]["name"]: d
+        for d in yaml.safe_load_all((K8S_DIR / "network-policies.yaml").read_text())
+        if d
+    }
+    spec = policies["allow-monitoring-scrape"]["spec"]
+    assert spec["podSelector"] == {"matchLabels": {"app": "ceq-api"}}
+    assert spec["policyTypes"] == ["Ingress"]
+    [rule] = spec["ingress"]
+    assert rule["from"] == [
+        {"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "monitoring"}}}
+    ]
+    assert rule["ports"] == [{"port": 5800, "protocol": "TCP"}]
+
+
+def test_scrape_targets_point_at_the_api_container_port() -> None:
+    """Annotation and ServiceMonitor must resolve to the container's /metrics/.
+
+    The annotation port is the POD port (the kubernetes-services job rewrites
+    __address__ to <podIP>:<annotation>); "80" was connection-refused.
+    """
+    yaml = pytest.importorskip("yaml", reason="PyYAML not installed in this lane")
+
+    docs = [d for d in yaml.safe_load_all((K8S_DIR / "api-deployment.yaml").read_text()) if d]
+    service = next(d for d in docs if d["kind"] == "Service")
+    deployment = next(d for d in docs if d["kind"] == "Deployment")
+    [container] = deployment["spec"]["template"]["spec"]["containers"]
+    container_ports = {p["containerPort"] for p in container["ports"]}
+
+    annotations = service["metadata"]["annotations"]
+    assert int(annotations["prometheus.io/port"]) in container_ports
+    assert annotations["prometheus.io/path"] == "/metrics/"
+
+    monitor = next(
+        d
+        for d in yaml.safe_load_all((K8S_DIR / "observability.yaml").read_text())
+        if d and d["kind"] == "ServiceMonitor"
+    )
+    [endpoint] = monitor["spec"]["endpoints"]
+    [service_port] = [p for p in service["spec"]["ports"] if p["name"] == endpoint["port"]]
+    assert service_port["targetPort"] in container_ports
+    assert endpoint["path"] == "/metrics/"
+
+
 # --- pgbouncer adoption (move 2) contracts -------------------------------
 #
 # Backstop for the 2026-08-24 outage. The runtime DATABASE_URL is rendered

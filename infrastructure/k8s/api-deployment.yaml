@@ -117,10 +117,16 @@ metadata:
   namespace: ceq
   labels:
     app: ceq-api
+  # prometheus.io/port is the POD port, not the Service port: the main
+  # Prometheus `kubernetes-services` job (endpoints role) rewrites
+  # __address__ to <podIP>:<annotation>. "80" scraped <podIP>:80, where
+  # nothing listens (connection refused). The path carries the trailing
+  # slash because prometheus_client's ASGI app is mounted at /metrics and
+  # Starlette answers /metrics with a 307 to /metrics/.
   annotations:
     prometheus.io/scrape: "true"
-    prometheus.io/path: "/metrics"
-    prometheus.io/port: "80"
+    prometheus.io/path: "/metrics/"
+    prometheus.io/port: "5800"
 spec:
   selector:
     app: ceq-api
