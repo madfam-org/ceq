@@ -81,18 +81,23 @@ for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
 
     # Anti-vacuity: an absent header is also what an image that stopped
     # rewriting looks like. The entry says on boot whether it installed.
-    if docker logs "$CID" 2>&1 | grep -q 'ceq-studio: internal response header filter active'; then
+    # Read the log once and grep the captured text. Under `set -o pipefail`,
+    # `docker logs | grep -q` can come out false even when the line is there:
+    # grep exits on its first match, `docker logs` then dies of SIGPIPE (141)
+    # and pipefail reports the pipeline as failed.
+    container_logs="$(docker logs "$CID" 2>&1 || true)"
+    if grep -q 'ceq-studio: internal response header filter active' <<<"$container_logs"; then
       log "the entry reported installing the filter"
     else
       log "Container logs:"
-      docker logs "$CID" 2>&1 | tail -30 >&2 || true
+      tail -30 <<<"$container_logs" >&2 || true
       fail "no filter boot line — the CMD may still be starting server.js directly"
     fi
 
     # The loudest signal in this class: a proxied rewrite rather than a routed
     # one, which is what a HOSTNAME mismatch produces.
-    if docker logs "$CID" 2>&1 | grep -q 'Failed to proxy'; then
-      docker logs "$CID" 2>&1 | tail -30 >&2 || true
+    if grep -q 'Failed to proxy' <<<"$container_logs"; then
+      tail -30 <<<"$container_logs" >&2 || true
       fail "the container log says 'Failed to proxy' — the rewrite is not being routed internally"
     fi
     log "no 'Failed to proxy' in the container log"
