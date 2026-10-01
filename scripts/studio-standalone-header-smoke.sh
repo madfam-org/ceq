@@ -33,6 +33,8 @@
 #   5. No `Failed to proxy` in the log — the loudest signal in this class, and
 #      the only one that exists when a rewrite is proxied to a foreign origin
 #      instead of routed internally.
+#   6. `/_next/image` answers 404: the built-in image optimizer is off in the
+#      build that ships (`images.unoptimized` in apps/studio/next.config.mjs).
 #
 # THE BOOT HOSTNAME IS PART OF THE TEST
 #
@@ -192,6 +194,17 @@ else
 fi
 
 rm -f "$HEADERS" "$BODY"
+
+# (6) The built-in image optimizer is off (`images.unoptimized` in
+# next.config.mjs). Next answers 404 for it before reading any parameter; any
+# other status means the route is live in the build that ships.
+img_status="$(curl -s -o /dev/null -w '%{http_code}' -H "Host: ${HOST_HEADER}" \
+  "http://127.0.0.1:${PORT}/_next/image?url=%2Ffavicon.ico&w=64&q=75")"
+if [ "$img_status" = "404" ]; then
+  pass "GET /_next/image -> 404 (image optimizer off)"
+else
+  fail "GET /_next/image -> ${img_status}, expected 404 — the image optimizer is enabled in this build"
+fi
 
 echo ""
 echo "$((checks - failures))/${checks} checks passed."
