@@ -62,7 +62,7 @@ jobs:
   # ===========================================================================
   verify-ci:
     name: Verify CI passed
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Wait for CEQ CI workflow
@@ -106,7 +106,7 @@ jobs:
   build-api:
     name: Build API
     needs: [verify-ci]
-    runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-latest' }}
+    runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-24.04' }}
     permissions:
       contents: read
       packages: write
@@ -191,7 +191,7 @@ jobs:
   build-studio:
     name: Build Studio
     needs: [verify-ci]
-    runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-latest' }}
+    runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-24.04' }}
     permissions:
       contents: read
       packages: write
@@ -301,7 +301,7 @@ jobs:
   build-worker:
     name: Build Worker
     needs: [verify-ci]
-    runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-latest' }}
+    runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-24.04' }}
     permissions:
       contents: read
       packages: write
@@ -392,7 +392,7 @@ jobs:
   # runs before the Deployments roll.
   deploy:
     name: Commit deploy digests (GitOps)
-    runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-latest' }}
+    runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-24.04' }}
     needs: [build-api, build-studio, build-worker]
     if: |
       always() &&
@@ -472,7 +472,7 @@ jobs:
   # ===========================================================================
   notify:
     name: Notify
-    runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-latest' }}
+    runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-24.04' }}
     needs: [deploy]
     if: always()
 
