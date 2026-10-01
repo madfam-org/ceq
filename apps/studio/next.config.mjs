@@ -19,17 +19,34 @@ const nextConfig = {
       bodySizeLimit: "10mb",
     },
   },
-  // Disable image optimization in dev for faster builds
   images: {
-    unoptimized: process.env.NODE_ENV === "development",
+    // Next's built-in image optimizer is OFF in every environment
+    // (GHSA-2xp9-vwfh-vxw4; no fix exists on the 14.x line). With this set,
+    // `/_next/image` answers 404 before it reads any parameter or fetches any
+    // URL, and every `<Image>` renders a plain `<img>` with its original `src`
+    // (no srcset); `fill`, `width`/`height` and `priority` still lay out the
+    // same. Thumbnails are therefore served at their stored size. Re-enabling
+    // resizing means a custom `loader` that resizes at the CDN, not flipping
+    // this back. Asserted in __tests__/next-config-images.test.ts.
+    unoptimized: true,
+    // Only consulted by the optimizer, so inert while `unoptimized` is true;
+    // kept to the exact origins the app's images come from so that a future
+    // re-enable does not inherit a wildcard. No `*` in any hostname.
     remotePatterns: [
       {
+        // The R2 account endpoint the API builds `public_url` from when
+        // R2_PUBLIC_URL is unset (`{R2_ENDPOINT}/{bucket}/{key}`, see
+        // apps/api/src/ceq_api/storage/__init__.py). Account id and bucket as
+        // documented in docs/PRODUCTION_DEPLOYMENT.md.
         protocol: "https",
-        hostname: "*.r2.cloudflarestorage.com",
+        hostname: "12f1353f7819865c56161ce00297668e.r2.cloudflarestorage.com",
+        pathname: "/ceq-assets/**",
       },
       {
+        // The public CDN domain for the same bucket (R2_PUBLIC_URL).
         protocol: "https",
         hostname: "assets.ceq.lol",
+        pathname: "/**",
       },
     ],
   },
