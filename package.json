@@ -31,5 +31,12 @@
   "packageManager": "pnpm@9.14.4",
   "engines": {
     "node": ">=20.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "browserslist@<4.28.7": "^4.29.3",
+      "nanoid@<3.3.18": "^3.3.19",
+      "postcss@>=8.5.0 <8.5.18": "^8.5.28"
+    }
   }
 }
