@@ -428,6 +428,17 @@ if [[ "$EXPECT_APP_AUTH_REDIRECT" == "true" ]]; then
   assert_redirect_target "Unauthenticated app gate" "${app_base}/" "${app_base}/login"
 fi
 
+# GHSA-2xp9-vwfh-vxw4: the deployed Studio must not run Next's image optimizer
+# (images.unoptimized in apps/studio/next.config.mjs). CI proves the build;
+# this proves what is actually serving both hosts.
+log "Checking the Next image optimizer is off"
+for image_base in "$studio_base" "$app_base"; do
+  image_status="$(http_status "${image_base}/_next/image?url=%2Ffavicon.ico&w=64&q=75")"
+  [[ "$image_status" == "404" ]] \
+    || fail "${image_base}/_next/image returned HTTP ${image_status}, expected 404 (image optimizer enabled in production)"
+  log "${image_base}/_next/image -> 404"
+done
+
 if [[ "$PUBLIC_ONLY" == "true" ]]; then
   log "Public-only smoke complete."
   exit 0

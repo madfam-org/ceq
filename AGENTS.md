@@ -190,9 +190,58 @@ pnpm --filter @ceq/studio test
 # Studio auth E2E (mock Janua on 127.0.0.1:5999; requires Playwright Chromium)
 cd apps/studio && pnpm exec playwright install chromium && pnpm test:e2e
 
+# Studio standalone response-header smoke (after `pnpm --filter @ceq/studio build`)
+bash scripts/studio-standalone-header-smoke.sh
+
 # Studio Docker smoke (after building the studio image)
 bash scripts/studio-docker-smoke.sh ceq-studio:local
+
+# Public production smoke (read-only; includes the /_next/image 404 check)
+CEQ_PUBLIC_ONLY=true bash scripts/production-smoke.sh
 ```
+
+## Studio security invariant: Next image optimizer off
+
+`apps/studio` (Next 14.2.35) ships with `images.unoptimized: true` in **every**
+environment (#93, GHSA-2xp9-vwfh-vxw4, which has no 14.x fix). Before #93 it was
+true only in development. `/_next/image` therefore answers **404** before it
+reads a parameter or fetches anything, and `<Image>` renders a plain `<img>`
+with its original `src`. `remotePatterns` lists only the exact origins the app's
+images come from: HTTPS, a `pathname` on every entry, no `*` in any hostname and
+no `domains`. Re-enabling resizing means a custom CDN `loader`, not flipping the
+flag back. Four layers enforce it:
+
+1. `apps/studio/__tests__/next-config-images.test.ts` (vitest, CI job
+   "Studio · lint + typecheck + vitest") evaluates the config under
+   `NODE_ENV=production|development|test` and checks the allow-list shape.
+2. `scripts/studio-standalone-header-smoke.sh` check 6 (same CI job) boots the
+   built standalone server and expects `GET /_next/image` → 404.
+3. `scripts/production-smoke.sh` (public mode too) expects 404 from
+   `/_next/image` on both `ceq.lol` and `app.ceq.lol`.
+4. This section. Change the test, the config and this text together.
+
+## Studio smoke scripts and the log-read rule
+
+- `scripts/studio-docker-smoke.sh <image>` runs in CI ("Studio · Docker smoke")
+  and in `deploy.yaml` before the Studio image is pushed. It proves the image
+  starts the filtered entrypoint and does not publish `x-middleware-rewrite`.
+- **It reads the container log once** (#95):
+  `container_logs="$(docker logs "$CID" 2>&1 || true)"`, then greps that text.
+  The old form, `docker logs "$CID" | grep -q …` under `set -euo pipefail`,
+  gave false negatives. `grep -q` exits on its first match, `docker logs` dies
+  of SIGPIPE (141), and `pipefail` reports the pipeline as failed. The deploy
+  run for `3e7c9c74` failed "no filter boot line" right after printing that very
+  line. Whether it fires depends on log size and timing, which is why PR CI
+  passed. Do not reintroduce `<producer> | grep -q` in a `pipefail` script.
+  Capture the output first, or use `grep -q … <<<"$var"`.
+- `scripts/studio-standalone-header-smoke.sh` needs no Docker and proves the
+  server itself does not leak the header (see its header comment for the six
+  checks).
+
+## CI runners
+
+GitHub-hosted jobs are pinned to `ubuntu-24.04` (#94), ahead of `ubuntu-latest`
+moving to Ubuntu 26 on 2026-10-19. Do not switch them back to `ubuntu-latest`.
 
 ## Authentication Configuration
 
@@ -226,11 +275,16 @@ login healthy. See `docs/JANUA_OPERATOR.md`.
 ## Environment Variables
 
 ### API (apps/api/.env)
+
+Production values come from Vault `secret/ceq`, synced into the `ceq-secrets`
+Secret by `infrastructure/k8s/external-secret.yaml`. Never paste a credential
+value into a doc, an access key ID included.
+
 ```bash
 DATABASE_URL=postgresql+asyncpg://ceq:PASSWORD@HOST:5432/ceq_production
 REDIS_URL=redis://:PASSWORD@redis-0.redis-headless.enclii-production.svc.cluster.local:6379/14
 R2_ENDPOINT=https://12f1353f7819865c56161ce00297668e.r2.cloudflarestorage.com
-R2_ACCESS_KEY=51844af3c4cbda516895116372ec3b38
+R2_ACCESS_KEY=<from Vault secret/ceq via the ceq-secrets ExternalSecret>
 R2_SECRET_KEY=<from-secrets.local.yaml>
 R2_BUCKET=ceq-assets
 JANUA_URL=https://api.janua.dev
@@ -424,7 +478,29 @@ kubectl logs -n ceq deployment/cloudflared
 - [docs/CEQ_STABILITY_ROADMAP.md](./docs/CEQ_STABILITY_ROADMAP.md) - Stabilization phases and smoke matrix
 - [docs/JANUA_OPERATOR.md](./docs/JANUA_OPERATOR.md) - CEQ-side Janua operator checklist
 - [docs/JANUA_AGENT_HANDOFF.md](./docs/JANUA_AGENT_HANDOFF.md) - Janua-side agent handoff
-- [Enclii CLAUDE.md](../enclii/CLAUDE.md) - Platform infrastructure
+- [Enclii GitOps](https://github.com/madfam-org/enclii/blob/main/docs/infrastructure/GITOPS.md) - Platform deploy model (ArgoCD, digests)
+
+## Related repositories and contracts
+
+- **Janua (identity):** the API validates RS256 tokens against Janua's JWKS
+  (`PyJWT[crypto]`). Issuer, audience and `kid` rules:
+  https://github.com/madfam-org/janua/blob/main/docs/guides/ECOSYSTEM_INTEGRATION.md.
+  Machine-to-machine consumers use Janua service tokens:
+  https://github.com/madfam-org/janua/blob/main/docs/service-tokens.md
+  (CEQ's side: `docs/SERVICE_CREDENTIALS.md`).
+- **Enclii (deploy platform):** GitOps/ArgoCD
+  https://github.com/madfam-org/enclii/blob/main/docs/infrastructure/GITOPS.md,
+  signed digests
+  https://github.com/madfam-org/enclii/blob/main/docs/runbooks/SIGNED_GITOPS_DIGESTS.md,
+  admission policies
+  https://github.com/madfam-org/enclii/blob/main/docs/infrastructure/KYVERNO_POLICIES.md.
+- **Render API consumers** (for example the tabletop and capture products) call
+  `/v1/render/*` per [`docs/API.md`](./docs/API.md) or through `@ceq/sdk`
+  ([`packages/sdk/README.md`](./packages/sdk/README.md)). The contract is defined
+  here; consumers link to it.
+- Python dependency note: `apps/api` pins `sqlalchemy>=2.0,<2.1`, because 2.1
+  drops greenlet from the default install and `sqlalchemy.ext.asyncio` then
+  fails to import.
 
 ## Known Issues — Audit 2026-04-23
 
