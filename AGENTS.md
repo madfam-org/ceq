@@ -44,6 +44,10 @@ redirect and should not become the source of truth again.
   production snapshot.
 - Older imported or session-specific sections below are historical context when
   they conflict with the latest evidence audit.
+- Open engineering items and owner decisions live in ONE list:
+  [`docs/CEQ_STABILITY_ROADMAP.md` → Pending work](./docs/CEQ_STABILITY_ROADMAP.md#pending-work-current). The
+  "Known Issues" sections at the end of this file are a closed historical record.
+- Studio runs Next.js 15.5.27 with React 19.3 (#97).
 
 ## LLM context files
 
@@ -110,7 +114,7 @@ Client: `@ceq/sdk` (`packages/sdk/`) — `CeqClient.renderCard/renderAudio/rende
 ```
 ceq/
 ├── apps/
-│   ├── studio/       # Next.js 14 frontend (port 5801)
+│   ├── studio/       # Next.js 15 frontend (port 5801)
 │   ├── api/          # FastAPI orchestration (port 5800)
 │   └── workers/      # ComfyUI GPU workers (ports 5810-5819)
 ├── packages/
@@ -132,7 +136,7 @@ ceq/
 
 | Layer | Technology | Notes |
 |-------|------------|-------|
-| Frontend | Next.js 14, shadcn/ui, Zustand | Dark mode only |
+| Frontend | Next.js 15 (React 19), shadcn/ui, Zustand | Dark mode only |
 | API | FastAPI, SQLAlchemy, Pydantic v2 | Python 3.11+ |
 | Workers | Python, comfy_runner | Vast.ai (current), Furnace (future) |
 | Queue | Redis | Job queue, real-time updates (DB 14) |
@@ -202,9 +206,10 @@ CEQ_PUBLIC_ONLY=true bash scripts/production-smoke.sh
 
 ## Studio security invariant: Next image optimizer off
 
-`apps/studio` (Next 14.2.35) ships with `images.unoptimized: true` in **every**
+`apps/studio` (Next 15.5.27) ships with `images.unoptimized: true` in **every**
 environment (#93, GHSA-2xp9-vwfh-vxw4, which has no 14.x fix). Before #93 it was
-true only in development. `/_next/image` therefore answers **404** before it
+true only in development. The posture was kept unchanged through the move from
+14.2.35 to 15.5.27. `/_next/image` therefore answers **404** before it
 reads a parameter or fetches anything, and `<Image>` renders a plain `<img>`
 with its original `src`. `remotePatterns` lists only the exact origins the app's
 images come from: HTTPS, a `pathname` on every entry, no `*` in any hostname and
@@ -331,7 +336,7 @@ async def create_workflow(data: WorkflowCreate, user: User = Depends(get_current
 ### TypeScript (Studio)
 
 ```typescript
-// Next.js 14 app router patterns
+// Next.js 15 app router patterns
 // File: apps/studio/app/workflows/page.tsx
 import { WorkflowList } from '@/components/workflow-list';
 import { getWorkflows } from '@/lib/api';

@@ -61,6 +61,10 @@ export default function Error({
           >
             Try again
           </button>
+          {/* A full document load on purpose: leaving an error boundary should not
+              reuse the client router state that just failed. eslint-config-next 15
+              started applying this rule to app/; the behavior is unchanged. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
           <a
             href="/"
             style={{

@@ -1,6 +1,6 @@
 # CEQ Stability Roadmap and Remediation Plan
 
-> **Last updated:** 2026-06-02
+> **Last updated:** 2026-10-02 ([Pending work](#pending-work-current)); the program status and phase sections below are dated 2026-06-02.
 > **Status:** Public API/Studio health is green; historical token-route/browser proof exists; current blockers are Janua ExternalSecret degradation, missing authenticated smoke token, no live worker capacity, GPU production smoke, and non-actionable Enclii metrics/alerts.
 > **Truth layer:** [`README.md`](./README.md), [`CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md`](./CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md), [`DOCS_EVIDENCE_AUDIT_2026-06-02.md`](./DOCS_EVIDENCE_AUDIT_2026-06-02.md)
 > **Session wrap-up:** [`docs/CEQ_IDENTITY_AND_DEMO_WRAPUP.md`](./CEQ_IDENTITY_AND_DEMO_WRAPUP.md)  
@@ -17,6 +17,7 @@
 
 ## Table of contents
 
+0. [Pending work (current)](#pending-work-current)
 1. [Purpose, mission, vision](#purpose-mission-vision)
 2. [Current status snapshot](#current-status-snapshot-2026-06-01)
 3. [Definition of done — full stability](#definition-of-done--full-stability)
@@ -30,6 +31,33 @@
 11. [Stability declaration template](#stability-declaration-template)
 12. [Product backlog (post-stability)](#product-backlog-post-stability)
 13. [Historical closure record](#historical-closure-record)
+
+---
+
+## Pending work (current)
+
+The one current list of open Studio/runtime engineering items and owner
+decisions. Program-level gates (identity, GPU production smoke, alerting,
+commercial GA) stay in the [GA-Critical evidence board](#ga-critical-evidence-board-roadmap-truth),
+[Phase 7](#phase-7--product-backlog-post-stability-p2p3) and
+[`COMMERCIAL_GA_REMEDIATION_PLAN.md`](./COMMERCIAL_GA_REMEDIATION_PLAN.md); this
+list does not repeat them. `AGENTS.md`, `llms.txt` and `llms-full.txt` point here.
+
+| # | Item | Why it matters | Priority | Type | Link |
+|---|------|----------------|----------|------|------|
+| 1 | **Output URLs when `R2_PUBLIC_URL` is unset.** `StorageService.get_public_url` (`apps/api/src/ceq_api/storage/__init__.py`) then returns `{R2_ENDPOINT}/{bucket}/{key}`: the S3 API endpoint, unsigned. The repo's manifests do not set `R2_PUBLIC_URL`; confirm the live value before choosing the fix. | A browser cannot load an unsigned S3-API URL for a private bucket, so gallery previews and downloads that use `public_url` do not render. Fix: serve outputs from a public bucket domain (`R2_PUBLIC_URL`, the `assets.ceq.lol` entry already in `remotePatterns`) or return presigned URLs. | P1 | Owner decision (which delivery path) + engineering | — |
+| 2 | **The gallery lightbox shows the thumbnail.** `output-gallery.tsx` prefers `preview_url` over the full output URL. | With the optimizer off (#93) the preview is served at its stored size, so the enlarged view is a scaled-up thumbnail. Load the full-resolution output in the lightbox and keep the thumbnail for the grid. | P2 | Engineering | #93 |
+| 3 | **Resizing via a CDN `loader`, and `sizes` on `fill` images.** The three `fill` images (`gallery/output-card.tsx`, `templates/template-card.tsx`, `app/templates/[category]/[id]/page.tsx`) have no `sizes`. | `images.unoptimized: true` stays (see the invariant in `AGENTS.md`); resizing comes back only through a custom loader that resizes at the CDN. `sizes` is what lets that loader pick a width. Depends on item 1. | P3 | Engineering | #93 |
+| 4 | **Object-storage credential rotation.** | Owner call, tracked privately. | P2 | Owner decision | — |
+| 5 | **`next lint` before Next 16.** Studio lints with `next lint`, which Next 15 deprecates and Next 16 removes. | Move to the ESLint CLI (`@next/codemod next-lint-to-eslint-cli`) before any 16.x upgrade. | P3 | Engineering | #97 |
+| 6 | **`x-middleware-rewrite` still leaks on Next 15.5.27** (upstream vercel/next.js#58366). | `apps/studio/server-entry.mjs` filters it on the Node response; re-measure on every Next bump (the standalone header smoke asserts the header is absent). | P3 | Engineering (watch upstream) | #97 |
+| 7 | **`postcss@8.4.31` pinned by `next@15.5.27`.** | Remaining `pnpm audit --prod` findings (build-time only; also `@babel/core` via `styled-jsx`). Clear with a `pnpm.overrides` entry or a Next patch release. | P3 | Engineering | #97 |
+
+Closed by #97: Studio on Next 15.5.27 + React 19; the Dockerfile's hand-made
+`node_modules/{next,react,react-dom}` links follow the lockfile again (the old
+`next` link named a store directory without the `@playwright+test` peer suffix
+the lockfile produces) and the image build now
+fails on a dangling link.
 
 ---
 

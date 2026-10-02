@@ -11,9 +11,10 @@
  *   -> 200
  *      x-middleware-rewrite: /landing
  *
- * Measured on this repository's own `.next/standalone` at Next 14.2.35, bound to
- * 0.0.0.0 as the Dockerfile binds it. `ceq.lol` is the public marketing surface,
- * so this reaches every anonymous visitor to the site's front page.
+ * Measured on this repository's own `.next/standalone` at Next 14.2.35, and again
+ * at 15.5.27 (still present), bound to 0.0.0.0 as the Dockerfile binds it.
+ * `ceq.lol` is the public marketing surface, so this reaches every anonymous
+ * visitor to the site's front page.
  *
  * ── Why it is Next's defect and not this app's misconfiguration ─────────────
  *
@@ -24,15 +25,15 @@
  * (`router-server.js` calls `filterInternalHeaders(req.headers)`). The same list
  * is never applied on the way OUT:
  *
- *   // next/dist/server/lib/router-utils/resolve-routes.js:406
+ *   // next/dist/server/lib/router-utils/resolve-routes.js:431 (15.5.27)
  *   if (middlewareHeaders["x-middleware-rewrite"]) {
  *     const value = middlewareHeaders["x-middleware-rewrite"];
- *     const rel = relativizeURL(value, initUrl);
- *     resHeaders["x-middleware-rewrite"] = rel;   // <- the client copy
- *     parsedUrl = url.parse(rel, true);           // <- the actual routing
+ *     const destination = getRelativeURL(value, initUrl);
+ *     resHeaders["x-middleware-rewrite"] = destination; // <- the client copy
+ *     parsedUrl = url.parse(destination, true);         // <- the actual routing
  *   }
  *
- *   // next/dist/server/lib/router-server.js:258
+ *   // next/dist/server/lib/router-server.js:329 (15.5.27)
  *   for (const key of Object.keys(resHeaders || {})) {
  *     res.setHeader(key, resHeaders[key]);        // <- onto the wire
  *   }

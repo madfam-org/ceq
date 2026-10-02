@@ -55,7 +55,7 @@ When documents conflict, prefer this order:
 | [`JANUA_AGENT_HANDOFF.md`](./JANUA_AGENT_HANDOFF.md) | Janua-side handoff and OAuth coordination notes |
 | [`PLATFORM_AGENT_HANDOFFS.md`](./PLATFORM_AGENT_HANDOFFS.md) | Platform/Vault/Kubernetes/acceptance handoff prompts and known adapter gaps |
 | [`PRODUCTION_DEPLOYMENT.md`](./PRODUCTION_DEPLOYMENT.md) | Production deployment guide; contains legacy raw commands and must be read Enclii-first |
-| [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md) | Stability roadmap, smoke matrix, critical path, and historical closure record |
+| [`CEQ_STABILITY_ROADMAP.md`](./CEQ_STABILITY_ROADMAP.md) | **Pending work (current)** — the one list of open engineering items and owner decisions — then the stability roadmap, smoke matrix, critical path, and historical closure record |
 
 ## Developer docs
 

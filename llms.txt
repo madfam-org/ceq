@@ -11,7 +11,7 @@ Compact LLM context index for this repository.
 - `docs/CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md` — latest audit wrap-up and ROI-prioritized blockers.
 - `docs/DOCS_EVIDENCE_AUDIT_2026-06-02.md` — current repo/prod evidence audit and remaining unverified claims.
 - `docs/CEQ_IDENTITY_AND_DEMO_WRAPUP.md` — session wrap-up, doc index, operator gates.
-- `docs/CEQ_STABILITY_ROADMAP.md` — stabilization phases, smoke matrix, remaining gates.
+- `docs/CEQ_STABILITY_ROADMAP.md` — **Pending work (current)** section first: the one list of open engineering items and owner decisions; then stabilization phases, smoke matrix, remaining gates.
 - `docs/GA_DEMO_DEFINITION.md` — capped GA demo definition, readiness scorecard, Tier A/B/C.
 - `docs/COMMERCIAL_GA_REMEDIATION_PLAN.md` — paid launch gates, remediation tracks, commercial GA declaration criteria.
 - `docs/COMMERCIAL_LAUNCH_READINESS_PACK.md` — launch evidence, support macros, alert/legal readiness checklist.
@@ -19,6 +19,11 @@ Compact LLM context index for this repository.
 - `docs/JANUA_AGENT_HANDOFF.md` — complete cross-repo handoff for Janua-side agents.
 - `docs/PLATFORM_AGENT_HANDOFFS.md` — orchestrator + Vault/K8s/acceptance agent prompts.
 - `llms-full.txt` — full context map and durable operating contract.
+
+## Stack
+
+- Studio (`apps/studio`): Next.js 15.5.27, React 19.3, pnpm 9.14.4, standalone output started by `server-entry.mjs`.
+- API / workers: FastAPI / Python 3.11.
 
 ## Testing and CI gates
 
