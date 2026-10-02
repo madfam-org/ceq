@@ -175,7 +175,9 @@ R2_BUCKET=ceq-assets
 | `pnpm typecheck` | Run TypeScript checks |
 | `pnpm --filter @ceq/studio test` | Studio unit tests (Vitest) |
 | `pnpm --filter @ceq/studio test:e2e` | Studio auth E2E (Playwright + mocked Janua) |
-| `bash scripts/studio-docker-smoke.sh <image>` | Verify Studio Docker entrypoint + HTTP |
+| `bash scripts/studio-standalone-header-smoke.sh` | Boot the built standalone Studio: no `x-middleware-rewrite` leak, security headers, `/_next/image` → 404 |
+| `bash scripts/studio-docker-smoke.sh <image>` | Verify Studio Docker entrypoint + HTTP (reads the container log once; see AGENTS.md) |
+| `CEQ_PUBLIC_ONLY=true bash scripts/production-smoke.sh` | Read-only production smoke, including `/_next/image` → 404 on both hosts |
 | `pnpm --filter @ceq/studio dev` | Run studio locally |
 | `pnpm --filter @ceq/studio build` | Build studio for production |
 
@@ -292,9 +294,14 @@ account to complete the acceptance checklist.
 
 | Project | Description |
 |---------|-------------|
-| [Enclii](https://github.com/madfam-io/enclii) | Platform-as-a-Service hosting |
-| [Janua](https://github.com/madfam-io/janua) | OAuth/OIDC authentication |
-| [Solarpunk Foundry](https://github.com/madfam-io/solarpunk-foundry) | MADFAM ecosystem docs |
+| [Enclii](https://github.com/madfam-org/enclii/blob/main/docs/infrastructure/GITOPS.md) | Platform hosting; GitOps deploy model |
+| [Janua](https://github.com/madfam-org/janua/blob/main/docs/guides/ECOSYSTEM_INTEGRATION.md) | OAuth/OIDC authentication; JWKS, issuer and audience contract |
+| [Solarpunk Foundry](https://github.com/madfam-org/solarpunk-foundry) | MADFAM ecosystem docs |
+
+**Security invariant:** Studio runs with Next's image optimizer off in every
+environment (`images.unoptimized: true`, exact `remotePatterns`; `/_next/image`
+returns 404, GHSA-2xp9-vwfh-vxw4). A vitest test, the standalone header smoke and
+the production smoke all enforce it; see `AGENTS.md`.
 
 ---
 

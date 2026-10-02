@@ -326,7 +326,7 @@ JANUA_URL=https://api.janua.dev
 
 # Cloudflare R2 Storage
 R2_ENDPOINT=https://12f1353f7819865c56161ce00297668e.r2.cloudflarestorage.com
-R2_ACCESS_KEY=51844af3c4cbda516895116372ec3b38
+R2_ACCESS_KEY=your-r2-access-key-id
 R2_SECRET_KEY=your-secret-key
 R2_BUCKET=ceq-assets
 # R2_BUCKET_NAME=ceq-assets also works and is used by k8s secrets.

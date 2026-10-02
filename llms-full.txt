@@ -59,8 +59,10 @@ gap or incident link.
 |-------|-------------------|
 | Studio unit tests | `pnpm --filter @ceq/studio test` |
 | Studio auth E2E | `pnpm --filter @ceq/studio test:e2e` — `apps/studio/e2e/` + `mock-janua-server.mjs` |
-| Studio Docker smoke | `scripts/studio-docker-smoke.sh <image>` — guards standalone entrypoint path |
-| Public prod smoke | `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` |
+| Studio config guard | `apps/studio/__tests__/next-config-images.test.ts` — `images.unoptimized` in every `NODE_ENV`, exact HTTPS `remotePatterns`, no wildcard, no `domains` |
+| Studio standalone smoke | `scripts/studio-standalone-header-smoke.sh` — no `x-middleware-rewrite` leak, security headers, `/_next/image` → 404 |
+| Studio Docker smoke | `scripts/studio-docker-smoke.sh <image>` — guards standalone entrypoint path; reads `docker logs` once into a variable (a `docker logs \| grep -q` pipeline under `pipefail` false-fails on SIGPIPE, #95) |
+| Public prod smoke | `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh` — includes `/_next/image` → 404 on `ceq.lol` and `app.ceq.lol` |
 | Capped GA demo gates | `docs/GA_DEMO_DEFINITION.md` — Tier B checklist + smoke flags |
 | Commercial GA gates | `docs/COMMERCIAL_GA_REMEDIATION_PLAN.md` — credits, entitlements, billing, quotas, support, launch signoff |
 | Session wrap-up | `docs/CEQ_IDENTITY_AND_DEMO_WRAPUP.md` — doc index, operator gates |

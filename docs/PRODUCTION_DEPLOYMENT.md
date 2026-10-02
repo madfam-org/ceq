@@ -532,7 +532,8 @@ Before ArgoCD picks up new Studio digests, CI must pass:
 
 | Job | What it guards |
 |-----|----------------|
-| `Studio · Docker smoke` | Standalone entrypoint at `apps/studio/server.js` + HTTP 200 |
+| `Studio · lint + typecheck + vitest` | Includes `next-config-images.test.ts` and `studio-standalone-header-smoke.sh` (`/_next/image` → 404, no `x-middleware-rewrite` leak) |
+| `Studio · Docker smoke` | Standalone entrypoint at `apps/studio/server.js` + HTTP 200; the container log is read once (#95) so a `pipefail` SIGPIPE cannot false-fail it |
 | `Studio · Playwright auth` | Mocked Janua OAuth, session bootstrap, refresh, logout (6 tests) |
 | `verify-ci` (deploy workflow) | Deploy waits for CEQ CI green on the commit SHA |
 

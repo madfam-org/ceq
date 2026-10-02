@@ -60,7 +60,7 @@ export JOB_COMPLETION_DEAD_LETTER_KEY="ceq:jobs:completion:dead"
 
 # Optional: R2 storage for outputs
 export R2_ENDPOINT="https://12f1353f7819865c56161ce00297668e.r2.cloudflarestorage.com"
-export R2_ACCESS_KEY="51844af3c4cbda516895116372ec3b38"
+export R2_ACCESS_KEY="your-r2-access-key-id"
 export R2_SECRET_KEY="your-secret-key"
 export R2_BUCKET="ceq-assets"
 # R2_BUCKET_NAME is also accepted.

@@ -24,7 +24,10 @@ Compact LLM context index for this repository.
 
 - Studio unit tests: `pnpm --filter @ceq/studio test`
 - Studio Playwright auth E2E: `pnpm --filter @ceq/studio test:e2e` (mock Janua server)
-- Studio Docker smoke: `scripts/studio-docker-smoke.sh <image>`
+- Studio standalone header smoke: `scripts/studio-standalone-header-smoke.sh` (after the studio build; includes `/_next/image` → 404)
+- Studio Docker smoke: `scripts/studio-docker-smoke.sh <image>` (reads the container log once; never `docker logs | grep -q` under pipefail)
+- Security invariant: Studio image optimizer off in all envs (`images.unoptimized`, exact `remotePatterns`, GHSA-2xp9-vwfh-vxw4); guarded by `apps/studio/__tests__/next-config-images.test.ts` and both smokes
+- Runners: GitHub-hosted jobs pinned to `ubuntu-24.04`
 - Public production smoke: `CEQ_PUBLIC_ONLY=true scripts/production-smoke.sh`
 - CI jobs: `Studio · Docker smoke`, `Studio · Playwright auth` (see `.github/workflows/ci.yaml`)
 
