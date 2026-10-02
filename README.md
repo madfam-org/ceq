@@ -53,8 +53,8 @@ CEQ is MADFAM's internal content generation platform. It enables:
 
 ```
 ceq.lol
-├── ceq-landing (Next.js 14)    → https://ceq.lol       (marketing + demo)
-├── ceq-studio (Next.js 14)     → https://app.ceq.lol   (authenticated app)
+├── ceq-landing (Next.js 15)    → https://ceq.lol       (marketing + demo)
+├── ceq-studio (Next.js 15)     → https://app.ceq.lol   (authenticated app)
 ├── ceq-api (FastAPI)           → https://api.ceq.lol   (port 5800)
 ├── ceq-workers (ComfyUI)       → GPU instances          (ports 5810-5819)
 └── Dependencies
@@ -187,7 +187,7 @@ R2_BUCKET=ceq-assets
 
 | Layer | Technology |
 |-------|------------|
-| Frontend | Next.js 14, shadcn/ui, Zustand, TanStack Query |
+| Frontend | Next.js 15 (React 19), shadcn/ui, Zustand, TanStack Query |
 | API | FastAPI, SQLAlchemy, Pydantic v2 |
 | Workers | Python, comfy_runner |
 | Queue | Redis |

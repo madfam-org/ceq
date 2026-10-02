@@ -103,7 +103,8 @@ export function generateStaticParams() {
   return Object.keys(PAGES).map((slug) => ({ slug }));
 }
 
-export default function LegalPage({ params }: { params: { slug: string } }) {
+export default async function LegalPage(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const page = PAGES[params.slug as LegalSlug];
   if (!page) {
     notFound();

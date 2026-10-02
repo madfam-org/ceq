@@ -11,9 +11,10 @@ const nextConfig = {
   // Skip build-time type errors (stubs for slider/switch have type mismatches)
   typescript: { ignoreBuildErrors: true },
   eslint: { ignoreDuringBuilds: true },
+  // Trace from monorepo root to include workspace deps in standalone.
+  // Top-level since Next 15 (it lived under `experimental` on 14.x).
+  outputFileTracingRoot: path.join(__dirname, "../../"),
   experimental: {
-    // Trace from monorepo root to include workspace deps in standalone.
-    outputFileTracingRoot: path.join(__dirname, "../../"),
     // Enable React Server Components
     serverActions: {
       bodySizeLimit: "10mb",

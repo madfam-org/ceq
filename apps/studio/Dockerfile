@@ -62,10 +62,10 @@ COPY --from=builder /app/apps/studio/public ./apps/studio/public
 
 # The process entry, and why the CMD below names it rather than server.js.
 #
-# Next 14.2.35 copies its internal router signal `x-middleware-rewrite` onto the
+# Next copies its internal router signal `x-middleware-rewrite` onto the
 # CLIENT response for every rewrite, with no origin check — so `GET /` on
 # ceq.lol answers every anonymous visitor with `x-middleware-rewrite: /landing`.
-# Measured on this repo's own standalone output. It cannot be removed inside
+# Measured on this repo's own standalone output at 14.2.35 and again at 15.5.27. It cannot be removed inside
 # src/middleware.ts (Next reads the rewrite out of that very response object, so
 # deleting it there cancels the rewrite and serves a blank 200) and the
 # next.config.mjs `headers()` entries are applied earlier in the route list than
@@ -75,12 +75,17 @@ COPY --from=builder /app/apps/studio/public ./apps/studio/public
 COPY --from=builder --chown=nextjs:nodejs /app/apps/studio/server-entry.mjs ./apps/studio/server-entry.mjs
 
 # Fix broken pnpm symlinks: copy .pnpm store and recreate links
-# Next.js 14 standalone doesn't trace .pnpm/ into output
+# The standalone output doesn't trace the whole .pnpm/ store.
+# The store directory names carry pnpm's peer suffix, so they must match
+# pnpm-lock.yaml exactly; the `test -e` lines fail the build on a dangling link.
 RUN rm -rf node_modules
 COPY --from=builder /app/node_modules/.pnpm ./node_modules/.pnpm
-RUN ln -s .pnpm/next@14.2.35_@babel+core@7.29.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next ./node_modules/next && \
-    ln -s .pnpm/react@18.3.1/node_modules/react ./node_modules/react && \
-    ln -s .pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom ./node_modules/react-dom
+RUN ln -s .pnpm/next@15.5.27_@babel+core@7.29.0_@playwright+test@1.60.0_@types+node@22.19.17_react-dom@19.3.0_react@19.3.0__react@19.3.0/node_modules/next ./node_modules/next && \
+    ln -s .pnpm/react@19.3.0/node_modules/react ./node_modules/react && \
+    ln -s .pnpm/react-dom@19.3.0_react@19.3.0/node_modules/react-dom ./node_modules/react-dom && \
+    test -e node_modules/next/package.json && \
+    test -e node_modules/react/package.json && \
+    test -e node_modules/react-dom/package.json
 
 # Environment
 ENV NODE_ENV=production

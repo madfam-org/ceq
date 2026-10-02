@@ -116,9 +116,12 @@ function cloneSessionCookies(
   }
 }
 
+// Next 15: dynamic route params arrive as a Promise.
+type RouteContext = { params: Promise<{ path?: string[] }> };
+
 async function proxy(
   request: NextRequest,
-  context: { params: { path?: string[] } }
+  context: RouteContext
 ): Promise<NextResponse> {
   if (!SUPPORTED_METHODS.has(request.method)) {
     return NextResponse.json(
@@ -127,7 +130,8 @@ async function proxy(
     );
   }
 
-  const targetPath = resolveTargetPath(context.params.path);
+  const { path } = await context.params;
+  const targetPath = resolveTargetPath(path);
   const targetUrl = new URL(`${targetPath}${request.nextUrl.search}`, API_BASE);
 
   const { token, setCookie } = await resolveSessionToken(request);
@@ -155,42 +159,42 @@ async function proxy(
 
 export async function GET(
   request: NextRequest,
-  context: { params: { path?: string[] } }
+  context: RouteContext
 ): Promise<NextResponse> {
   return proxy(request, context);
 }
 
 export async function HEAD(
   request: NextRequest,
-  context: { params: { path?: string[] } }
+  context: RouteContext
 ): Promise<NextResponse> {
   return proxy(request, context);
 }
 
 export async function POST(
   request: NextRequest,
-  context: { params: { path?: string[] } }
+  context: RouteContext
 ): Promise<NextResponse> {
   return proxy(request, context);
 }
 
 export async function PUT(
   request: NextRequest,
-  context: { params: { path?: string[] } }
+  context: RouteContext
 ): Promise<NextResponse> {
   return proxy(request, context);
 }
 
 export async function PATCH(
   request: NextRequest,
-  context: { params: { path?: string[] } }
+  context: RouteContext
 ): Promise<NextResponse> {
   return proxy(request, context);
 }
 
 export async function DELETE(
   request: NextRequest,
-  context: { params: { path?: string[] } }
+  context: RouteContext
 ): Promise<NextResponse> {
   return proxy(request, context);
 }

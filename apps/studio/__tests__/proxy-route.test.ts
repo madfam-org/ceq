@@ -57,7 +57,7 @@ describe("Studio API proxy route", () => {
       body: JSON.stringify({ prompt: "entropy" }),
     });
 
-    const response = await POST(request, { params: { path: ["v1", "jobs"] } });
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "jobs"] }) });
     const body = await response.json();
 
     expect(response.status).toBe(201);
@@ -96,7 +96,7 @@ describe("Studio API proxy route", () => {
       },
     });
 
-    const response = await GET(request, { params: { path: ["v1", "jobs", "job-1"] } });
+    const response = await GET(request, { params: Promise.resolve({ path: ["v1", "jobs", "job-1"] }) });
 
     expect(response.status).toBe(401);
     const [upstreamCallUrl, upstreamInit] = mockFetch.mock.calls[0];
@@ -113,7 +113,7 @@ describe("Studio API proxy route", () => {
     mockFetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
 
     const request = requestFor("/v1/jobs/job-1", { method: "DELETE" });
-    const response = await DELETE(request, { params: { path: ["v1", "jobs", "job-1"] } });
+    const response = await DELETE(request, { params: Promise.resolve({ path: ["v1", "jobs", "job-1"] }) });
     expect(response.status).toBe(204);
 
     const [upstreamCallUrl, upstreamInit] = mockFetch.mock.calls[0];
