@@ -44,6 +44,10 @@ redirect and should not become the source of truth again.
   production snapshot.
 - Older imported or session-specific sections below are historical context when
   they conflict with the latest evidence audit.
+- Open engineering items and owner decisions live in ONE list:
+  [`docs/CEQ_STABILITY_ROADMAP.md` → Pending work](./docs/CEQ_STABILITY_ROADMAP.md#pending-work-current). The
+  "Known Issues" sections at the end of this file are a closed historical record.
+- Studio runs Next.js 15.5.27 with React 19.3 (#97).
 
 ## LLM context files
 

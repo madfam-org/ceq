@@ -70,6 +70,15 @@ gap or incident link.
 
 Playwright runs Studio via `next dev` on `127.0.0.1:5801`; middleware treats `127.0.0.1` as an app host (same as `localhost`).
 
+Studio stack: Next.js 15.5.27 + React 19.3 (#97), standalone output started by `apps/studio/server-entry.mjs`.
+
+## Pending work and roadmap
+
+The one current list of open engineering items and owner decisions is
+`docs/CEQ_STABILITY_ROADMAP.md` → "Pending work (current)". Program-level gates
+stay in that file's GA-Critical evidence board and Phase 7 backlog, and in
+`docs/COMMERCIAL_GA_REMEDIATION_PLAN.md`. Do not fork the list here.
+
 ## Maintenance
 
 These files are maintained by `internal-devops/scripts/sync-agent-docs.py`.

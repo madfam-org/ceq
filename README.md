@@ -18,6 +18,8 @@ and evidence:
 - [`docs/CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md`](./docs/CEQ_CODEBASE_AUDIT_WRAPUP_2026-06-02.md)
 - [`docs/DOCS_EVIDENCE_AUDIT_2026-06-02.md`](./docs/DOCS_EVIDENCE_AUDIT_2026-06-02.md)
 
+Open work and owner decisions: [`docs/CEQ_STABILITY_ROADMAP.md` → Pending work](./docs/CEQ_STABILITY_ROADMAP.md#pending-work-current).
+
 Older roadmap, deployment, and handoff docs preserve historical context. When
 they conflict, the latest evidence audit wins.
 
@@ -282,7 +284,7 @@ account to complete the acceptance checklist.
 | [docs/JANUA_OPERATOR.md](./docs/JANUA_OPERATOR.md) | Janua OAuth registration & login unblock checklist |
 | [docs/JANUA_AGENT_HANDOFF.md](./docs/JANUA_AGENT_HANDOFF.md) | Complete handoff for Janua-side agents |
 | [docs/PLATFORM_AGENT_HANDOFFS.md](./docs/PLATFORM_AGENT_HANDOFFS.md) | Copy-paste prompts for Vault/K8s/acceptance agents |
-| [docs/CEQ_STABILITY_ROADMAP.md](./docs/CEQ_STABILITY_ROADMAP.md) | Stabilization record and remaining roadmap |
+| [docs/CEQ_STABILITY_ROADMAP.md](./docs/CEQ_STABILITY_ROADMAP.md) | Current pending work (top section), stabilization record and remaining roadmap |
 | [apps/api/README.md](./apps/api/README.md) | API documentation (incl. `/v1/render/*` contract) |
 | [apps/workers/README.md](./apps/workers/README.md) | GPU worker documentation |
 | [packages/sdk/README.md](./packages/sdk/README.md) | `@ceq/sdk` — JS/TS client for the render API |
