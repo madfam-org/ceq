@@ -80,7 +80,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/studio/server-entry.mjs ./ap
 # pnpm-lock.yaml exactly; the `test -e` lines fail the build on a dangling link.
 RUN rm -rf node_modules
 COPY --from=builder /app/node_modules/.pnpm ./node_modules/.pnpm
-RUN ln -s .pnpm/next@15.5.27_@babel+core@7.29.0_@playwright+test@1.60.0_@types+node@22.19.17_react-dom@19.3.0_react@19.3.0__react@19.3.0/node_modules/next ./node_modules/next && \
+RUN ln -s .pnpm/next@15.5.28_@babel+core@7.29.0_@playwright+test@1.60.0_@types+node@22.19.17_react-dom@19.3.0_react@19.3.0__react@19.3.0/node_modules/next ./node_modules/next && \
     ln -s .pnpm/react@19.3.0/node_modules/react ./node_modules/react && \
     ln -s .pnpm/react-dom@19.3.0_react@19.3.0/node_modules/react-dom ./node_modules/react-dom && \
     test -e node_modules/next/package.json && \
