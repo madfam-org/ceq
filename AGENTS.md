@@ -47,7 +47,7 @@ redirect and should not become the source of truth again.
 - Open engineering items and owner decisions live in ONE list:
   [`docs/CEQ_STABILITY_ROADMAP.md` → Pending work](./docs/CEQ_STABILITY_ROADMAP.md#pending-work-current). The
   "Known Issues" sections at the end of this file are a closed historical record.
-- Studio runs Next.js 15.5.27 with React 19.3 (#97).
+- Studio runs Next.js 15.5.28 with React 19.3 (#97).
 
 ## LLM context files
 
@@ -206,7 +206,7 @@ CEQ_PUBLIC_ONLY=true bash scripts/production-smoke.sh
 
 ## Studio security invariant: Next image optimizer off
 
-`apps/studio` (Next 15.5.27) ships with `images.unoptimized: true` in **every**
+`apps/studio` (Next 15.5.28) ships with `images.unoptimized: true` in **every**
 environment (#93, GHSA-2xp9-vwfh-vxw4, which has no 14.x fix). Before #93 it was
 true only in development. The posture was kept unchanged through the move from
 14.2.35 to 15.5.27. `/_next/image` therefore answers **404** before it
