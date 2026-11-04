@@ -93,7 +93,7 @@ spec:
             # Bump limits if concurrency goes beyond 2 workers.
             requests:
               memory: "384Mi"
-              cpu: "100m"
+              cpu: "25m"
             limits:
               memory: "1Gi"
               cpu: "1000m"
