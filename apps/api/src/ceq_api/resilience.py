@@ -128,13 +128,15 @@ class CircuitBreaker:
                 )
                 self._state.state = CircuitState.OPEN
 
-            elif self._state.state == CircuitState.CLOSED:
-                if self._state.failure_count >= self.config.failure_threshold:
-                    logger.warning(
-                        f"Circuit breaker {self.name}: CLOSED -> OPEN after "
-                        f"{self._state.failure_count} failures"
-                    )
-                    self._state.state = CircuitState.OPEN
+            elif (
+                self._state.state == CircuitState.CLOSED
+                and self._state.failure_count >= self.config.failure_threshold
+            ):
+                logger.warning(
+                    f"Circuit breaker {self.name}: CLOSED -> OPEN after "
+                    f"{self._state.failure_count} failures"
+                )
+                self._state.state = CircuitState.OPEN
 
     async def call(self, func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
         """Execute function with circuit breaker protection."""

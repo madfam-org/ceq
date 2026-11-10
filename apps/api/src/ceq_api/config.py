@@ -273,10 +273,9 @@ class Settings(BaseSettings):
                 error_msg = "Production configuration errors:\n" + "\n".join(f"  - {e}" for e in errors)
                 raise ValueError(error_msg)
 
-        elif self.environment == "staging":
+        elif self.environment == "staging" and not self.r2_endpoint:
             # Warnings for staging
-            if not self.r2_endpoint:
-                logger.warning("R2_ENDPOINT not configured - storage features will be disabled")
+            logger.warning("R2_ENDPOINT not configured - storage features will be disabled")
 
         return self
 
