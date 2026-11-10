@@ -46,11 +46,48 @@ export function isDhanamCheckoutEnabled(): boolean {
   return process.env.NEXT_PUBLIC_CEQ_CHECKOUT_ENABLED === "true";
 }
 
-export function getDhanamBillingBaseUrl(): string {
-  return (process.env.NEXT_PUBLIC_DHANAM_BILLING_URL || "https://api.dhan.am").replace(
-    /\/+$/,
-    "",
-  );
+/**
+ * Dhanam's hosted checkout. A product links buyers here with
+ * `?plan=<product>_<tier>&product=<product>&return_url=<absolute>`; the buyer
+ * signs in with Janua on Dhanam's page, so identity never travels in the link.
+ */
+export const DHANAM_HOSTED_CHECKOUT_URL = "https://app.dhan.am/checkout";
+
+const CHECKOUT_PATH = "/checkout";
+
+/**
+ * The hosted-checkout base: `NEXT_PUBLIC_DHANAM_CHECKOUT_URL` when it is an
+ * absolute http(s) URL whose path is exactly `/checkout` (no query or
+ * fragment), else {@link DHANAM_HOSTED_CHECKOUT_URL}. Anything else (the old
+ * `api.dhan.am` billing base, a `/billing/checkout` path) is ignored, so a stale
+ * variable can never resurrect the dead signed link.
+ */
+export function getDhanamCheckoutUrl(
+  configured: string | undefined = process.env.NEXT_PUBLIC_DHANAM_CHECKOUT_URL,
+): string {
+  const value = configured?.trim();
+  if (!value) return DHANAM_HOSTED_CHECKOUT_URL;
+
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return DHANAM_HOSTED_CHECKOUT_URL;
+  }
+
+  const path = url.pathname.replace(/\/+$/, "");
+  if (
+    (url.protocol !== "https:" && url.protocol !== "http:") ||
+    path !== CHECKOUT_PATH ||
+    url.search ||
+    url.hash ||
+    url.username ||
+    url.password
+  ) {
+    return DHANAM_HOSTED_CHECKOUT_URL;
+  }
+
+  return `${url.origin}${CHECKOUT_PATH}`;
 }
 
 export function getBillingPlan(id: CeqBillingPlanId): CeqBillingPlan {
@@ -61,28 +98,47 @@ export function getBillingPlan(id: CeqBillingPlanId): CeqBillingPlan {
   return plan;
 }
 
+/** Dhanam catalog plan id for a CEQ tier: `<product>_<tierSlug>`. */
+export function dhanamPlanId(plan: CeqBillingPlan): string {
+  return `${CEQ_BILLING_PRODUCT}_${plan.tierSlug}`;
+}
+
+/**
+ * Link to Dhanam's hosted checkout for a sellable CEQ tier.
+ *
+ * Throws for a tier that is not sold (the free Creator tier) and for a
+ * `returnUrl` that is not an absolute http(s) URL: Dhanam only returns buyers
+ * to absolute https URLs on its allowlist.
+ */
 export function buildDhanamCheckoutUrl({
   planId,
-  userId,
   returnUrl,
-  baseUrl = getDhanamBillingBaseUrl(),
+  checkoutUrl = getDhanamCheckoutUrl(),
 }: {
   planId: CeqBillingPlanId;
-  userId: string;
   returnUrl: string;
-  baseUrl?: string;
+  checkoutUrl?: string;
 }): string {
   const plan = getBillingPlan(planId);
   if (!plan.checkoutEnabled) {
     throw new Error(`Plan ${planId} does not support checkout.`);
   }
 
+  let absoluteReturnUrl: URL;
+  try {
+    absoluteReturnUrl = new URL(returnUrl);
+  } catch {
+    throw new Error(`Checkout return URL must be absolute: ${returnUrl}`);
+  }
+  if (absoluteReturnUrl.protocol !== "https:" && absoluteReturnUrl.protocol !== "http:") {
+    throw new Error(`Checkout return URL must be http(s): ${returnUrl}`);
+  }
+
   const params = new URLSearchParams({
-    plan: plan.tierSlug,
+    plan: dhanamPlanId(plan),
     product: CEQ_BILLING_PRODUCT,
-    user_id: userId,
-    return_url: returnUrl,
+    return_url: absoluteReturnUrl.toString(),
   });
 
-  return `${baseUrl.replace(/\/+$/, "")}/billing/checkout?${params.toString()}`;
+  return `${getDhanamCheckoutUrl(checkoutUrl)}?${params.toString()}`;
 }

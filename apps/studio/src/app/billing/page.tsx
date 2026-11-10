@@ -23,8 +23,10 @@ const LEGAL_LINKS = [
   { href: "/legal/refunds", label: "Refunds" },
 ];
 
-function checkoutUrlFor(plan: CeqBillingPlan, userId: string): string | null {
-  if (!plan.checkoutEnabled || !userId || !isDhanamCheckoutEnabled()) {
+// The buyer signs in with Janua on Dhanam's hosted checkout, so the link
+// carries no identity; a CEQ session is still required to show it.
+function checkoutUrlFor(plan: CeqBillingPlan, signedIn: boolean): string | null {
+  if (!plan.checkoutEnabled || !signedIn || !isDhanamCheckoutEnabled()) {
     return null;
   }
 
@@ -33,7 +35,6 @@ function checkoutUrlFor(plan: CeqBillingPlan, userId: string): string | null {
 
   return buildDhanamCheckoutUrl({
     planId: plan.id,
-    userId,
     returnUrl: `${origin}/billing`,
   });
 }
@@ -69,7 +70,7 @@ export default function BillingPage() {
 
         <section className="grid gap-4 lg:grid-cols-3">
           {CEQ_BILLING_PLANS.map((plan) => {
-            const checkoutUrl = checkoutUrlFor(plan, user?.id ?? "");
+            const checkoutUrl = checkoutUrlFor(plan, Boolean(user?.id));
             return (
               <article key={plan.id} className="ceq-card flex min-h-80 flex-col p-5">
                 <div className="flex items-start justify-between gap-3">
