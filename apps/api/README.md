@@ -395,9 +395,15 @@ Role claim handling is intentionally defensive:
   normalized into a list.
 - Role normalization lowercases values and converts underscores to hyphens (for
 - example `"Studio_Admin"` → `"studio-admin"`) before entitlement checks.
-- Entitlement claims are also supported. `entitlements`, `plan`, `plan_id`,
-  `subscription`, and `subscription_tier` (including list-style variants) map
-  into paid access during entitlement evaluation.
+- Paid access comes only from CEQ's **own** tier
+  (`ceq_api/auth/ceq_tier.py`): the `ceq_tier` claim, else a `ceq:<tier>`
+  entry in `madfam_entitled_products`, else the free `creator` tier.
+  `pro_artist` and `studio` (the Dhanam catalog tiers `ceq_pro_artist` and
+  `ceq_studio`) map to the Pro and Studio gates; `madfam` marks a MADFAM
+  operator. Unknown values fail closed to `creator`. The generic `tier`,
+  `plan`, `plan_id`, `subscription`, `subscription_tier` and `entitlements`
+  claims are never read: they describe whatever product the organization
+  pays for, not CEQ.
 
 ### Service principals (machine-to-machine)
 
@@ -435,9 +441,13 @@ own jobs stay visible to it across refreshes. Job/output ownership checks
 (`job.user_id == user.id`) therefore isolate each machine client to its own
 namespace for free.
 
-Quotas and entitlements are unchanged: a service principal carries
-`roles: ["service_account"]` and `tier: "community"`, so it lands on the free
-tier and premium-template gating still fails closed.
+Quotas and entitlements: a service principal carries
+`roles: ["service_account"]`. Its tier is read only from `ceq_tier` (never the
+organization's generic `tier`). An operator client's `ceq_tier: "madfam"`
+becomes the `ceq:madfam` entitlement, which no gate rewards today, so it lands
+on the free tier's job cap and premium-template gating still fails closed. A
+client bound to an organization that bought CEQ gets that organization's CEQ
+tier.
 
 Rate limiting uses a **separate bucket**: machine callers key on
 `service:<client_id>`, humans on `user:<uuid>`. A backfill therefore cannot
