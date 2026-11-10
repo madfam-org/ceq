@@ -23,6 +23,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWKClient, PyJWKClientError
 
+from ceq_api.auth.ceq_tier import ceq_entitlements_from_claims
 from ceq_api.config import get_settings
 from ceq_api.resilience import (
     JANUA_RETRY_CONFIG,
@@ -299,36 +300,6 @@ def _normalize_roles(value: Any) -> list[str] | None:
     return roles if roles else None
 
 
-def _normalize_entitlements(value: Any) -> list[str] | None:
-    """Normalize entitlement claims from token payloads into a list of strings."""
-    if value is None:
-        return None
-
-    values = value
-
-    if isinstance(value, dict):
-        nested = value.get("id") or value.get("slug") or value.get("name")
-        if nested is None:
-            return None
-        values = nested
-
-    if isinstance(value, str):
-        values = [value]
-    elif isinstance(value, Iterable) and not isinstance(value, (bytes, bytearray, dict)):
-        values = list(value)
-    else:
-        values = [value]
-
-    entitlements = [
-        str(entitlement).strip().lower().replace("_", "-")
-        for entitlement in values
-        if isinstance(entitlement, (str, UUID, int, float))
-        and not isinstance(entitlement, dict)
-        and str(entitlement).strip()
-    ]
-    return entitlements if entitlements else None
-
-
 # ---------------------------------------------------------------------------
 # Introspection client (legacy, used as fallback)
 # ---------------------------------------------------------------------------
@@ -375,17 +346,8 @@ async def _validate_token_introspection(token: str) -> JanuaUser | None:
         if roles_raw is None:
             roles_raw = data.get("role")
 
-        entitlements = _normalize_entitlements(
-            data.get("entitlements")
-            or data.get("plan")
-            or data.get("plan_id")
-            or data.get("subscription")
-            or data.get("subscription_tier")
-        )
-        if entitlements is None:
-            plans = data.get("plans")
-            if isinstance(plans, list):
-                entitlements = _normalize_entitlements(plans)
+        # CEQ's own tier only; generic plan/tier claims are never read.
+        entitlements = ceq_entitlements_from_claims(data)
 
         user = JanuaUser(
             id=UUID(user_id),
@@ -458,9 +420,9 @@ def _service_principal_from_payload(payload: dict[str, Any]) -> JanuaUser | None
         email=str(payload.get("email") or f"{client_id}@service.auth.madfam.io"),
         org_id=org_id,
         roles=_normalize_roles(payload.get("roles")),
-        entitlements=_normalize_entitlements(
-            payload.get("entitlements") or payload.get("tier")
-        ),
+        # CEQ's own tier only (`ceq_tier`, e.g. `madfam` for operator
+        # clients); the generic `tier` is the org's, not CEQ's.
+        entitlements=ceq_entitlements_from_claims(payload),
         client_id=client_id,
         scopes=_normalize_scopes(payload.get("scope")),
         is_service_principal=True,
@@ -543,17 +505,8 @@ def _validate_token_local(token: str) -> JanuaUser | None:
         logger.warning("JWT missing required claims (sub, email)")
         return None
 
-    entitlements = _normalize_entitlements(
-        payload.get("entitlements")
-        or payload.get("plan")
-        or payload.get("plan_id")
-        or payload.get("subscription")
-        or payload.get("subscription_tier")
-    )
-    if entitlements is None:
-        plans = payload.get("plans")
-        if isinstance(plans, list):
-            entitlements = _normalize_entitlements(plans)
+    # CEQ's own tier only; generic plan/tier claims are never read.
+    entitlements = ceq_entitlements_from_claims(payload)
 
     user = JanuaUser(
         id=UUID(sub),
