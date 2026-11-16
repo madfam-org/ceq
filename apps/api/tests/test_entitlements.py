@@ -17,7 +17,6 @@ from ceq_api.entitlements import (
 from ceq_api.models import Template
 from ceq_api.quotas import active_job_limit_for_user
 
-
 _SETTINGS = SimpleNamespace(
     max_active_jobs_admin=30,
     max_active_jobs_studio=12,
