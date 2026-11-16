@@ -21,12 +21,13 @@ from ceq_api.models import BrandAsset, BrandKit, Client
 # --- Fixtures ---------------------------------------------------------------
 
 
-def _make_user(org_id, roles=None):
+def _make_user(org_id, roles=None, platform_admin=False):
     return JanuaUser(
         id=uuid4(),
         email=f"user-{uuid4().hex[:6]}@madfam.io",
         org_id=org_id,
         roles=roles or ["user"],
+        platform_admin=platform_admin,
     )
 
 
@@ -348,8 +349,16 @@ class TestClientProvisioning:
         )
         assert resp.status_code == status.HTTP_403_FORBIDDEN
 
+    async def test_provision_refuses_organization_admin(self, app, async_client, tenant_a_org):
+        _auth_as(app, _make_user(org_id=tenant_a_org, roles=["admin", "user"]))
+        resp = await async_client.post(
+            "/v1/brand-kits/clients",
+            json={"janua_org_id": str(uuid4()), "display_name": "New Co"},
+        )
+        assert resp.status_code == status.HTTP_403_FORBIDDEN
+
     async def test_admin_can_provision_and_slug_is_derived(self, app, async_client):
-        _auth_as(app, _make_user(org_id=uuid4(), roles=["admin", "user"]))
+        _auth_as(app, _make_user(org_id=uuid4(), roles=["user"], platform_admin=True))
         org = str(uuid4())
         resp = await async_client.post(
             "/v1/brand-kits/clients",
@@ -361,7 +370,7 @@ class TestClientProvisioning:
     async def test_provision_rejects_duplicate_org(
         self, app, async_client, seed_tenants, tenant_a_org
     ):
-        _auth_as(app, _make_user(org_id=uuid4(), roles=["admin"]))
+        _auth_as(app, _make_user(org_id=uuid4(), platform_admin=True))
         resp = await async_client.post(
             "/v1/brand-kits/clients",
             json={"janua_org_id": str(tenant_a_org), "display_name": "Dup"},

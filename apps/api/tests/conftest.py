@@ -71,12 +71,13 @@ def mock_user() -> JanuaUser:
 
 @pytest.fixture
 def mock_admin_user() -> JanuaUser:
-    """Create a mock admin user."""
+    """Create a mock platform administrator (verified `is_admin` claim)."""
     return JanuaUser(
         id=uuid4(),
         email="admin@madfam.io",
         org_id=uuid4(),
         roles=["admin", "user"],
+        platform_admin=True,
     )
 
 

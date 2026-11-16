@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 from fastapi import status
 
-from ceq_api.auth import get_current_user
+from ceq_api.auth import JanuaUser, get_current_user
 from ceq_api.models import CreditLedgerEntry, CreditLedgerType
 
 
@@ -101,6 +101,33 @@ class TestCreditGrants:
                 "amount": 100,
                 "reason": "welcome grant",
                 "idempotency_key": "grant-requires-admin",
+            },
+        )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    @pytest.mark.asyncio
+    async def test_grant_refuses_organization_admin(self, app, async_client, mock_user):
+        org_admin = JanuaUser(
+            id=uuid4(),
+            email="org-admin@example.com",
+            org_id=uuid4(),
+            roles=["admin", "owner"],
+        )
+
+        async def org_admin_user():
+            return org_admin
+
+        app.dependency_overrides[get_current_user] = org_admin_user
+
+        response = await async_client.post(
+            "/v1/credits/grants",
+            json={
+                "user_id": str(mock_user.id),
+                "org_id": str(mock_user.org_id),
+                "amount": 100,
+                "reason": "welcome grant",
+                "idempotency_key": "grant-org-admin",
             },
         )
 

@@ -112,14 +112,33 @@ def reset_jwks_breaker():
 class TestJanuaUser:
     """Tests for JanuaUser dataclass."""
 
-    def test_is_admin_with_admin_role(self):
-        """User with admin role should return True for is_admin."""
+    def test_is_admin_with_platform_admin_claim(self):
+        """A principal carrying the platform-admin claim is an admin."""
         user = JanuaUser(
             id=uuid4(),
             email="admin@test.com",
-            roles=["admin", "user"],
+            roles=["user"],
+            platform_admin=True,
         )
         assert user.is_admin is True
+
+    def test_is_admin_false_for_organization_admin_role(self):
+        """A bare `admin` organization role is not platform administration."""
+        user = JanuaUser(
+            id=uuid4(),
+            email="org-admin@test.com",
+            roles=["admin", "user"],
+        )
+        assert user.is_admin is False
+
+    @pytest.mark.parametrize(
+        "roles",
+        [["superadmin"], ["platform-admin"], ["platform_admin"], ["Admin"], ["ceq:admin"]],
+    )
+    def test_is_admin_false_for_custom_role_named_like_admin(self, roles):
+        """Custom organization roles named like an admin role grant nothing."""
+        user = JanuaUser(id=uuid4(), email="user@test.com", roles=roles)
+        assert user.is_admin is False
 
     def test_is_admin_without_admin_role(self):
         """User without admin role should return False for is_admin."""
@@ -278,6 +297,39 @@ class TestValidateTokenLocal:
 
         assert user is not None
         assert user.roles == ["admin"]
+        # An organization role named admin does not make a platform admin.
+        assert user.is_admin is False
+
+    @pytest.mark.parametrize(
+        ("is_admin_claim", "expected"),
+        [(True, True), (False, False), ("true", False), (1, False), (None, False)],
+    )
+    def test_platform_admin_read_from_verified_is_admin_claim(
+        self, rsa_public_key, make_test_jwt, is_admin_claim, expected
+    ):
+        """Only an `is_admin` claim that is exactly true marks a platform admin."""
+        extra: dict = {"roles": ["admin"]}
+        if is_admin_claim is not None:
+            extra["is_admin"] = is_admin_claim
+        token = make_test_jwt(
+            sub=str(uuid4()),
+            email="alice@madfam.io",
+            org_id=str(uuid4()),
+            extra_claims=extra,
+        )
+
+        mock_jwks = MagicMock()
+        mock_jwks.get_signing_key.return_value = rsa_public_key
+
+        with patch("ceq_api.auth.janua._get_jwks_client", return_value=mock_jwks):
+            with patch("ceq_api.auth.janua.settings") as mock_settings:
+                mock_settings.janua_issuer = "https://auth.madfam.io"
+                mock_settings.janua_audience = "ceq-api"
+
+                user = _validate_token_local(token)
+
+        assert user is not None
+        assert user.is_admin is expected
 
     def test_expired_token_raises(self, rsa_public_key, make_test_jwt):
         """Expired JWT should raise ExpiredSignatureError."""
@@ -453,6 +505,37 @@ class TestValidateTokenIntrospection:
         assert user is not None
         assert str(user.id) == user_id
         assert user.roles == ["studio-owner"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("payload_extra", "expected"),
+        [
+            ({"roles": ["admin"]}, False),
+            ({"roles": ["admin"], "is_admin": False}, False),
+            ({"roles": ["user"], "is_admin": True}, True),
+            ({"roles": ["user"], "is_admin": "true"}, False),
+        ],
+    )
+    async def test_introspection_platform_admin_from_is_admin_claim(
+        self, payload_extra, expected
+    ):
+        """Introspection marks a platform admin only from `is_admin` == true."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "id": str(uuid4()),
+            "email": "introspected@test.com",
+            **payload_extra,
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch("ceq_api.auth.janua.get_janua_client", return_value=mock_client):
+            user = await _validate_token_introspection("valid-token")
+
+        assert user is not None
+        assert user.is_admin is expected
 
     @pytest.mark.asyncio
     async def test_introspection_invalid_status(self):
@@ -884,6 +967,23 @@ class TestRequireAdmin:
         """Admin user should pass through."""
         result = require_admin(mock_admin_user)
         assert result == mock_admin_user
+
+    def test_require_admin_refuses_organization_admin(self):
+        """An organization admin (bare `admin` role, no claim) gets 403."""
+        org_admin = JanuaUser(
+            id=uuid4(), email="org-admin@test.com", org_id=uuid4(), roles=["admin"]
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            require_admin(org_admin)
+
+        assert exc_info.value.status_code == 403
+
+    def test_require_admin_refuses_custom_role_named_like_admin(self):
+        user = JanuaUser(id=uuid4(), email="x@test.com", roles=["superadmin", "ceq:admin"])
+        with pytest.raises(HTTPException) as exc_info:
+            require_admin(user)
+
+        assert exc_info.value.status_code == 403
 
     def test_require_admin_with_regular_user(self, mock_user):
         """Regular user should raise 403."""

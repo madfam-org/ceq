@@ -9,7 +9,7 @@ import httpx
 import pytest
 from fastapi import status
 
-from ceq_api.auth import get_current_user
+from ceq_api.auth import JanuaUser, get_current_user
 
 
 async def _override_admin(mock_admin_user):
@@ -46,6 +46,22 @@ class TestOperationsAuth:
 
         assert response.status_code == status.HTTP_403_FORBIDDEN
         assert "Admin access required" in response.json()["detail"]
+
+    @pytest.mark.parametrize(
+        "roles", [["admin"], ["owner", "admin"], ["superadmin"], ["platform-admin"]]
+    )
+    def test_operations_status_refuses_organization_roles(self, app, client, roles):
+        org_user = JanuaUser(
+            id=uuid4(), email="org-admin@example.com", org_id=uuid4(), roles=roles
+        )
+
+        async def override():
+            return org_user
+
+        app.dependency_overrides[get_current_user] = override
+        response = client.get("/v1/operations/status")
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
 class TestOperationsStatus:

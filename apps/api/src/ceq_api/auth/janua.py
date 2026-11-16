@@ -207,6 +207,12 @@ class JanuaUser:
     Everything user-shaped (``email``, ``org_id``, ``roles``) is still populated
     for service principals from the token's own claims, so existing code paths
     that read them keep working unchanged.
+
+    ``platform_admin`` mirrors the verified token's ``is_admin`` claim (exactly
+    ``True``). It is the only source of platform administration: Janua puts a
+    user's organization membership roles (``owner``, ``admin``, ``member`` or
+    custom organization roles) in ``roles`` as bare strings, so a role name
+    there describes standing inside some organization, not platform access.
     """
 
     id: UUID
@@ -219,11 +225,17 @@ class JanuaUser:
     client_id: str | None = None
     scopes: frozenset[str] = frozenset()
     is_service_principal: bool = False
+    # Platform administrator, from the verified token's `is_admin` claim only.
+    platform_admin: bool = False
 
     @property
     def is_admin(self) -> bool:
-        """Check if user has admin role."""
-        return self.roles is not None and "admin" in self.roles
+        """Whether this principal is a platform administrator.
+
+        Reads only ``platform_admin`` (the token's ``is_admin`` claim); ``roles``
+        is never consulted.
+        """
+        return self.platform_admin is True
 
     @property
     def principal_key(self) -> str:
@@ -278,6 +290,15 @@ def _is_client_credentials_payload(payload: dict[str, Any]) -> bool:
         payload.get("token_use") == "client_credentials"
         or payload.get("actor_type") == "service_account"
     )
+
+
+def _platform_admin_from_claims(claims: dict[str, Any]) -> bool:
+    """Platform administrator iff the ``is_admin`` claim is exactly ``True``.
+
+    ``claims`` must come from a verified source (the JWKS-verified payload or
+    Janua's own userinfo response), never from request headers or bodies.
+    """
+    return claims.get("is_admin") is True
 
 
 def _normalize_roles(value: Any) -> list[str] | None:
@@ -355,6 +376,7 @@ async def _validate_token_introspection(token: str) -> JanuaUser | None:
             org_id=UUID(data["org_id"]) if data.get("org_id") else None,
             roles=_normalize_roles(roles_raw),
             entitlements=entitlements,
+            platform_admin=_platform_admin_from_claims(data),
         )
         logger.debug("Token validated via introspection for user %s", user.email)
         return user
@@ -426,6 +448,7 @@ def _service_principal_from_payload(payload: dict[str, Any]) -> JanuaUser | None
         client_id=client_id,
         scopes=_normalize_scopes(payload.get("scope")),
         is_service_principal=True,
+        platform_admin=_platform_admin_from_claims(payload),
     )
     logger.debug(
         "Token validated locally (JWKS) for service principal %s (scopes=%s)",
@@ -514,6 +537,7 @@ def _validate_token_local(token: str) -> JanuaUser | None:
         org_id=UUID(payload["org_id"]) if payload.get("org_id") else None,
         roles=_normalize_roles(payload.get("roles")) or _normalize_roles(payload.get("role")),
         entitlements=entitlements,
+        platform_admin=_platform_admin_from_claims(payload),
     )
     logger.debug(f"Token validated locally (JWKS) for user {user.email}")
     return user
@@ -867,7 +891,9 @@ def require_auth(user: Annotated[JanuaUser, Depends(get_current_user)]) -> Janua
 
 def require_admin(user: Annotated[JanuaUser, Depends(get_current_user)]) -> JanuaUser:
     """
-    Require admin role.
+    Require a platform administrator (the verified token's ``is_admin`` claim).
+
+    An organization role named ``admin`` in ``roles`` is not enough.
 
         @router.delete("/templates/{id}")
         async def delete_template(user: JanuaUser = Depends(require_admin)):
