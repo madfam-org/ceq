@@ -305,7 +305,8 @@ Worker completion callback notes:
 - Late non-cancelled worker reports cannot overwrite an already-cancelled job.
 - New GPU job submissions fail with `429` when the user reaches the active
   queued/running job cap. Free/default users use `MAX_ACTIVE_JOBS_PER_USER`;
-  pro, studio, and admin roles use their plan-specific cap variables.
+  the `ceq_tier` claim's pro and studio tiers, and platform administrators
+  (`is_admin` claim), use their plan-specific cap variables.
 - `outputs` has a DB-level uniqueness guard on `(job_id, storage_uri)`.
 - `/metrics` includes CEQ counters for worker completion reports, output
   persistence, cancellations, dead-letter replay outcomes, and user webhook

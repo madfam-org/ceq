@@ -249,14 +249,15 @@ class TestWorkflowEndpoints:
         sample_workflow_json,
         sample_input_schema,
     ):
-        """Studio plan roles use the Studio active-job cap."""
+        """The Studio CEQ tier uses the Studio active-job cap."""
         from ceq_api.routers import workflows as workflows_router
 
         studio_user = JanuaUser(
             id=mock_user.id,
             email=mock_user.email,
             org_id=mock_user.org_id,
-            roles=["user", "studio"],
+            roles=["user"],
+            entitlements=["ceq:studio"],
         )
 
         async def override_studio_user():
@@ -326,7 +327,8 @@ class TestWorkflowEndpoints:
             id=mock_user.id,
             email=mock_user.email,
             org_id=mock_user.org_id,
-            roles=["user", "studio"],
+            roles=["user"],
+            entitlements=["ceq:studio"],
         )
 
         async def override_paid_user():
