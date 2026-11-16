@@ -18,34 +18,57 @@ from ceq_api.models import Template
 from ceq_api.quotas import active_job_limit_for_user
 
 
-def test_paid_template_entitlement_via_roles() -> None:
-    """Role tokens continue to grant paid-template access."""
+_SETTINGS = SimpleNamespace(
+    max_active_jobs_admin=30,
+    max_active_jobs_studio=12,
+    max_active_jobs_pro=7,
+    max_active_jobs_per_user=4,
+)
+
+
+@pytest.mark.parametrize(
+    "roles",
+    [
+        ["Pro"],
+        ["studio"],
+        ["premium"],
+        ["admin"],
+        ["ceq:pro"],
+        ["ceq:studio"],
+        ["ceq:admin"],
+        ["plan:pro"],
+    ],
+)
+def test_roles_never_grant_paid_templates_or_quota(roles) -> None:
+    """Organization roles and app-role grants are not a CEQ purchase."""
     user = JanuaUser(
         id="00000000-0000-0000-0000-000000000001",
-        email="pro@example.com",
-        roles=["free", "Pro"],
+        email="org-role@example.com",
+        roles=roles,
+    )
+    assert not user_can_use_paid_templates(user)
+    assert active_job_limit_for_user(user, _SETTINGS) == 4
+
+
+@pytest.mark.parametrize("token", ["ceq:pro-artist", "ceq:studio"])
+def test_paid_template_entitlement_via_ceq_tier(token) -> None:
+    """The verified ceq_tier entitlement grants paid-template access."""
+    user = JanuaUser(
+        id="00000000-0000-0000-0000-000000000001",
+        email="tier@example.com",
+        entitlements=[token],
     )
     assert user_can_use_paid_templates(user)
 
 
-def test_paid_template_entitlement_via_plan_claim() -> None:
-    """Plan claim tokens should grant paid-template access."""
+def test_platform_admin_claim_keeps_admin_access() -> None:
     user = JanuaUser(
         id="00000000-0000-0000-0000-000000000001",
-        email="plan@example.com",
-        entitlements=["plan:pro"],
+        email="platform-admin@example.com",
+        platform_admin=True,
     )
     assert user_can_use_paid_templates(user)
-
-
-def test_paid_template_entitlement_via_plan_alias() -> None:
-    """Alias-style entitlement claims should map to quota/template tokens."""
-    user = JanuaUser(
-        id="00000000-0000-0000-0000-000000000001",
-        email="planalias@example.com",
-        entitlements=["pro-artist"],
-    )
-    assert user_can_use_paid_templates(user)
+    assert active_job_limit_for_user(user, _SETTINGS) == 30
 
 
 def test_premium_template_entitlement_gate() -> None:
@@ -67,20 +90,20 @@ def test_premium_template_entitlement_gate() -> None:
         require_template_entitlement(template, user)
 
 
-def test_active_job_quota_uses_plan_entitlements() -> None:
-    """Plan-style entitlements should map into quota classes."""
-    user = JanuaUser(
+def test_active_job_quota_uses_ceq_tier_entitlements() -> None:
+    """The CEQ tier entitlement maps into quota classes."""
+    studio = JanuaUser(
         id="00000000-0000-0000-0000-000000000001",
-        email="plan-user@example.com",
-        entitlements=["plan_studio"],
+        email="studio@example.com",
+        entitlements=["ceq:studio"],
     )
-    settings = SimpleNamespace(
-        max_active_jobs_admin=30,
-        max_active_jobs_studio=12,
-        max_active_jobs_pro=7,
-        max_active_jobs_per_user=4,
+    pro = JanuaUser(
+        id="00000000-0000-0000-0000-000000000002",
+        email="pro@example.com",
+        entitlements=["ceq:pro-artist"],
     )
-    assert active_job_limit_for_user(user, settings) == 12
+    assert active_job_limit_for_user(studio, _SETTINGS) == 12
+    assert active_job_limit_for_user(pro, _SETTINGS) == 7
 
 
 def test_template_entitlement_metadata_includes_normalized_tokens() -> None:
@@ -96,10 +119,10 @@ def test_template_entitlement_metadata_includes_normalized_tokens() -> None:
         id="00000000-0000-0000-0000-000000000001",
         email="basic@example.com",
         roles=["guest"],
-        entitlements=["ceq:premium"],
+        entitlements=["ceq:studio"],
     )
 
     require_template_entitlement(template, user)
 
     assert "premium" in PREMIUM_TEMPLATE_TAGS
-    assert "ceq:premium" in PAID_TEMPLATE_ENTITLEMENTS
+    assert "ceq:studio" in PAID_TEMPLATE_ENTITLEMENTS

@@ -2,8 +2,8 @@
 
 Studio can hide premium templates, but commercial GA requires the API to
 fail closed when callers bypass the UI. This module keeps the initial policy
-intentionally small: template tags declare the gated surface; Janua roles
-declare whether the user can use it.
+intentionally small: template tags declare the gated surface; the verified
+``ceq_tier`` entitlement declares whether the user can use it.
 """
 
 from collections.abc import Iterable
@@ -14,48 +14,12 @@ from ceq_api.auth import JanuaUser
 from ceq_api.models import Template
 
 PREMIUM_TEMPLATE_TAGS = {"pro", "premium"}
-PAID_TEMPLATE_ROLES = {"admin", "paid", "pro", "premium", "studio"}
-PAID_TEMPLATE_ENTITLEMENTS = PAID_TEMPLATE_ROLES | {
-    "ceq-admin",
-    "ceq:admin",
-    "ceq-paid",
-    "ceq-pro",
-    "ceq-premium",
-    "ceq-studio",
-    "ceq:pro",
-    "ceq:premium",
-    "ceq:studio",
-    "plan:paid",
-    "plan:pro",
-    "plan:premium",
-    "plan:studio",
-    "plan-paid",
-    "plan-pro",
-    "plan-premium",
-    "plan-studio",
-    "tier:paid",
-    "tier:pro",
-    "tier-pro",
-    "tier-paid",
-}
-
-
-def _expand_entitlement_values(values: Iterable[object] | None) -> set[str]:
-    normalized = _normalize(values)
-    expanded = set(normalized)
-
-    for value in normalized:
-        if value.startswith("ceq-") or value.startswith("ceq:"):
-            expanded.add(value.removeprefix("ceq:").removeprefix("ceq-"))
-        if value.startswith("plan:") or value.startswith("plan-"):
-            expanded.add(value.split(":", 1)[1] if ":" in value else value.split("-", 1)[1])
-        if value.startswith("tier:") or value.startswith("tier-"):
-            expanded.add(value.split(":", 1)[1] if ":" in value else value.split("-", 1)[1])
-
-        if value.endswith("-artist"):
-            expanded.add(value.removesuffix("-artist"))
-
-    return expanded
+# Paid-template access comes ONLY from `JanuaUser.entitlements`, which
+# `ceq_entitlements_from_claims` fills from the verified `ceq_tier` claim
+# (see `auth/ceq_tier.py`). The `roles` claim is never read here: it carries
+# organization membership roles and application-role grants, neither of which
+# is a CEQ purchase.
+PAID_TEMPLATE_ENTITLEMENTS = frozenset({"ceq:pro-artist", "ceq:studio"})
 
 
 def _normalize(values: Iterable[object] | None) -> set[str]:
@@ -73,11 +37,9 @@ def template_requires_paid_entitlement(template: Template) -> bool:
 
 
 def user_can_use_paid_templates(user: JanuaUser) -> bool:
-    """Return true when Janua roles grant paid-template access."""
-    capability_tokens = _expand_entitlement_values(
-        _normalize(user.roles) | _normalize(getattr(user, "entitlements", None))
-    )
-    return user.is_admin or bool(capability_tokens & PAID_TEMPLATE_ENTITLEMENTS)
+    """Return true when the verified CEQ tier entitlement grants paid templates."""
+    entitlements = set(getattr(user, "entitlements", None) or [])
+    return user.is_admin or bool(entitlements & PAID_TEMPLATE_ENTITLEMENTS)
 
 
 def require_template_entitlement(template: Template, user: JanuaUser) -> None:

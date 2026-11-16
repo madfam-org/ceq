@@ -1,6 +1,5 @@
 """Quota helpers for GPU job submission."""
 
-from collections.abc import Iterable
 from typing import Any
 from uuid import UUID
 
@@ -12,78 +11,23 @@ from ceq_api.auth import JanuaUser
 from ceq_api.models import Job, JobStatus
 
 ACTIVE_JOB_STATUSES = (JobStatus.QUEUED.value, JobStatus.RUNNING.value)
-PRO_QUOTA_ROLES = {
-    "paid",
-    "pro",
-    "premium",
-    "plan:paid",
-    "plan:pro",
-    "plan:premium",
-    "plan-paid",
-    "plan-pro",
-    "plan-premium",
-    "tier:paid",
-    "tier:pro",
-    "tier:premium",
-    "tier-paid",
-    "tier-pro",
-    "tier-premium",
-    "ceq-paid",
-    "ceq-pro",
-    "ceq-premium",
-    "ceq:paid",
-    "ceq:pro",
-    "ceq:premium",
-}
-STUDIO_QUOTA_ROLES = {
-    "studio",
-    "plan:studio",
-    "plan-studio",
-    "tier:studio",
-    "tier-studio",
-    "ceq-studio",
-    "ceq:studio",
-}
-
-
-def _expand_quota_tokens(values: Iterable[object] | None) -> set[str]:
-    normalized = _normalize(values)
-    expanded = set(normalized)
-
-    for value in normalized:
-        if value.startswith("ceq-") or value.startswith("ceq:"):
-            expanded.add(value.removeprefix("ceq:").removeprefix("ceq-"))
-        if value.startswith("plan:") or value.startswith("plan-"):
-            expanded.add(value.split(":", 1)[1] if ":" in value else value.split("-", 1)[1])
-        if value.startswith("tier:") or value.startswith("tier-"):
-            expanded.add(value.split(":", 1)[1] if ":" in value else value.split("-", 1)[1])
-
-        if value.endswith("-artist"):
-            expanded.add(value.removesuffix("-artist"))
-
-    return expanded
-
-
-def _normalize(values: Iterable[object] | None) -> set[str]:
-    return {
-        str(value).strip().lower().replace("_", "-")
-        for value in values or []
-        if str(value).strip()
-    }
+# Quota classes come ONLY from `JanuaUser.entitlements`, which
+# `ceq_entitlements_from_claims` fills from the verified `ceq_tier` claim
+# (see `auth/ceq_tier.py`). The `roles` claim is never read here: it carries
+# organization membership roles and application-role grants, neither of which
+# is a CEQ purchase.
+PRO_QUOTA_ENTITLEMENTS = frozenset({"ceq:pro-artist"})
+STUDIO_QUOTA_ENTITLEMENTS = frozenset({"ceq:studio"})
 
 
 def active_job_limit_for_user(user: JanuaUser, settings: Any) -> int:
-    """Resolve the active-job cap for the user's current plan/role."""
-    roles = _normalize(user.roles)
-    entitlements = _normalize(getattr(user, "entitlements", None))
-
-    caps = roles | entitlements
-    expanded_caps = _expand_quota_tokens(caps)
+    """Resolve the active-job cap from the verified CEQ tier entitlement."""
     if user.is_admin:
         return int(settings.max_active_jobs_admin)
-    if expanded_caps & STUDIO_QUOTA_ROLES:
+    entitlements = set(getattr(user, "entitlements", None) or [])
+    if entitlements & STUDIO_QUOTA_ENTITLEMENTS:
         return int(settings.max_active_jobs_studio)
-    if expanded_caps & PRO_QUOTA_ROLES:
+    if entitlements & PRO_QUOTA_ENTITLEMENTS:
         return int(settings.max_active_jobs_pro)
     return int(settings.max_active_jobs_per_user)
 

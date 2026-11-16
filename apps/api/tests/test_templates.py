@@ -261,14 +261,15 @@ class TestTemplateEndpoints:
         sample_workflow_json,
         sample_input_schema,
     ):
-        """Paid roles use their higher active-job cap instead of the free cap."""
+        """Paid CEQ tiers use their higher active-job cap instead of the free cap."""
         from ceq_api.routers import templates as templates_router
 
         paid_user = JanuaUser(
             id=mock_user.id,
             email=mock_user.email,
             org_id=mock_user.org_id,
-            roles=["user", "pro"],
+            roles=["user"],
+            entitlements=["ceq:pro-artist"],
         )
 
         async def override_paid_user():
@@ -427,7 +428,8 @@ class TestTemplateEndpoints:
             id=mock_user.id,
             email=mock_user.email,
             org_id=mock_user.org_id,
-            roles=["user", "pro"],
+            roles=["user"],
+            entitlements=["ceq:pro-artist"],
         )
 
         async def override_paid_user():
