@@ -764,3 +764,214 @@ class TestLeaseEndpoints:
         assert recovered.status_code == 200
         assert UUID(recovered.json()["job_id"]) == queued_job.id
         assert recovered.json()["attempt"] == 2
+
+
+# ---------------------------------------------------------------------------
+# Job kinds and capability leases (RFC 0061)
+# ---------------------------------------------------------------------------
+
+
+def kind_payload(job_id: str, kind: str) -> str:
+    """A non-comfy job envelope: a kind, no workflow."""
+    return json.dumps({"id": job_id, "kind": kind, "input": {"job_id": job_id}})
+
+
+class TestCapabilityLeases:
+    """A worker only ever receives the kinds it declared."""
+
+    async def test_comfy_only_worker_never_receives_a_capture_job(self, redis):
+        from ceq_api.job_kinds import pending_key_for_kind
+
+        page_key = pending_key_for_kind("capture.page")
+        await redis.lpush(page_key, kind_payload(str(uuid4()), "capture.page"))
+
+        # Default capabilities, and comfy stated explicitly: both see nothing.
+        assert (
+            await worker_lease.claim_next_job(
+                redis, worker_id="gpu", client_id="c", ttl_seconds=60
+            )
+            is None
+        )
+        assert (
+            await worker_lease.claim_next_job(
+                redis,
+                worker_id="gpu",
+                client_id="c",
+                ttl_seconds=60,
+                capabilities=["comfy"],
+            )
+            is None
+        )
+        assert await redis.llen(page_key) == 1
+        assert await redis.llen(PROCESSING_KEY) == 0
+
+    async def test_cpu_worker_never_receives_a_comfy_job(self, redis):
+        from ceq_api.job_kinds import pending_key_for_kind
+
+        comfy_id, page_id = str(uuid4()), str(uuid4())
+        page_key = pending_key_for_kind("capture.page")
+        await redis.lpush(PENDING_KEY, job_payload(comfy_id))
+        await redis.lpush(page_key, kind_payload(page_id, "capture.page"))
+
+        first = await worker_lease.claim_next_job(
+            redis,
+            worker_id="cpu",
+            client_id="c",
+            ttl_seconds=60,
+            capabilities=["capture.page"],
+        )
+        second = await worker_lease.claim_next_job(
+            redis,
+            worker_id="cpu",
+            client_id="c",
+            ttl_seconds=60,
+            capabilities=["capture.page"],
+        )
+
+        assert first is not None and first.job_id == page_id
+        assert first.pending_key == page_key
+        assert second is None
+        # The comfy job is untouched, still claimable by a legacy Redis worker.
+        assert await redis.llen(PENDING_KEY) == 1
+        assert await redis.brpoplpush(PENDING_KEY, PROCESSING_KEY, timeout=1)
+
+    async def test_capabilities_are_tried_in_declared_order(self, redis):
+        from ceq_api.job_kinds import pending_key_for_kind
+
+        edit_id, export_id = str(uuid4()), str(uuid4())
+        await redis.lpush(pending_key_for_kind("edit"), kind_payload(edit_id, "edit"))
+        await redis.lpush(
+            pending_key_for_kind("export"), kind_payload(export_id, "export")
+        )
+
+        leased = await worker_lease.claim_next_job(
+            redis,
+            worker_id="cpu",
+            client_id="c",
+            ttl_seconds=60,
+            capabilities=["export", "edit"],
+        )
+        assert leased is not None and leased.job_id == export_id
+
+    async def test_expired_non_comfy_lease_is_requeued_to_its_own_list(self, redis):
+        from ceq_api.job_kinds import pending_key_for_kind
+
+        job_id = str(uuid4())
+        page_key = pending_key_for_kind("capture.page")
+        await redis.lpush(page_key, kind_payload(job_id, "capture.page"))
+
+        now = time.time()
+        await worker_lease.claim_next_job(
+            redis,
+            worker_id="cpu",
+            client_id="c",
+            ttl_seconds=30,
+            capabilities=["capture.page"],
+            now=now,
+        )
+
+        actions = await worker_lease.reap_expired(redis, max_attempts=3, now=now + 31)
+
+        assert actions == [(job_id, "requeued")]
+        assert await redis.llen(page_key) == 1
+        assert await redis.llen(PENDING_KEY) == 0
+        assert await redis.llen(PROCESSING_KEY) == 0
+
+        # Retry budget survives, and the job is still invisible to comfy workers.
+        assert (
+            await worker_lease.claim_next_job(
+                redis, worker_id="gpu", client_id="c", ttl_seconds=30
+            )
+            is None
+        )
+        again = await worker_lease.claim_next_job(
+            redis,
+            worker_id="cpu-2",
+            client_id="c",
+            ttl_seconds=30,
+            capabilities=["capture.page"],
+        )
+        assert again is not None and again.attempts == 2
+
+    async def test_explicit_requeue_returns_non_comfy_job_to_its_own_list(self, redis):
+        from ceq_api.job_kinds import pending_key_for_kind
+
+        job_id = str(uuid4())
+        export_key = pending_key_for_kind("export")
+        await redis.lpush(export_key, kind_payload(job_id, "export"))
+        await worker_lease.claim_next_job(
+            redis,
+            worker_id="cpu",
+            client_id="c",
+            ttl_seconds=60,
+            capabilities=["export"],
+        )
+
+        assert (
+            await worker_lease.requeue_lease(
+                redis, job_id=job_id, worker_id="cpu", attempts=1
+            )
+            == LeaseOutcome.OK
+        )
+        assert await redis.llen(export_key) == 1
+        assert await redis.llen(PENDING_KEY) == 0
+
+    async def test_lease_without_origin_requeues_to_the_comfy_list(self, redis):
+        """A lease opened before ``pending_key`` existed is a comfy lease."""
+        job_id = str(uuid4())
+        await redis.lpush(PENDING_KEY, job_payload(job_id))
+        await worker_lease.claim_next_job(
+            redis, worker_id="w1", client_id="c", ttl_seconds=60
+        )
+        await redis.hdel(worker_lease.lease_key(job_id), "pending_key")
+
+        await worker_lease.requeue_lease(
+            redis, job_id=job_id, worker_id="w1", attempts=1
+        )
+        assert await redis.llen(PENDING_KEY) == 1
+
+    async def test_unknown_capability_is_rejected_by_the_store(self, redis):
+        with pytest.raises(ValueError):
+            await worker_lease.claim_next_job(
+                redis,
+                worker_id="w",
+                client_id="c",
+                ttl_seconds=60,
+                capabilities=["gpu.magic"],
+            )
+
+
+class TestCapabilityEndpoint:
+    """``capabilities`` on ``POST /v1/worker/lease``."""
+
+    async def test_unknown_capability_is_422(self, lease_app, async_client):
+        response = await async_client.post(
+            "/v1/worker/lease",
+            json={"worker_id": "w1", "capabilities": ["gpu.magic"]},
+        )
+        assert response.status_code == 422
+
+    async def test_empty_capabilities_is_422(self, lease_app, async_client):
+        response = await async_client.post(
+            "/v1/worker/lease", json={"worker_id": "w1", "capabilities": []}
+        )
+        assert response.status_code == 422
+
+    async def test_default_capabilities_still_lease_comfy(
+        self, lease_app, async_client, queued_job
+    ):
+        response = await async_client.post(
+            "/v1/worker/lease", json={"worker_id": "gpu-1"}
+        )
+        assert response.status_code == 200
+        assert UUID(response.json()["job_id"]) == queued_job.id
+
+    async def test_cpu_capability_does_not_lease_a_comfy_job(
+        self, lease_app, async_client, queued_job, redis
+    ):
+        response = await async_client.post(
+            "/v1/worker/lease",
+            json={"worker_id": "cpu-1", "capabilities": ["capture.page"]},
+        )
+        assert response.status_code == 204
+        assert await redis.llen(PENDING_KEY) == 1

@@ -29,6 +29,7 @@ from ceq_api.config import get_settings
 from ceq_api.db.redis import get_redis, publish_job_update
 from ceq_api.db.session import get_db
 from ceq_api.job_billing import refund_gpu_job_credits
+from ceq_api.job_kinds import DEFAULT_JOB_KIND, pending_key_for_kind
 from ceq_api.logging import audit_logger
 from ceq_api.metrics import record_job_cancellation, record_worker_completion_report
 from ceq_api.models.job import Job
@@ -92,7 +93,10 @@ class JobStatusResponse(BaseModel):
     """Job status response model."""
 
     id: UUID
-    workflow_id: UUID
+    kind: str = Field(default=DEFAULT_JOB_KIND, description="Job kind; `comfy` for ComfyUI jobs")
+    workflow_id: UUID | None = Field(
+        default=None, description="Null for jobs that are not ComfyUI graphs"
+    )
     status: str = Field(description="queued | running | completed | failed | cancelled")
     progress: float = Field(default=0.0, ge=0.0, le=1.0)
     current_node: str | None = Field(default=None, description="Currently executing node")
@@ -116,6 +120,7 @@ class JobStatusResponse(BaseModel):
         """Create response from Job model with brand message."""
         return cls(
             id=job.id,
+            kind=job.kind or DEFAULT_JOB_KIND,
             workflow_id=job.workflow_id,
             status=job.status,
             progress=job.progress,
@@ -205,19 +210,28 @@ def _validate_worker_callback_token(token: str | None) -> None:
         )
 
 
-async def _remove_pending_job(redis: Any, job_id: UUID) -> int:
-    """Remove queued job payloads by matching both current and legacy shapes."""
+async def _remove_pending_job(
+    redis: Any, job_id: UUID, kind: str = DEFAULT_JOB_KIND
+) -> int:
+    """Remove queued job payloads by matching both current and legacy shapes.
+
+    Looks on the pending list of the job's kind, which is where it was queued.
+    """
     job_id_str = str(job_id)
     removed = 0
+    try:
+        pending_key = pending_key_for_kind(kind)
+    except ValueError:
+        pending_key = pending_key_for_kind(DEFAULT_JOB_KIND)
 
     for payload in (
         json.dumps({"id": job_id_str}),
         json.dumps({"job_id": job_id_str}),
     ):
-        removed += int(await redis.lrem("ceq:jobs:pending", 0, payload) or 0)
+        removed += int(await redis.lrem(pending_key, 0, payload) or 0)
 
     try:
-        queue_items = await redis.lrange("ceq:jobs:pending", 0, -1)
+        queue_items = await redis.lrange(pending_key, 0, -1)
     except Exception as exc:  # noqa: BLE001 - Redis mocks/clients differ by context
         logger.debug("Unable to scan pending queue for cancellation: %s", exc)
         return removed
@@ -239,7 +253,7 @@ async def _remove_pending_job(redis: Any, job_id: UUID) -> int:
             or input_payload.get("job_id")
         )
         if candidate == job_id_str:
-            removed += int(await redis.lrem("ceq:jobs:pending", 0, raw_payload) or 0)
+            removed += int(await redis.lrem(pending_key, 0, raw_payload) or 0)
 
     return removed
 
@@ -629,7 +643,7 @@ async def cancel_job(
         operation="cancel",
         job_id=str(job_id),
         user_id=str(user.id),
-        workflow_id=str(job.workflow_id),
+        workflow_id=str(job.workflow_id) if job.workflow_id else None,
     )
 
     # Publish cancel signal to worker via Redis
@@ -652,7 +666,7 @@ async def cancel_job(
     )
 
     # Remove from queue if still queued.
-    await _remove_pending_job(redis, job_id)
+    await _remove_pending_job(redis, job_id, job.kind or DEFAULT_JOB_KIND)
     record_job_cancellation()
 
     # Publish status update for WebSocket listeners

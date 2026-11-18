@@ -36,7 +36,7 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,6 +45,7 @@ from ceq_api.auth.janua import JanuaUser, get_worker_principal
 from ceq_api.config import get_settings
 from ceq_api.db.redis import get_redis
 from ceq_api.db.session import get_db
+from ceq_api.job_kinds import DEFAULT_JOB_KIND, JOB_KINDS
 from ceq_api.models.job import Job
 from ceq_api.models.job import JobStatus as JobStatusEnum
 from ceq_api.routers.jobs import (
@@ -81,6 +82,28 @@ class LeaseRequest(BaseModel):
             "omit to use the server default."
         ),
     )
+    capabilities: list[str] = Field(
+        default_factory=lambda: [DEFAULT_JOB_KIND],
+        min_length=1,
+        max_length=len(JOB_KINDS),
+        description=(
+            "Job kinds this worker can run. Only jobs of these kinds are "
+            "offered, trying the kinds in the order listed. Omit for "
+            "`[\"comfy\"]`, the behaviour of workers that predate job kinds. "
+            f"Allowed: {', '.join(JOB_KINDS)}."
+        ),
+    )
+
+    @field_validator("capabilities")
+    @classmethod
+    def _known_capabilities(cls, value: list[str]) -> list[str]:
+        unknown = sorted({kind for kind in value if kind not in JOB_KINDS})
+        if unknown:
+            raise ValueError(
+                f"Unknown capability {', '.join(unknown)}; "
+                f"allowed: {', '.join(JOB_KINDS)}"
+            )
+        return list(dict.fromkeys(value))
 
 
 class LeasedJobResponse(BaseModel):
@@ -248,6 +271,10 @@ async def lease_next_job(
     write, so it is atomic against other HTTPS leasers *and* against legacy
     in-cluster Redis workers doing ``BRPOPLPUSH`` on the same lists. Exactly one
     claimant can win any payload.
+
+    Only jobs whose kind is in ``capabilities`` are offered (default
+    ``["comfy"]``); each kind waits on its own pending list, so a worker never
+    receives a job it did not declare it can run.
     """
     redis = get_redis()
     ttl = _lease_ttl(data.ttl_seconds)
@@ -268,6 +295,7 @@ async def lease_next_job(
         worker_id=data.worker_id,
         client_id=principal.client_id or "",
         ttl_seconds=ttl,
+        capabilities=data.capabilities,
     )
 
     if leased is None:
@@ -288,12 +316,13 @@ async def lease_next_job(
         raise HTTPException(status_code=status.HTTP_204_NO_CONTENT) from None
 
     logger.info(
-        "Job %s leased to worker %s (client=%s, attempt=%s, ttl=%ss)",
+        "Job %s leased to worker %s (client=%s, attempt=%s, ttl=%ss, queue=%s)",
         job_uuid,
         data.worker_id,
         principal.client_id,
         leased.attempts,
         ttl,
+        leased.pending_key,
     )
 
     return LeasedJobResponse(

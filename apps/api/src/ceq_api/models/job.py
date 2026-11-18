@@ -4,9 +4,10 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
+from ceq_api.job_kinds import DEFAULT_JOB_KIND, JOB_KINDS, validate_job_kind
 from ceq_api.models.base import JSONB, Base, GUIDString, TimestampMixin
 
 
@@ -22,19 +23,44 @@ class JobStatus(StrEnum):
 
 class Job(Base, TimestampMixin):
     """
-    Job model for tracking workflow executions.
+    Job model for tracking executions.
 
-    Each job represents a single execution of a workflow with specific parameters.
+    A job has a ``kind`` (see ``ceq_api.job_kinds``). A ``comfy`` job is a single
+    execution of a workflow with specific parameters and always has a
+    ``workflow_id``. The other kinds (RFC 0061: capture, edit, export) are not
+    ComfyUI graphs and carry no workflow.
     """
 
     __tablename__ = "jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ({})".format(", ".join(f"'{k}'" for k in JOB_KINDS)),
+            name="ck_jobs_kind",
+        ),
+        # The guarantee the old NOT NULL gave, kept for the kind it applied to.
+        CheckConstraint(
+            "kind <> 'comfy' OR workflow_id IS NOT NULL",
+            name="ck_jobs_comfy_has_workflow",
+        ),
+    )
+
+    # What this job is, and therefore which worker capability can run it.
+    kind: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=DEFAULT_JOB_KIND,
+        server_default=DEFAULT_JOB_KIND,
+        index=True,
+        comment="Job kind (closed set, see ceq_api.job_kinds)",
+    )
 
     # References
-    workflow_id: Mapped[UUID] = mapped_column(
+    workflow_id: Mapped[UUID | None] = mapped_column(
         GUIDString(),
         ForeignKey("workflows.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
+        comment="ComfyUI workflow; null for non-comfy kinds",
     )
     user_id: Mapped[UUID] = mapped_column(
         GUIDString(),
@@ -125,5 +151,10 @@ class Job(Base, TimestampMixin):
     workflow = relationship("Workflow", back_populates="jobs", lazy="selectin")
     outputs = relationship("Output", back_populates="job", lazy="selectin")
 
+    @validates("kind")
+    def _validate_kind(self, _key: str, value: str) -> str:
+        """Reject a kind outside the closed set before it reaches the database."""
+        return validate_job_kind(value)
+
     def __repr__(self) -> str:
-        return f"<Job {self.id} ({self.status})>"
+        return f"<Job {self.id} {self.kind} ({self.status})>"

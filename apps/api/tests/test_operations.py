@@ -86,6 +86,7 @@ class TestOperationsStatus:
         async def llen(key):
             return {
                 "ceq:jobs:pending": 2,
+                "ceq:jobs:pending:capture.stage": 4,
                 "ceq:jobs:processing": 1,
                 "ceq:jobs:completion:dead": 3,
             }.get(key, 0)
@@ -100,6 +101,9 @@ class TestOperationsStatus:
         assert data["callback_token_configured"] is True
         assert data["webhook_secret_configured"] is True
         assert data["redis"]["pending_jobs"] == 2
+        assert data["pending_jobs_by_kind"]["comfy"] == 2
+        assert data["pending_jobs_by_kind"]["capture.stage"] == 4
+        assert data["pending_jobs_by_kind"]["export"] == 0
         assert data["redis"]["processing_jobs"] == 1
         assert data["redis"]["completion_dead_letters"] == 3
 

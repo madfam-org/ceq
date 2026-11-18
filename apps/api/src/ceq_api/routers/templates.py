@@ -17,6 +17,7 @@ from ceq_api.db import get_db
 from ceq_api.db.redis import enqueue_job
 from ceq_api.entitlements import require_template_entitlement
 from ceq_api.job_billing import debit_gpu_job_credits
+from ceq_api.job_kinds import JobKind
 from ceq_api.models import Job, Template, Workflow
 from ceq_api.quotas import active_job_limit_for_user, require_active_job_quota
 
@@ -339,6 +340,7 @@ async def run_template(
 
     # Create job record
     job = Job(
+        kind=JobKind.COMFY.value,
         workflow_id=workflow.id,
         user_id=user.id,
         status="queued",
@@ -367,6 +369,7 @@ async def run_template(
     # Queue job for processing
     job_data = {
         "id": str(job.id),
+        "kind": JobKind.COMFY.value,
         "workflow_id": str(workflow.id),
         "template_id": str(template.id),
         "input": {

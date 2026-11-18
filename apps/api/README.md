@@ -289,6 +289,23 @@ allocated to run it. See `docs/TEMPLATES.md` and `docs/GPU_COMPUTE_STRATEGY.md`.
 | `SERVICE_PRINCIPAL_SCOPE` | No | `ceq:render` | Scope a machine token must carry for render/jobs |
 | `RATE_LIMIT_SERVICE_PRINCIPAL` | No | `100/minute` | Per-`client_id` limit for machine callers (separate bucket from humans) |
 
+Job kinds and capability leases (RFC 0061):
+
+- Every job has a `kind`: `comfy` (a ComfyUI graph, the default and the only
+  kind any route creates today), `capture.journey`, `capture.stage`,
+  `capture.page`, `edit`, `export`. The set is closed; see
+  `src/ceq_api/job_kinds.py`. Only `comfy` jobs have a `workflow_id`.
+- `comfy` jobs wait on Redis `ceq:jobs:pending`, as before. Every other kind
+  waits on `ceq:jobs:pending:<kind>`.
+- `POST /v1/worker/lease` takes `capabilities`, the kinds the worker can run,
+  tried in the order listed. Omitted means `["comfy"]`, so existing workers are
+  unaffected, and a CPU worker never receives a ComfyUI graph.
+- A requeued or reaped job returns to the list it was claimed from.
+- Nothing falls back across lists: a job of a kind no worker declares waits.
+  `GET /v1/operations/status` reports `pending_jobs_by_kind`; the
+  `ceq_queue_depth` metric and `redis.pending_jobs` count the `comfy` list only.
+- Not built yet: no route submits a non-comfy job, and no CPU worker exists.
+
 Worker completion callback notes:
 
 - Workers retry retryable `POST /v1/jobs/{job_id}/outputs/report` failures and
