@@ -9,8 +9,14 @@ What this process is trusted with, and what it is not:
 
 - It opens web pages, so it is treated as the most exposed process CEQ runs.
 - It holds one credential, the worker token. It has no storage keys, no Redis
-  and no database. The child process that runs the browser is not given even
-  the worker credentials: its environment is rebuilt from a short allow-list.
+  and no database. The child process that runs the browser is not handed the
+  worker credentials: its environment is rebuilt from a short allow-list, the
+  credentials are removed from this process's own environment once read, and
+  this process is marked non-dumpable so a same-user child cannot read its
+  memory or `/proc` entries. A child running as a different user would be a
+  stronger wall; that is a deployment change, not made here.
+- Files the CLI names are read only if they are plain files inside the job's
+  own output directory. A symlink is refused.
 - A page may be opened only if its host is on this worker's own list
   (``CEQ_CAPTURE_ALLOWED_HOSTS``). The API checked the same rule when the
   production was submitted; it is checked again here because this is where
@@ -23,6 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import ctypes
 import json
 import os
 import re
@@ -38,7 +45,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from ceq_worker.config import get_settings
-from ceq_worker.lease import LeaseConsumer
+from ceq_worker.lease import ArtifactTooLargeError, LeaseConsumer
 
 settings = get_settings()
 
@@ -54,7 +61,19 @@ VIDEO_TYPES = ("video/mp4", "video/webm", "video/quicktime")
 # What the child process may inherit. Nothing named CEQ_* or JANUA_* is here.
 CHILD_ENV = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "PLAYWRIGHT_BROWSERS_PATH", "NODE_ENV")
 _HOSTNAME = re.compile(r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9-]*[a-z][a-z0-9-]*$")
-_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$")
+_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,200}")
+_JOB_ID = re.compile(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
+_PLATFORM = re.compile(r"[a-z0-9][a-z0-9_-]{0,31}")
+KNOWN_KINDS = frozenset({"capture.page", "export"})
+MAX_MANIFEST_BYTES = 1024 * 1024
+# Environment names that carry the worker's credential. Removed from this
+# process once the settings have read them.
+CREDENTIAL_ENV = (
+    "CEQ_WORKER_CLIENT_SECRET",
+    "JANUA_CLIENT_SECRET",
+    "CEQ_WORKER_CLIENT_ID",
+    "JANUA_CLIENT_ID",
+)
 
 
 class JobRefusedError(Exception):
@@ -109,7 +128,9 @@ def check_capture_url(url: str, allowed: list[str]) -> str:
         port = parts.port
     except ValueError:
         raise JobRefusedError("the url cannot be parsed") from None
-    host = (parts.hostname or "").lower().rstrip(".")
+    host = (parts.hostname or "").lower()
+    if host.endswith("."):
+        raise JobRefusedError("the host may not end in a dot")
     if parts.scheme.lower() != "https" or port not in (None, 443) or "@" in parts.netloc:
         raise JobRefusedError("only plain https urls on the default port are opened")
     if not _HOSTNAME.match(host):
@@ -144,8 +165,18 @@ async def run_cli(args: list[str], *, cwd: Path, timeout: float) -> tuple[int, s
         with contextlib.suppress(ProcessLookupError, PermissionError):
             os.killpg(process.pid, signal.SIGKILL)
 
+    tail = bytearray()
+
+    async def drain() -> None:
+        # Only the end of the output is kept, however much the CLI prints.
+        assert process.stdout is not None
+        while chunk := await process.stdout.read(65536):
+            tail.extend(chunk)
+            del tail[:-4000]
+        await process.wait()
+
     try:
-        out, _ = await asyncio.wait_for(process.communicate(), timeout=timeout)
+        await asyncio.wait_for(drain(), timeout=timeout)
     except TimeoutError:
         kill()
         await process.wait()
@@ -154,11 +185,49 @@ async def run_cli(args: list[str], *, cwd: Path, timeout: float) -> tuple[int, s
         kill()
         await process.wait()
         raise
-    return process.returncode or 0, out.decode("utf-8", "replace")[-2000:]
+    # A child killed by a signal has a negative return code: never read as success.
+    code = process.returncode if process.returncode is not None else -1
+    return code, bytes(tail).decode("utf-8", "replace")
 
 
 Uploader = Callable[[str, Path, str], Awaitable[dict[str, Any]]]
 Downloader = Callable[[str, str, Path], Awaitable[Path]]
+
+
+def output_file(out: Path, name: str) -> Path:
+    """A file the CLI named, if it is a plain file directly inside ``out``.
+
+    The CLI's own manifest is not trusted to name what gets uploaded: a name
+    with a path in it, a symlink, or anything that is not a regular file is
+    refused, so a misbehaving child cannot have this worker upload something
+    from elsewhere on the disk.
+    """
+    if not _NAME.fullmatch(name):
+        raise RuntimeError(f"the CLI named a file this worker will not read: {name!r}")
+    path = out / name
+    if path.is_symlink() or not path.is_file() or path.resolve().parent != out.resolve():
+        raise RuntimeError(f"{name!r} is not a plain file in the job's output")
+    return path
+
+
+def read_manifest(out: Path, name: str) -> dict[str, Any]:
+    path = output_file(out, name)
+    if path.stat().st_size > MAX_MANIFEST_BYTES:
+        raise RuntimeError(f"{name} is larger than a manifest can be")
+    data = json.loads(path.read_text())
+    if not isinstance(data, dict):
+        raise RuntimeError(f"{name} is not a manifest")
+    return data
+
+
+def cli_failure(what: str, code: int, tail: str) -> RuntimeError:
+    """The CLI failed. Its output goes to the worker's log, not to the job's error.
+
+    The job's error is shown to the client that submitted it, and the CLI's
+    output can carry paths, command lines and text taken from the page.
+    """
+    print(f"   {what} exited {code}; last output:\n{tail[-1500:]}")
+    return RuntimeError(f"{what} exited with code {code}")
 
 
 def content_type_of(path: Path) -> str:
@@ -169,7 +238,8 @@ async def capture_page(
     job_id: str, params: dict[str, Any], work: Path, upload: Uploader
 ) -> list[dict[str, Any]]:
     p = CapturePageParams(**params)
-    allowed = settings.capture_allowed_hosts
+    # One normalised list, used for the check here and handed to the CLI.
+    allowed = [h.strip().lower() for h in settings.capture_allowed_hosts if h.strip()]
     check_capture_url(p.url, allowed)
     out = work / "out"
     code, tail = await run_cli(
@@ -192,15 +262,13 @@ async def capture_page(
         timeout=settings.cpu_job_timeout_seconds,
     )
     if code != 0:
-        raise RuntimeError(f"capture page exited {code}: {tail[-600:]}")
+        raise cli_failure("capture page", code, tail)
 
-    manifest = json.loads((out / "manifest.json").read_text())
-    outputs = [await upload(job_id, out / "manifest.json", "application/json")]
-    for tile in manifest["tiles"]:
-        name = str(tile["file"])
-        if not _NAME.match(name):
-            raise RuntimeError(f"the manifest names a file this worker will not read: {name!r}")
-        descriptor = await upload(job_id, out / name, "image/png")
+    manifest = read_manifest(out, "manifest.json")
+    tiles = [(output_file(out, str(tile["file"])), tile) for tile in manifest["tiles"]]
+    outputs = [await upload(job_id, output_file(out, "manifest.json"), "application/json")]
+    for path, tile in tiles:
+        descriptor = await upload(job_id, path, "image/png")
         outputs.append({**descriptor, "width": int(tile["w"]), "height": int(tile["h"])})
     return outputs
 
@@ -243,28 +311,28 @@ async def export(
     if p.aspects:
         args += ["--aspects", ",".join(p.aspects)]
     if p.platforms:
-        if not all(re.fullmatch(r"[a-z0-9_-]{1,32}", name) for name in p.platforms):
+        if not all(_PLATFORM.fullmatch(name) for name in p.platforms):
             raise JobRefusedError("a platform name is not a plain word")
         args += ["--platforms", ",".join(p.platforms)]
     code, tail = await run_cli(args, cwd=work, timeout=settings.cpu_job_timeout_seconds)
     # 0: every target passed. 1: some did not, and export.json says which.
-    if code not in (0, 1) or not (out / "export.json").exists():
-        raise RuntimeError(f"export exited {code}: {tail[-600:]}")
+    if code not in (0, 1) or not (out / "export.json").is_file():
+        raise cli_failure("export", code, tail)
 
-    manifest = json.loads((out / "export.json").read_text())
-    if manifest.get("failed"):
-        reasons = "; ".join(
-            f"{f.get('format')} {f.get('aspect')}: {f.get('reason')}" for f in manifest["failed"]
-        )
+    manifest = read_manifest(out, "export.json")
+    failed = manifest.get("failed") or []
+    if failed or code == 1:
+        targets = ", ".join(f"{f.get('format')} {f.get('aspect')}" for f in failed) or "unnamed"
+        print(f"   export failed targets: {failed}")
         # Not uploaded: a production must not carry on with part of an export.
-        raise JobRefusedError(f"{len(manifest['failed'])} export target(s) failed: {reasons}")
+        raise JobRefusedError(f"{max(1, len(failed))} export target(s) failed: {targets}")
 
-    outputs = [await upload(job_id, out / "export.json", "application/json")]
-    for item in manifest["outputs"]:
-        name = str(item["file"])
-        if not _NAME.match(name):
-            raise RuntimeError(f"the manifest names a file this worker will not read: {name!r}")
-        descriptor = await upload(job_id, out / name, content_type_of(out / name))
+    files = [(output_file(out, str(item["file"])), item) for item in manifest["outputs"]]
+    if not files:
+        raise RuntimeError("the export produced no output")
+    outputs = [await upload(job_id, output_file(out, "export.json"), "application/json")]
+    for path, item in files:
+        descriptor = await upload(job_id, path, content_type_of(path))
         outputs.append(
             {
                 **descriptor,
@@ -286,10 +354,6 @@ def make_handler(
         started = time.time()
         job_id = str(event.get("id", ""))
         kind = event.get("kind")
-        body = event.get("input") or {}
-        work = Path(settings.cpu_work_dir) / re.sub(r"[^A-Za-z0-9-]", "_", job_id)
-        shutil.rmtree(work, ignore_errors=True)
-        work.mkdir(parents=True, exist_ok=True)
 
         def failed(error: str, *, retryable: bool) -> dict[str, Any]:
             return {
@@ -300,20 +364,26 @@ def make_handler(
                 "metadata": {"kind": kind},
             }
 
+        # The job id names a directory that is created and removed. Anything
+        # that is not a UUID never touches the disk.
+        if not _JOB_ID.fullmatch(job_id):
+            return failed("the job has no usable id", retryable=False)
+        work = Path(settings.cpu_work_dir) / job_id.lower()
+        shutil.rmtree(work, ignore_errors=True)
+        work.mkdir(parents=True, exist_ok=True)
+
         try:
             if kind not in settings.cpu_capabilities:
                 raise JobRefusedError(f"this worker does not run {kind!r} jobs")
+            body = event.get("input")
+            params = body.get("params") if isinstance(body, dict) else None
+            inputs = body.get("inputs") if isinstance(body, dict) else None
+            if not isinstance(params, dict) or not isinstance(inputs or {}, dict):
+                raise JobRefusedError("the job's parameters are not in the expected shape")
             if kind == "capture.page":
-                outputs = await capture_page(job_id, body.get("params") or {}, work, upload)
+                outputs = await capture_page(job_id, params, work, upload)
             elif kind == "export":
-                outputs = await export(
-                    job_id,
-                    body.get("params") or {},
-                    body.get("inputs") or {},
-                    work,
-                    upload,
-                    download,
-                )
+                outputs = await export(job_id, params, inputs or {}, work, upload, download)
             else:
                 raise JobRefusedError(f"no runner exists for {kind!r} jobs")
             return {
@@ -329,14 +399,34 @@ def make_handler(
                 "error": "Job cancelled",
                 "execution_time": time.time() - started,
             }
-        except (JobRefusedError, ValidationError) as exc:
+        except (JobRefusedError, ValidationError, ArtifactTooLargeError) as exc:
             return failed(str(exc), retryable=False)
+        except (KeyError, TypeError, AttributeError, ValueError) as exc:
+            # A payload or manifest that is not shaped as expected will be
+            # shaped the same way on the next attempt.
+            return failed(f"malformed job data: {type(exc).__name__}", retryable=False)
         except Exception as exc:  # noqa: BLE001 - reported, and worth another try
             return failed(str(exc), retryable=True)
         finally:
             shutil.rmtree(work, ignore_errors=True)
 
     return handler
+
+
+def harden_process() -> None:
+    """Keep the worker's credential out of reach of the child it starts.
+
+    The settings have already read the credential, so it is removed from this
+    process's environment (which a same-user process can read through /proc).
+    On Linux the process is also marked non-dumpable, which hands its /proc
+    entries to root and stops a same-user process attaching to it.
+    """
+    for name in CREDENTIAL_ENV:
+        os.environ.pop(name, None)
+    with contextlib.suppress(Exception):
+        libc = ctypes.CDLL(None, use_errno=True)
+        pr_set_dumpable = 4
+        libc.prctl(pr_set_dumpable, 0, 0, 0, 0)
 
 
 async def main() -> None:
@@ -346,12 +436,21 @@ async def main() -> None:
             "The CPU worker runs in lease mode only: set CEQ_LEASE_URL, "
             "CEQ_WORKER_CLIENT_ID and CEQ_WORKER_CLIENT_SECRET."
         )
-    consumer = LeaseConsumer(capabilities=settings.cpu_capabilities)
+    capabilities = list(settings.cpu_capabilities)
+    if not capabilities or not set(capabilities) <= KNOWN_KINDS:
+        raise SystemExit(
+            f"CEQ_CPU_CAPABILITIES must be a non-empty subset of {sorted(KNOWN_KINDS)}; "
+            f"got {capabilities!r}"
+        )
+    harden_process()
 
     async def upload(job_id: str, path: Path, content_type: str) -> dict[str, Any]:
         return await consumer.upload_artifact(job_id, path, content_type=content_type)
 
-    consumer._handler = make_handler(upload, consumer.download_input)
+    async def download(job_id: str, storage_uri: str, dest: Path) -> Path:
+        return await consumer.download_input(job_id, storage_uri, dest)
+
+    consumer = LeaseConsumer(handler=make_handler(upload, download), capabilities=capabilities)
     await consumer.initialize()
     Path(settings.cpu_work_dir).mkdir(parents=True, exist_ok=True)
     print(f"🧮 CPU worker: {', '.join(settings.cpu_capabilities)}")

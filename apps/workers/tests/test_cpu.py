@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -164,7 +165,9 @@ class TestCapturePage:
         result = await worker.handle(event("capture.page", {"url": "https://enclii.dev/"}))
 
         assert result["success"] is False and result["retryable"] is True
-        assert "boom" in result["error"]
+        # The CLI's own words go to the worker's log, not to the client.
+        assert result["error"] == "capture page exited with code 2"
+        assert "boom" not in result["error"]
         assert list(Path(cpu.settings.cpu_work_dir).iterdir()) == []
 
     async def test_a_manifest_cannot_name_a_file_outside_the_output(self, worker):
@@ -201,7 +204,7 @@ class TestExport:
         )
 
         assert result["success"] is False and result["retryable"] is False
-        assert "webm 16:9: empty" in result["error"]
+        assert "webm 16:9" in result["error"]
         assert worker.uploaded == []
 
     @pytest.mark.parametrize(
@@ -310,7 +313,8 @@ class TestLeaseClient:
         assert consumer._client.post.call_args.args[0].endswith("/v1/worker/jobs/j/upload-url")
         put = consumer._client.put.call_args
         assert put.args[0] == "https://r2/put"
-        assert put.kwargs["headers"] == {"Content-Type": "image/png"}
+        assert put.kwargs["headers"] == {"Content-Type": "image/png", "Content-Length": "5"}
+        assert b"".join([chunk async for chunk in put.kwargs["content"]]) == b"12345"
         assert "Authorization" not in put.kwargs["headers"]
         assert descriptor == {
             "filename": "a.png",
@@ -318,3 +322,135 @@ class TestLeaseClient:
             "file_type": "image/png",
             "file_size_bytes": 5,
         }
+
+    async def test_a_transfer_url_that_is_not_https_is_refused(self, tmp_path):
+        consumer = self.consumer()
+        grant = self.response(200, {"upload_url": "http://r2/put", "storage_uri": "r2://b/x"})
+        consumer._client.post = AsyncMock(return_value=grant)
+        consumer._client.put = AsyncMock()
+        path = tmp_path / "a.png"
+        path.write_bytes(b"1")
+
+        with pytest.raises(RuntimeError, match="not https"):
+            await consumer.upload_artifact("j", path, content_type="image/png")
+        consumer._client.put.assert_not_called()
+
+    async def test_a_file_over_the_limit_is_not_uploaded(self, tmp_path, monkeypatch):
+        from ceq_worker import lease
+
+        monkeypatch.setattr(lease.settings, "max_artifact_bytes", 3)
+        consumer = self.consumer()
+        grant = self.response(200, {"upload_url": "https://r2/put", "storage_uri": "r2://b/x"})
+        consumer._client.post = AsyncMock(return_value=grant)
+        consumer._client.put = AsyncMock()
+        path = tmp_path / "a.png"
+        path.write_bytes(b"12345")
+
+        with pytest.raises(lease.ArtifactTooLargeError):
+            await consumer.upload_artifact("j", path, content_type="image/png")
+        consumer._client.put.assert_not_called()
+
+    def test_an_empty_capability_list_is_refused(self):
+        """Sent as no list, it would be read as ["comfy"] and hand this worker GPU jobs."""
+        with pytest.raises(ValueError, match="not empty"):
+            LeaseConsumer(capabilities=[])
+
+
+class TestHardening:
+    async def test_a_symlink_named_by_the_cli_is_never_uploaded(self, worker, tmp_path):
+        secret = tmp_path / "secret.txt"
+        secret.write_text("worker secret")
+        worker.cli(
+            CAPTURE_CLI.replace(
+                'open(os.path.join(out, "tile-r000-c000.png"), "wb").write(b"png")',
+                f'os.symlink({str(secret)!r}, os.path.join(out, "tile-r000-c000.png"))',
+            )
+        )
+
+        result = await worker.handle(event("capture.page", {"url": "https://enclii.dev/"}))
+
+        assert result["success"] is False
+        assert "not a plain file" in result["error"]
+        assert worker.uploaded == []
+
+    async def test_nothing_is_uploaded_when_any_named_file_is_bad(self, worker):
+        """Every file is checked before the first upload, so a bad one leaves no partial set."""
+        worker.cli(
+            CAPTURE_CLI.replace(
+                '[{"file": "tile-r000-c000.png", "w": 1440, "h": 900}]',
+                '[{"file": "tile-r000-c000.png", "w": 1440, "h": 900},'
+                ' {"file": "missing.png", "w": 1, "h": 1}]',
+            )
+        )
+
+        result = await worker.handle(event("capture.page", {"url": "https://enclii.dev/"}))
+
+        assert result["success"] is False
+        assert worker.uploaded == []
+
+    @pytest.mark.parametrize("job_id", ["", "..", "../../etc", "not-a-uuid", "1111"])
+    async def test_a_job_without_a_uuid_never_touches_the_disk(self, worker, job_id):
+        ran = worker.cli("open('ran', 'w')")
+        payload = {**event("capture.page", {"url": "https://enclii.dev/"}), "id": job_id}
+
+        result = await worker.handle(payload)
+
+        assert result["success"] is False and result["retryable"] is False
+        assert not (ran.parent / "ran").exists()
+        assert not Path(cpu.settings.cpu_work_dir).exists() or not list(
+            Path(cpu.settings.cpu_work_dir).iterdir()
+        )
+
+    @pytest.mark.parametrize(
+        "body", [None, [], {"params": "x"}, {"params": {"url": "https://enclii.dev/"}, "inputs": 3}]
+    )
+    async def test_a_misshapen_payload_fails_without_a_retry(self, worker, body):
+        payload = {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "kind": "capture.page",
+            "input": body,
+        }
+        result = await worker.handle(payload)
+        assert result["success"] is False and result["retryable"] is False
+
+    async def test_a_child_killed_by_a_signal_is_a_failure(self, worker):
+        worker.cli("import os, signal; os.kill(os.getpid(), signal.SIGKILL)")
+        result = await worker.handle(event("capture.page", {"url": "https://enclii.dev/"}))
+        assert result["success"] is False
+
+    async def test_exit_one_with_nothing_listed_is_still_a_failure(self, worker):
+        worker.cli(EXPORT_CLI.replace("sys.exit(1 if failed else 0)", "sys.exit(1)"))
+        result = await worker.handle(
+            event("export", {"formats": ["mp4"], "aspects": ["16:9"]}, TAKE)
+        )
+        assert result["success"] is False
+        assert worker.uploaded == []
+
+    @pytest.mark.parametrize("name", ["--help", "-o", "a b", ""])
+    async def test_a_platform_name_cannot_be_an_option(self, worker, name):
+        worker.cli(EXPORT_CLI)
+        result = await worker.handle(event("export", {"platforms": [name]}, TAKE))
+        assert result["success"] is False and result["retryable"] is False
+
+    def test_a_host_ending_in_a_dot_is_refused(self):
+        with pytest.raises(JobRefusedError):
+            check_capture_url("https://cv.madfam.io./", HOSTS)
+
+    def test_hardening_removes_the_credential_from_the_environment(self, monkeypatch):
+        monkeypatch.setenv("CEQ_WORKER_CLIENT_SECRET", "s3cret")
+        monkeypatch.setenv("JANUA_CLIENT_SECRET", "s3cret")
+        monkeypatch.setattr(cpu.ctypes, "CDLL", lambda *a, **k: (_ for _ in ()).throw(OSError()))
+
+        cpu.harden_process()
+
+        assert "CEQ_WORKER_CLIENT_SECRET" not in os.environ
+        assert "JANUA_CLIENT_SECRET" not in os.environ
+
+    async def test_the_worker_will_not_start_with_no_or_unknown_capabilities(self, monkeypatch):
+        monkeypatch.setattr(cpu.settings, "lease_url", "https://api.example")
+        monkeypatch.setattr(cpu.settings, "janua_client_id", "id")
+        monkeypatch.setattr(cpu.settings, "janua_client_secret", "secret")
+        for bad in ([], ["comfy"], ["capture.page", "edit"]):
+            monkeypatch.setattr(cpu.settings, "cpu_capabilities", bad)
+            with pytest.raises(SystemExit, match="CEQ_CPU_CAPABILITIES"):
+                await cpu.main()

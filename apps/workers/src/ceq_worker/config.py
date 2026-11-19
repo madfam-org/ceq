@@ -171,7 +171,12 @@ class Settings(BaseSettings):
     )
     cpu_job_timeout_seconds: int = Field(default=900, ge=30, le=3300)
     cpu_work_dir: str = Field(default="/tmp/ceq-cpu")
+    # Per network phase (connect, a read, a write).
     artifact_transfer_timeout_seconds: float = Field(default=300.0)
+    # For one whole upload or download, however slowly it drips.
+    artifact_transfer_total_seconds: float = Field(default=1800.0)
+    # Largest single file the worker moves, in or out. 2 GiB.
+    max_artifact_bytes: int = Field(default=2 * 1024**3, ge=1)
 
     @property
     def external_worker_redis_url(self) -> str:
