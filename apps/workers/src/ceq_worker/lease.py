@@ -23,14 +23,38 @@ import asyncio
 import contextlib
 import signal
 import time
+from collections.abc import Awaitable, Callable, Sequence
+from pathlib import Path
 from typing import Any
 
 import httpx
 
 from ceq_worker.config import get_settings
-from ceq_worker.handler import handler
 
 settings = get_settings()
+
+JobHandler = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
+
+
+class ArtifactTooLargeError(RuntimeError):
+    """A file is over the size this worker moves. Trying again would not shrink it."""
+
+
+def _require_https(url: str) -> None:
+    """A presigned URL is a credential for one object. It is only ever used over https."""
+    if not str(url).startswith("https://"):
+        raise RuntimeError("the API returned a transfer URL that is not https")
+
+
+def _comfy_handler() -> JobHandler:
+    """The ComfyUI handler, imported only when a consumer actually needs it.
+
+    Importing it builds the ComfyUI executor and a storage client, which a CPU
+    worker has no use for and no dependencies to load.
+    """
+    from ceq_worker.handler import handler
+
+    return handler
 
 
 class TokenExpiredError(RuntimeError):
@@ -99,7 +123,23 @@ class ServiceTokenProvider:
 class LeaseConsumer:
     """HTTPS job-lease consumer for external GPU workers."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        handler: JobHandler | None = None,
+        capabilities: Sequence[str] | None = None,
+    ) -> None:
+        """``handler`` runs a leased job; the default is the ComfyUI handler.
+
+        ``capabilities`` are the job kinds this worker asks for. None sends no
+        list, which the API reads as ``["comfy"]``: the behaviour of every
+        worker that predates job kinds.
+        """
+        if capabilities is not None and len(capabilities) == 0:
+            # An empty list would be sent as no list, which the API reads as
+            # ["comfy"]: a worker that asked for nothing would be handed GPU jobs.
+            raise ValueError("capabilities may be omitted, but not empty")
+        self._handler = handler
+        self._capabilities = list(capabilities) if capabilities is not None else None
         self._client: httpx.AsyncClient | None = None
         self._tokens: ServiceTokenProvider | None = None
         self._running = False
@@ -119,6 +159,10 @@ class LeaseConsumer:
         self._client = httpx.AsyncClient(
             timeout=settings.lease_request_timeout_seconds,
         )
+        # Resolved before the first lease: a worker that cannot load its handler
+        # must fail at startup, not after it has taken a job.
+        if self._handler is None:
+            self._handler = _comfy_handler()
         self._tokens = ServiceTokenProvider(self._client)
         await self._tokens.get_token()
         print(f"📡 Lease mode: {settings.lease_url}")
@@ -172,6 +216,100 @@ class LeaseConsumer:
 
         return response
 
+    # --- artifacts without storage credentials ---------------------------
+
+    async def upload_artifact(
+        self, job_id: str, path: Path, *, content_type: str
+    ) -> dict[str, Any]:
+        """Upload one file of a leased job through a presigned URL.
+
+        The API authorizes one key under the job's own prefix; the bytes go
+        straight to storage. The worker holds no storage credentials.
+        """
+        if self._client is None:
+            raise RuntimeError("Consumer not initialized")
+        response = await self._post(
+            f"/v1/worker/jobs/{job_id}/upload-url",
+            {
+                "worker_id": settings.worker_id,
+                "filename": path.name,
+                "content_type": content_type,
+            },
+        )
+        if response.status_code >= 400:
+            raise RuntimeError(
+                f"upload-url refused for {path.name}: HTTP {response.status_code}"
+            )
+        grant = response.json()
+        size = path.stat().st_size
+        if size > settings.max_artifact_bytes:
+            raise ArtifactTooLargeError(
+                f"{path.name} is {size} bytes, over the {settings.max_artifact_bytes} byte limit"
+            )
+        _require_https(grant["upload_url"])
+
+        async def chunks():
+            with path.open("rb") as stream:
+                while block := stream.read(1024 * 1024):
+                    yield block
+
+        # Streamed, with the length stated: a presigned PUT refuses chunked
+        # encoding, and a large export must not be held in memory.
+        put = await asyncio.wait_for(
+            self._client.put(
+                grant["upload_url"],
+                content=chunks(),
+                # The signature covers the content type; it must match.
+                headers={"Content-Type": content_type, "Content-Length": str(size)},
+                timeout=settings.artifact_transfer_timeout_seconds,
+            ),
+            timeout=settings.artifact_transfer_total_seconds,
+        )
+        if put.status_code >= 400:
+            raise RuntimeError(f"upload of {path.name} failed: HTTP {put.status_code}")
+        return {
+            "filename": path.name,
+            "storage_uri": grant["storage_uri"],
+            "file_type": content_type,
+            "file_size_bytes": size,
+        }
+
+    async def download_input(self, job_id: str, storage_uri: str, dest: Path) -> Path:
+        """Fetch an output of a step this job depends on, through a presigned URL."""
+        if self._client is None:
+            raise RuntimeError("Consumer not initialized")
+        response = await self._post(
+            f"/v1/worker/jobs/{job_id}/download-url",
+            {"worker_id": settings.worker_id, "storage_uri": storage_uri},
+        )
+        if response.status_code >= 400:
+            raise RuntimeError(f"download-url refused: HTTP {response.status_code}")
+        url = response.json()["download_url"]
+        _require_https(url)
+
+        async def fetch() -> None:
+            received = 0
+            async with self._client.stream(
+                "GET", url, timeout=settings.artifact_transfer_timeout_seconds
+            ) as stream:
+                if stream.status_code >= 400:
+                    raise RuntimeError(f"download failed: HTTP {stream.status_code}")
+                with dest.open("wb") as out:
+                    async for chunk in stream.aiter_bytes():
+                        received += len(chunk)
+                        if received > settings.max_artifact_bytes:
+                            raise ArtifactTooLargeError(
+                                f"the input is over the {settings.max_artifact_bytes} byte limit"
+                            )
+                        out.write(chunk)
+
+        try:
+            await asyncio.wait_for(fetch(), timeout=settings.artifact_transfer_total_seconds)
+        except BaseException:
+            dest.unlink(missing_ok=True)
+            raise
+        return dest
+
     # --- main loop -------------------------------------------------------
 
     async def run(self) -> None:
@@ -202,13 +340,13 @@ class LeaseConsumer:
 
     async def _lease_one(self) -> dict[str, Any] | None:
         """Claim one job, or None when the queue is empty."""
-        response = await self._post(
-            "/v1/worker/lease",
-            {
-                "worker_id": settings.worker_id,
-                "ttl_seconds": settings.lease_ttl_seconds,
-            },
-        )
+        body: dict[str, Any] = {
+            "worker_id": settings.worker_id,
+            "ttl_seconds": settings.lease_ttl_seconds,
+        }
+        if self._capabilities:
+            body["capabilities"] = self._capabilities
+        response = await self._post("/v1/worker/lease", body)
 
         # 204 is the normal empty-queue answer, not an error.
         if response.status_code == 204:
@@ -247,7 +385,9 @@ class LeaseConsumer:
         )
 
         start = time.time()
-        handler_task = asyncio.create_task(handler({"id": job_id, **payload}))
+        if self._handler is None:
+            raise RuntimeError("Consumer not initialized")
+        handler_task = asyncio.create_task(self._handler({"id": job_id, **payload}))
         heartbeat_task = asyncio.create_task(self._heartbeat_loop(job_id, interval))
 
         try:
@@ -355,7 +495,9 @@ class LeaseConsumer:
             await self._report_fail(
                 job_id,
                 error=result.get("error") or "Execution failed",
-                retryable=True,
+                # A handler may say a retry cannot help (bad parameters, a page
+                # that may not be opened). Unsaid, it stays retryable.
+                retryable=bool(result.get("retryable", True)),
                 gpu_seconds=result.get("execution_time", elapsed),
                 metadata=result.get("metadata") or {},
             )
