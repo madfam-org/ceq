@@ -371,6 +371,11 @@ async def poll_job_status(
         job = result.scalar_one_or_none()
 
         if job and job.user_id == user.id:
+            if job.production_id is not None:
+                # Show the cached state without writing it: a production job's
+                # row is only ever changed under its production's lock, and a
+                # stale cache entry must not undo a finished step.
+                db.expunge(job)
             # Merge Redis data (more current) with DB data
             if "status" in redis_data:
                 job.status = redis_data["status"]
@@ -450,6 +455,17 @@ async def persist_job_completion(
             # The steps after this one were already released or cancelled on
             # its first terminal report. A second, different report would
             # leave them contradicting it, so it is recorded and ignored.
+            if (
+                job.status == JobStatusEnum.CANCELLED.value
+                and data.status == JobStatusEnum.CANCELLED.value
+            ):
+                # The worker closing out a job that was cancelled under it:
+                # same state, so keep what only the worker knows.
+                now = datetime.now(UTC)
+                job.completed_at = job.completed_at or now
+                job.worker_id = data.worker_id or job.worker_id
+                if data.gpu_seconds is not None:
+                    job.gpu_seconds = data.gpu_seconds
             job.output_metadata = {
                 **(job.output_metadata or {}),
                 "ignored_worker_report_after_terminal": {

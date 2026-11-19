@@ -29,6 +29,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ceq_api.config import get_settings
 from ceq_api.db.redis import enqueue_job
 from ceq_api.job_kinds import JobKind
 from ceq_api.models.job import Job, JobStatus
@@ -83,7 +84,10 @@ _HOSTNAME = re.compile(rf"^(?:{_LABEL}\.)+{_LABEL}$")
 # anything outside ASCII.
 _URL_CHARS = re.compile(r"^[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+$")
 # A string that names a resource by scheme ("file:", "concat:", "http://").
-_SCHEME_LIKE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
+# The colon must be followed by something, so prose such as "Intro: hello" is
+# not mistaken for one.
+_SCHEME_LIKE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:(?=\S)")
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 
 
 def check_capture_url(url: Any, allowed: list[str]) -> str:
@@ -128,10 +132,18 @@ def check_no_other_locations(value: Any, where: str) -> None:
     Only ``params.url`` of a capture step is checked against the host list.
     Until each kind has a declared parameter contract, nothing else in
     ``params`` may carry a location a worker might open or read: no
-    ``file:``, ``concat:``, ``http://`` or similar, at any depth.
+    ``file:``, ``concat:``, ``http://`` or similar, no absolute, home-relative
+    or parent-relative path, and no control character, at any depth.
     """
     if isinstance(value, str):
-        if _SCHEME_LIKE.match(value) or "://" in value or "\x00" in value:
+        # Judge the string as a tool would after trimming it.
+        text = _CONTROL.sub("", value).strip()
+        if (
+            text != value.strip()  # carried a control character
+            or _SCHEME_LIKE.match(text)
+            or "://" in text
+            or text.startswith(("/", "\\", "~", ".."))
+        ):
             raise GraphError(f"{where} may not carry a location or scheme")
     elif isinstance(value, dict):
         for key, item in value.items():
@@ -293,7 +305,8 @@ async def release_ready_jobs(db: AsyncSession, production_id: UUID) -> list[Job]
             # A worker reports its own storage_uri. Only an artifact under the
             # reporting job's own prefix (where the upload route puts it) is
             # handed on, so one worker cannot point the next at something else.
-            if f"outputs/{output.job_id}/" not in output.storage_uri:
+            expected = f"r2://{get_settings().r2_bucket}/outputs/{output.job_id}/"
+            if not output.storage_uri.startswith(expected) or ".." in output.storage_uri:
                 logger.warning(
                     "Production %s: output %s of job %s is outside the job prefix; not passed on",
                     production_id,

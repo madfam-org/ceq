@@ -237,7 +237,11 @@ async def get_production(
     # Reading also repairs: a step whose dependencies are complete but which
     # was never queued (the API died between the two) is queued now. Releasing
     # is idempotent, so this is safe to do on every read.
-    await release_ready_jobs(db, production.id)
+    try:
+        async with db.begin_nested():
+            await release_ready_jobs(db, production.id)
+    except Exception:  # noqa: BLE001 - a read still answers when the queue is down
+        logger.exception("Production %s: repair on read failed", production.id)
     return _response(production, await _jobs_of(db, production.id))
 
 

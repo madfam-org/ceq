@@ -15,6 +15,7 @@ from sqlalchemy import select
 import ceq_api.auth.janua as janua_module
 from ceq_api import productions as productions_module
 from ceq_api.auth.janua import JanuaUser, get_production_principal, service_principal_id
+from ceq_api.config import get_settings
 from ceq_api.models.job import Job, JobStatus
 from ceq_api.models.output import Output
 from ceq_api.productions import (
@@ -33,6 +34,7 @@ from ceq_api.routers.jobs import JobCompletionReport, JobOutputReport, persist_j
 PRODUCE_SCOPE = "ceq:produce"
 CLIENT = "cinematic-pointer"
 HOSTS = ["enclii.dev", ".madfam.io"]
+BUCKET = f"r2://{get_settings().r2_bucket}"
 
 
 def principal(client_id: str = CLIENT, scopes: frozenset[str] = frozenset({PRODUCE_SCOPE})):
@@ -181,6 +183,14 @@ class TestCaptureHosts:
             {"nested": {"deep": ["ok", "http://internal/"]}},
             {"audio": "s3://bucket/key"},
             {"http://key": 1},
+            {"a": " file:/etc/passwd"},
+            {"a": "\tconcat:a|b"},
+            {"a": "//host/x"},
+            {"a": "/etc/passwd"},
+            {"a": "\\\\host\\share"},
+            {"a": "../x"},
+            {"a": "~/.ssh/id"},
+            {"a": "C:\\Windows"},
             {"text": "a\x00b"},
         ],
     )
@@ -194,7 +204,18 @@ class TestCaptureHosts:
 
     def test_ordinary_params_pass(self):
         validate_graph(
-            [step("a", "export", aspect="16:9", formats=["mp4", "webm"], crf=17, note="16:9 cut")],
+            [
+                step(
+                    "a",
+                    "export",
+                    aspect="16:9",
+                    formats=["mp4", "webm"],
+                    crf=17,
+                    note="16:9 cut",
+                    title="Intro: hello",
+                    hint="a/b.mp4",
+                )
+            ],
             allowed_hosts=HOSTS,
             max_jobs=5,
         )
@@ -309,7 +330,7 @@ async def finish(db_session, job: Job, status="completed", outputs=()):
             outputs=[
                 JobOutputReport(
                     filename=name,
-                    storage_uri=f"r2://ceq/outputs/{job.id}/{name}",
+                    storage_uri=f"{BUCKET}/outputs/{job.id}/{name}",
                     file_type="video",
                     file_size_bytes=1,
                 )
@@ -349,7 +370,7 @@ class TestSubmitAndRun:
             "take": [
                 {
                     "filename": "take.mp4",
-                    "storage_uri": f"r2://ceq/outputs/{take.id}/take.mp4",
+                    "storage_uri": f"{BUCKET}/outputs/{take.id}/take.mp4",
                     "file_type": "video",
                 }
             ]
@@ -460,8 +481,20 @@ class TestRepairAndCancel:
                         file_size_bytes=1,
                     ),
                     JobOutputReport(
+                        filename="y",
+                        storage_uri=f"http://internal/outputs/{take.id}/y",
+                        file_type="video",
+                        file_size_bytes=1,
+                    ),
+                    JobOutputReport(
+                        filename="z",
+                        storage_uri=f"{BUCKET}/outputs/{take.id}/../../z",
+                        file_type="video",
+                        file_size_bytes=1,
+                    ),
+                    JobOutputReport(
                         filename="ok.mp4",
-                        storage_uri=f"r2://ceq/outputs/{take.id}/ok.mp4",
+                        storage_uri=f"{BUCKET}/outputs/{take.id}/ok.mp4",
                         file_type="video",
                         file_size_bytes=1,
                     ),
@@ -511,6 +544,44 @@ class TestRepairAndCancel:
         ]
         # And it frees the client's quota: nothing is unfinished any more.
         assert (await async_client.delete(f"/v1/productions/{data['id']}")).status_code == 200
+
+    async def test_reading_still_answers_when_the_queue_is_down(
+        self, production_app, async_client, queued, db_session, monkeypatch
+    ):
+        data = await submit(async_client)
+        take = await job_for(db_session, data["id"], "take")
+        take.status = "completed"
+        await db_session.flush()
+
+        async def down(_payload):
+            raise RuntimeError("redis down")
+
+        monkeypatch.setattr(productions_module, "enqueue_job", down)
+
+        response = await async_client.get(f"/v1/productions/{data['id']}")
+
+        assert response.status_code == 200
+        # Not marked as queued when it was not: the next read tries again.
+        assert {j["step"]: j["waiting"] for j in response.json()["jobs"]}["edit"] is True
+
+    async def test_a_cancelled_jobs_closing_report_keeps_worker_facts(
+        self, production_app, async_client, queued, db_session, mock_redis, monkeypatch
+    ):
+        monkeypatch.setattr(productions_router, "get_redis", lambda: mock_redis)
+        data = await submit(async_client)
+        take = await job_for(db_session, data["id"], "take")
+        take.status = "running"
+        await db_session.flush()
+        await async_client.delete(f"/v1/productions/{data['id']}")
+
+        await persist_job_completion(
+            take.id, JobCompletionReport(status="cancelled", worker_id="w1"), db_session
+        )
+
+        await db_session.refresh(take)
+        assert take.status == "cancelled"
+        assert take.worker_id == "w1"
+        assert take.completed_at is not None
 
     async def test_another_client_cannot_cancel(self, production_app, async_client, queued):
         data = await submit(async_client)

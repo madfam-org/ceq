@@ -329,8 +329,10 @@ Productions (RFC 0061 Q7):
   or control character; it is stored in canonical form. Prefer exact hosts: a
   suffix entry also covers every internal subdomain of that domain.
 - No other string in `params`, at any depth and for any kind, may name a
-  resource by scheme (`file:`, `concat:`, `http://`, ...). This holds until
-  each kind has a declared parameter contract.
+  resource by scheme (`file:`, `concat:`, `http://`, ...), start with `/`,
+  `\\`, `~` or `..`, or contain a control character. This holds until each kind
+  has a declared parameter contract. Ordinary text such as `"Intro: hello"` or
+  `"16:9"` passes; `"Note:x"` (no space after the colon) does not.
 - **This is a submit-time check only.** It does not constrain redirects or
   what a page loads. The CPU worker must enforce the same host list on every
   request it makes before it runs inside the cluster.
@@ -343,8 +345,8 @@ Productions (RFC 0061 Q7):
   (10) unfinished productions per client, 16 KB of `params` per step.
 - Delivery is at least once: a step may be queued twice if the API fails
   between queueing and commit. Outputs upsert, so a repeat is safe.
-- A dependent step is handed only outputs stored under the reporting job's
-  own `outputs/<job_id>/` prefix. Once a production job is terminal, a later
+- A dependent step is handed only outputs whose `storage_uri` starts with
+  `r2://<bucket>/outputs/<job_id>/`, the form the upload route mints. Once a production job is terminal, a later
   report with a different status is recorded and ignored.
 - Reading a production also repairs it: a step that was ready but never
   queued is queued then.
