@@ -384,6 +384,8 @@ jobs:
   # images still roll and the CPU worker keeps its previous digest.
   build-cpu-worker:
     name: Build CPU Worker
+    # Bounded: the digest commit waits for this job to end, whatever its result.
+    timeout-minutes: 20
     needs: [verify-ci]
     runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-24.04' }}
     permissions:

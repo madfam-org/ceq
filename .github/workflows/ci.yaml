@@ -132,6 +132,10 @@ jobs:
   # build fails on the pull request. Nothing publishes or deploys this image yet.
   cpu-worker-image:
     name: CPU worker · image build
+    # Pull requests only. The deploy pipeline waits for this workflow to pass
+    # on main, and this image must never be what holds a deploy back.
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 15
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
