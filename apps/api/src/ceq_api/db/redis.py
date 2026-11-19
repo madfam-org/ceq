@@ -64,16 +64,24 @@ def get_redis() -> redis.Redis:
 
 async def enqueue_job(job_data: dict[str, Any]) -> None:
     """
-    Add a job to the processing queue.
+    Add a job to the pending list of its kind.
 
-    Jobs are stored as JSON in a Redis list.
+    Jobs are stored as JSON in a Redis list. The list is chosen from the
+    payload's ``kind`` (see ``ceq_api.job_kinds``): ``comfy``, and any payload
+    without a kind, goes to ``ceq:jobs:pending`` exactly as before; every other
+    kind goes to its own list so only a worker that declared that capability
+    can claim it. An unknown kind raises ``ValueError`` rather than being
+    queued where nothing would ever run it.
     """
     import json
+
+    from ceq_api.job_kinds import DEFAULT_JOB_KIND, pending_key_for_kind
 
     if _redis is None:
         raise RuntimeError("Redis not initialized")
 
-    await _redis.lpush("ceq:jobs:pending", json.dumps(job_data))
+    pending_key = pending_key_for_kind(job_data.get("kind") or DEFAULT_JOB_KIND)
+    await _redis.lpush(pending_key, json.dumps(job_data))
 
 
 async def publish_job_update(job_id: str, update: dict[str, Any]) -> None:

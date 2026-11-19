@@ -26,8 +26,34 @@ parallel queue for HTTPS workers to race against — that is the whole design.
 The lease adds ONE structure the Redis path does not have:
 
     ceq:jobs:lease:<job_id>   HASH   {payload, worker_id, client_id, expires_at,
-                                      attempts, leased_at}
+                                      attempts, leased_at, pending_key}
     ceq:jobs:leased           ZSET   job_id -> expires_at (reaper index)
+
+Job kinds and capability leases (RFC 0061)
+------------------------------------------
+A job has a kind (``ceq_api.job_kinds``) and a worker leases by capability: it
+names the kinds it can run and is only ever handed those.
+
+    ceq:jobs:pending          LIST   ``comfy`` jobs. Unchanged; still the one
+                                     list legacy Redis workers BRPOPLPUSH.
+    ceq:jobs:pending:<kind>   LIST   one list per non-comfy kind.
+
+Routing is by list, not by inspecting payloads: the API pushes a job onto the
+list of its kind, and a claim pops only from the lists of the capabilities the
+worker declared, trying them in the order declared and taking the first job it
+finds. The whole scan runs inside one Lua script, so it is exactly as atomic as
+the single ``RPOPLPUSH`` it replaces. Because a legacy Redis worker reads only
+``ceq:jobs:pending``, it can never pop a non-comfy job; because an HTTPS leaser
+that sends no capabilities defaults to ``["comfy"]``, its behaviour is unchanged.
+
+``ceq:jobs:processing``, the lease hashes, the reaper index and the dead-letter
+list stay shared by all kinds. What differs per kind is only where a job waits,
+so the lease records the list it was popped from (``pending_key``) and a requeue
+(explicit ``/fail`` or the reaper) pushes the payload back onto THAT list. A
+lease with no ``pending_key`` (opened before this field existed) is a comfy
+lease and returns to ``ceq:jobs:pending``. The requeue script only ever pushes to
+a list in the known set; a corrupted ``pending_key`` falls back to the comfy
+list rather than writing to an arbitrary key.
 
 Crash recovery
 --------------
@@ -53,6 +79,8 @@ Consequences worth stating plainly:
 - **Attempts are capped.** Each requeue increments ``attempts``; past
   ``worker_lease_max_attempts`` the payload is dead-lettered to
   ``ceq:jobs:lease:dead`` instead of cycling forever.
+- **A capability with no worker starves.** Nothing falls back across lists: a
+  job of a kind no worker declares waits on its list until one does.
 """
 
 from __future__ import annotations
@@ -60,14 +88,22 @@ from __future__ import annotations
 import json
 import logging
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
+
+from ceq_api.job_kinds import (
+    ALL_PENDING_KEYS,
+    COMFY_PENDING_KEY,
+    DEFAULT_JOB_KIND,
+    pending_key_for_kind,
+)
 
 logger = logging.getLogger(__name__)
 
 # --- Key space (shares pending/processing with ceq_worker.queue) -------------
 
-PENDING_KEY = "ceq:jobs:pending"
+PENDING_KEY = COMFY_PENDING_KEY  # the comfy list; other kinds: job_kinds
 PROCESSING_KEY = "ceq:jobs:processing"
 LEASE_INDEX_KEY = "ceq:jobs:leased"
 LEASE_DEAD_LETTER_KEY = "ceq:jobs:lease:dead"
@@ -86,18 +122,30 @@ def lease_key(job_id: str) -> str:
 # control-plane calls, and EVAL keeps behavior identical under the AsyncMock /
 # fakeredis test doubles the repo uses.
 
-# Claim the next pending job.
+# Claim the next pending job from the lists this worker may read.
 #
 # RPOPLPUSH is the same tail-pop a Redis worker's BRPOPLPUSH performs, so the two
-# modes contend on one queue and Redis picks a single winner. We then extract the
-# job id from the payload and write the lease. If the payload is unparseable or
-# carries no id we still leave it on `processing` and return nil rather than
-# silently dropping it — an operator can inspect the list.
+# modes contend on one queue and Redis picks a single winner. The pending lists
+# (one per declared capability) are tried in the order given and the first
+# non-empty one wins; the script is atomic, so no other claimant can interleave
+# between two lists. We then extract the job id from the payload and write the
+# lease, recording the list the payload came from so a requeue can return it
+# there. If the payload is unparseable or carries no id we still leave it on
+# `processing` and return nil rather than silently dropping it — an operator can
+# inspect the list.
 #
-# KEYS: pending, processing, lease_index
+# KEYS: processing, lease_index, pending_1 [, pending_2 ...]
 # ARGV: worker_id, client_id, now, expires_at, lease_key_prefix
 _CLAIM_LUA = """
-local payload = redis.call('RPOPLPUSH', KEYS[1], KEYS[2])
+local payload = false
+local origin = false
+for i = 3, #KEYS do
+    payload = redis.call('RPOPLPUSH', KEYS[i], KEYS[1])
+    if payload then
+        origin = KEYS[i]
+        break
+    end
+end
 if not payload then
     return nil
 end
@@ -133,14 +181,15 @@ redis.call('HSET', lkey,
     'client_id', ARGV[2],
     'leased_at', ARGV[3],
     'expires_at', ARGV[4],
-    'attempts', tostring(attempts))
+    'attempts', tostring(attempts),
+    'pending_key', origin)
 -- Clear any TTL inherited from an attempts-only stub: this is now a LIVE lease,
 -- and it must not vanish out from under a running worker. Lease lifetime is
 -- governed by `expires_at` + the reaper, never by key expiry.
 redis.call('PERSIST', lkey)
-redis.call('ZADD', KEYS[3], tonumber(ARGV[4]), job_id)
+redis.call('ZADD', KEYS[2], tonumber(ARGV[4]), job_id)
 
-return {job_id, payload, tostring(attempts)}
+return {job_id, payload, tostring(attempts), origin}
 """
 
 # Extend an existing lease. Only the CURRENT lease holder may extend: a worker
@@ -186,6 +235,12 @@ return 1
 # Requeue a leased job: processing -> pending, lease dropped, attempts kept.
 # Used both by an explicit /fail with retries remaining and by the reaper.
 #
+# The payload goes back to the list it was claimed from (`pending_key` on the
+# lease), never blindly to the comfy list: a requeued capture job must stay
+# invisible to ComfyUI workers. The target is chosen from the candidate lists
+# passed in KEYS, so the script cannot be steered into pushing onto an arbitrary
+# key; an absent or unrecognised `pending_key` uses KEYS[4], the comfy list.
+#
 # The attempts counter is preserved by re-writing a stub lease hash holding only
 # `attempts`; the next claim reads it, increments, and overwrites the whole hash.
 # Without this a job could bounce between workers forever.
@@ -196,7 +251,7 @@ return 1
 # forever. The TTL is generously longer than any plausible requeue-to-reclaim
 # gap, so it never truncates a live retry budget — it only collects orphans.
 #
-# KEYS: lease_key, lease_index, processing, pending
+# KEYS: lease_key, lease_index, processing, default_pending [, known_pending ...]
 # ARGV: worker_id ('' = force, used by the reaper), job_id, attempts, stub_ttl
 _REQUEUE_LUA = """
 if redis.call('EXISTS', KEYS[1]) == 0 then
@@ -206,11 +261,21 @@ if ARGV[1] ~= '' and redis.call('HGET', KEYS[1], 'worker_id') ~= ARGV[1] then
     return -1
 end
 local payload = redis.call('HGET', KEYS[1], 'payload')
+local origin = redis.call('HGET', KEYS[1], 'pending_key')
+local target = KEYS[4]
+if origin then
+    for i = 5, #KEYS do
+        if KEYS[i] == origin then
+            target = KEYS[i]
+            break
+        end
+    end
+end
 redis.call('DEL', KEYS[1])
 redis.call('ZREM', KEYS[2], ARGV[2])
 if payload then
     redis.call('LREM', KEYS[3], 1, payload)
-    redis.call('LPUSH', KEYS[4], payload)
+    redis.call('LPUSH', target, payload)
 end
 redis.call('HSET', KEYS[1], 'attempts', ARGV[3])
 redis.call('EXPIRE', KEYS[1], tonumber(ARGV[4]))
@@ -261,6 +326,7 @@ class LeasedJob:
     payload: dict[str, Any]
     attempts: int
     expires_at: float
+    pending_key: str = PENDING_KEY
 
 
 class LeaseOutcome:
@@ -306,23 +372,33 @@ async def claim_next_job(
     worker_id: str,
     client_id: str,
     ttl_seconds: int,
+    capabilities: Sequence[str] = (DEFAULT_JOB_KIND,),
     now: float | None = None,
 ) -> LeasedJob | None:
     """Atomically claim the next pending job and open a lease on it.
 
-    Returns None when the queue is empty, or when the tail payload was
+    ``capabilities`` are the job kinds this worker can run. Only the pending
+    lists of those kinds are read, in the order given (duplicates ignored), and
+    the first job found is claimed. The default, ``("comfy",)``, is the
+    behaviour from before kinds existed. An unknown kind raises ``ValueError``.
+
+    Returns None when every list read is empty, or when the tail payload was
     unparseable (it is left on ``processing`` for operator inspection rather
     than being handed to a worker that cannot run it).
     """
     now = time.time() if now is None else now
     expires_at = now + ttl_seconds
 
+    pending_keys = list(dict.fromkeys(pending_key_for_kind(k) for k in capabilities))
+    if not pending_keys:
+        raise ValueError("A worker must declare at least one capability")
+
     result = await redis.eval(
         _CLAIM_LUA,
-        3,
-        PENDING_KEY,
+        2 + len(pending_keys),
         PROCESSING_KEY,
         LEASE_INDEX_KEY,
+        *pending_keys,
         worker_id,
         client_id,
         f"{now:.3f}",
@@ -353,11 +429,14 @@ async def claim_next_job(
     except ValueError:
         attempts = 1
 
+    origin = _decode(result[3]) if len(result) > 3 else ""
+
     return LeasedJob(
         job_id=job_id,
         payload=payload if isinstance(payload, dict) else {},
         attempts=attempts,
         expires_at=expires_at,
+        pending_key=origin or PENDING_KEY,
     )
 
 
@@ -432,7 +511,10 @@ async def requeue_lease(
     worker_id: str,
     attempts: int,
 ) -> str:
-    """Return a leased job to ``pending`` so another worker can retry it.
+    """Return a leased job to its pending list so another worker can retry it.
+
+    The job goes back to the list it was claimed from (recorded on the lease),
+    so it stays visible only to workers with the right capability.
 
     Pass ``worker_id=""`` to force (the reaper does this — the owning worker is
     by definition not around to identify itself).
@@ -440,11 +522,12 @@ async def requeue_lease(
     return _outcome(
         await redis.eval(
             _REQUEUE_LUA,
-            4,
+            4 + len(ALL_PENDING_KEYS),
             lease_key(job_id),
             LEASE_INDEX_KEY,
             PROCESSING_KEY,
             PENDING_KEY,
+            *ALL_PENDING_KEYS,
             worker_id,
             job_id,
             str(attempts),

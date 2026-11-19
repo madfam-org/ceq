@@ -17,6 +17,7 @@ from ceq_api.auth.janua import JanuaUser, require_admin
 from ceq_api.config import get_settings
 from ceq_api.db.redis import get_redis
 from ceq_api.db.session import get_db
+from ceq_api.job_kinds import JOB_KINDS, pending_key_for_kind
 from ceq_api.metrics import record_completion_dead_letter_replay
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,13 @@ class OperationsStatusResponse(BaseModel):
     webhook_secret_configured: bool
     alembic_revision: str | None = None
     redis: dict[str, int | None | bool] = Field(default_factory=dict)
+    pending_jobs_by_kind: dict[str, int | None] = Field(
+        default_factory=dict,
+        description=(
+            "Jobs waiting per kind. `redis.pending_jobs` is the `comfy` list "
+            "only; a kind with no worker declaring it waits here unseen otherwise."
+        ),
+    )
 
 
 class CompletionDeadLetterEntry(BaseModel):
@@ -167,6 +175,9 @@ async def get_operations_status(
                 redis,
                 settings.job_completion_dead_letter_key,
             ),
+        },
+        pending_jobs_by_kind={
+            kind: await _llen(redis, pending_key_for_kind(kind)) for kind in JOB_KINDS
         },
     )
 

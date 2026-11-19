@@ -42,7 +42,7 @@ def _payload_for(job: Job, outputs: list[Output], storage: StorageClient) -> dic
         "source": "ceq",
         "job": {
             "id": str(job.id),
-            "workflow_id": str(job.workflow_id),
+            "workflow_id": str(job.workflow_id) if job.workflow_id else None,
             "status": job.status,
             "progress": job.progress,
             "error": job.error,
