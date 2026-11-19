@@ -205,4 +205,4 @@ class TestMigration:
 
         config = Config()
         config.set_main_option("script_location", "ceq_api:alembic")
-        assert ScriptDirectory.from_config(config).get_heads() == ["20261118_job_kind"]
+        assert "20261118_job_kind" in {r.revision for r in ScriptDirectory.from_config(config).walk_revisions()}

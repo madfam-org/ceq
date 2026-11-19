@@ -9,6 +9,7 @@ from ceq_api.models.credit import CreditLedgerEntry, CreditLedgerType
 from ceq_api.models.feature_interest import FeatureInterest
 from ceq_api.models.job import Job, JobStatus
 from ceq_api.models.output import Output
+from ceq_api.models.production import Production
 from ceq_api.models.template import Template
 from ceq_api.models.workflow import Workflow
 
@@ -26,6 +27,7 @@ __all__ = [
     "Job",
     "JobStatus",
     "Output",
+    "Production",
     "Template",
     "Workflow",
 ]

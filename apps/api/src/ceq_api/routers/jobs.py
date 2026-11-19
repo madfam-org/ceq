@@ -35,6 +35,8 @@ from ceq_api.metrics import record_job_cancellation, record_worker_completion_re
 from ceq_api.models.job import Job
 from ceq_api.models.job import JobStatus as JobStatusEnum
 from ceq_api.models.output import Output
+from ceq_api.productions import TERMINAL as PRODUCTION_TERMINAL
+from ceq_api.productions import lock_production, on_job_finished
 from ceq_api.services.job_webhooks import deliver_job_webhook
 from ceq_api.storage import get_storage
 
@@ -369,6 +371,11 @@ async def poll_job_status(
         job = result.scalar_one_or_none()
 
         if job and job.user_id == user.id:
+            if job.production_id is not None:
+                # Show the cached state without writing it: a production job's
+                # row is only ever changed under its production's lock, and a
+                # stale cache entry must not undo a finished step.
+                db.expunge(job)
             # Merge Redis data (more current) with DB data
             if "status" in redis_data:
                 job.status = redis_data["status"]
@@ -439,6 +446,41 @@ async def persist_job_completion(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Job not found.",
         )
+
+    if job.production_id is not None:
+        # Production lock first, then the job as it is now: see lock_production.
+        await lock_production(db, job.production_id)
+        await db.refresh(job)
+        if job.status in PRODUCTION_TERMINAL:
+            # The steps after this one were already released or cancelled on
+            # its first terminal report. A second, different report would
+            # leave them contradicting it, so it is recorded and ignored.
+            if (
+                job.status == JobStatusEnum.CANCELLED.value
+                and data.status == JobStatusEnum.CANCELLED.value
+            ):
+                # The worker closing out a job that was cancelled under it:
+                # same state, so keep what only the worker knows.
+                now = datetime.now(UTC)
+                job.completed_at = job.completed_at or now
+                job.worker_id = data.worker_id or job.worker_id
+                if data.gpu_seconds is not None:
+                    job.gpu_seconds = data.gpu_seconds
+            job.output_metadata = {
+                **(job.output_metadata or {}),
+                "ignored_worker_report_after_terminal": {
+                    "status": data.status,
+                    "reported_at": datetime.now(UTC).isoformat(),
+                    "worker_id": data.worker_id,
+                },
+            }
+            await db.flush()
+            record_worker_completion_report(job.status, 0)
+            return JobCompletionReportResponse(
+                job_id=job.id,
+                status=job.status,
+                outputs_persisted=0,
+            )
 
     if job.status == JobStatusEnum.CANCELLED.value and data.status != JobStatusEnum.CANCELLED.value:
         job.output_metadata = {
@@ -539,6 +581,11 @@ async def persist_job_completion(
     await db.flush()
     record_worker_completion_report(job.status, outputs_persisted)
 
+    # A production moves on here: steps that waited on this job are queued, or
+    # cancelled if it did not complete. Outputs are flushed above so a released
+    # step is handed them.
+    await on_job_finished(db, job)
+
     if job.status in {
         JobStatusEnum.COMPLETED.value,
         JobStatusEnum.FAILED.value,
@@ -610,6 +657,11 @@ async def cancel_job(
             detail="This transmutation belongs to another alchemist.",
         )
 
+    if job.production_id is not None:
+        # Production lock first, then the job as it is now: see lock_production.
+        await lock_production(db, job.production_id)
+        await db.refresh(job)
+
     # Check if cancellable
     if job.status not in [JobStatusEnum.QUEUED.value, JobStatusEnum.RUNNING.value]:
         raise HTTPException(
@@ -637,6 +689,10 @@ async def cancel_job(
         job,
         reason="api-cancelled",
     )
+
+    # Database side of a production first; the Redis side effects below are
+    # not undone if this were to fail after them.
+    await on_job_finished(db, job)
 
     # Audit log the cancellation
     audit_logger.log_job_operation(

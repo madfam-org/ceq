@@ -52,6 +52,7 @@ from ceq_api.routers import (  # noqa: E402
     operations,
     outputs,
     printability,
+    productions,
     render,
     synthesis,
     templates,
@@ -224,6 +225,9 @@ app.include_router(intent.router, prefix="/v1/intent", tags=["intent"])
 # authenticated HTTPS instead of connecting to Redis directly. Gated on a Janua
 # service principal holding the dedicated `ceq:worker` scope.
 app.include_router(worker.router, prefix="/v1/worker", tags=["worker"])
+# Named service clients submit productions (graphs of CPU jobs) here, with the
+# dedicated `ceq:produce` scope. RFC 0061 Q7.
+app.include_router(productions.router, prefix="/v1/productions", tags=["productions"])
 
 
 @app.get("/")

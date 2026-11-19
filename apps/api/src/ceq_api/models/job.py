@@ -4,7 +4,17 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from ceq_api.job_kinds import DEFAULT_JOB_KIND, JOB_KINDS, validate_job_kind
@@ -42,6 +52,13 @@ class Job(Base, TimestampMixin):
             "kind <> 'comfy' OR workflow_id IS NOT NULL",
             name="ck_jobs_comfy_has_workflow",
         ),
+        # Partial, as in the migration: only production jobs are looked up this way.
+        Index(
+            "ix_jobs_production_id",
+            "production_id",
+            postgresql_where=text("production_id IS NOT NULL"),
+            sqlite_where=text("production_id IS NOT NULL"),
+        ),
     )
 
     # What this job is, and therefore which worker capability can run it.
@@ -66,6 +83,31 @@ class Job(Base, TimestampMixin):
         nullable=False,
         index=True,
         comment="Janua user ID",
+    )
+
+    # Production membership (RFC 0061). All null/empty for a job submitted on
+    # its own, which is every job that predates productions.
+    production_id: Mapped[UUID | None] = mapped_column(
+        GUIDString(),
+        ForeignKey("productions.id", ondelete="CASCADE", name="fk_jobs_production_id"),
+        nullable=True,
+    )
+    step: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="Name of this job within its production",
+    )
+    depends_on: Mapped[list] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default="[]",
+        comment="Step names in the same production that must complete first",
+    )
+    released_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When a production job was put on its queue; null while it waits on a step",
     )
 
     # Status
