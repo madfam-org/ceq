@@ -313,8 +313,9 @@ Productions (RFC 0061 Q7):
 
 - `POST /v1/productions/` takes `{name, steps: [{step, kind, params, depends_on}]}`:
   a small graph of `capture.*`, `edit` and `export` jobs (never `comfy`).
-  `GET /v1/productions/{id}` returns it with the state of each job; a client
-  sees only what it submitted.
+  `GET /v1/productions/{id}` returns it with the state of each job, and
+  `DELETE /v1/productions/{id}` cancels every unfinished job. A client sees
+  and cancels only what it submitted.
 - Callers are service clients only. The token needs the scope
   `PRODUCTION_SUBMIT_SCOPE` (`ceq:produce`; `ceq:render` and `ceq:worker` do
   not imply it) **and** the client id must be listed in
@@ -323,7 +324,16 @@ Productions (RFC 0061 Q7):
 - A capture step's `params.url` must be `https`, on the default port, without
   credentials, and on a host listed in `PRODUCTION_ALLOWED_HOSTS` (JSON list,
   empty by default). `"enclii.dev"` matches that host only; `".madfam.io"`
-  matches any subdomain and not the bare domain.
+  matches any subdomain and not the bare domain. The host must be a plain
+  name (no IP address) and the URL plain ASCII with no backslash, whitespace
+  or control character; it is stored in canonical form. Prefer exact hosts: a
+  suffix entry also covers every internal subdomain of that domain.
+- No other string in `params`, at any depth and for any kind, may name a
+  resource by scheme (`file:`, `concat:`, `http://`, ...). This holds until
+  each kind has a declared parameter contract.
+- **This is a submit-time check only.** It does not constrain redirects or
+  what a page loads. The CPU worker must enforce the same host list on every
+  request it makes before it runs inside the cluster.
 - Steps with no dependency are queued at once. Every other step waits in the
   database (`released_at` null) until the steps it names have completed, then
   is queued with their outputs under `input.inputs[<step>]`.
@@ -333,9 +343,17 @@ Productions (RFC 0061 Q7):
   (10) unfinished productions per client, 16 KB of `params` per step.
 - Delivery is at least once: a step may be queued twice if the API fails
   between queueing and commit. Outputs upsert, so a repeat is safe.
-- Known gaps: there is no route to cancel a whole production, and a job that
-  is dead-lettered by the lease reaper (not by an explicit `/fail`) is not
-  marked failed in the database, so the steps after it keep waiting.
+- A dependent step is handed only outputs stored under the reporting job's
+  own `outputs/<job_id>/` prefix. Once a production job is terminal, a later
+  report with a different status is recorded and ignored.
+- Reading a production also repairs it: a step that was ready but never
+  queued is queued then.
+- Known gaps: a job dead-lettered by the lease reaper (not by an explicit
+  `/fail`) is not marked failed in the database, so the steps after it keep
+  waiting until the production is cancelled. Any `ceq:worker` client can lease
+  any kind it declares; capabilities are not yet bound to clients. The routes
+  have no rate limit beyond the per-client cap, which concurrent submits can
+  exceed by a few.
 
 
 Worker completion callback notes:

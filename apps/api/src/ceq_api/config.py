@@ -156,7 +156,6 @@ class Settings(BaseSettings):
     production_max_jobs: int = Field(default=20, ge=1, le=100)
     # Productions one client may have unfinished at a time.
     production_max_active_per_client: int = Field(default=10, ge=1)
-    rate_limit_production_submit: str = "30/minute"
 
     # R2 Storage (Cloudflare)
     r2_endpoint: str = ""

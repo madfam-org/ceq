@@ -7,6 +7,12 @@ Safe while the previous API version is serving: every new ``jobs`` column is
 nullable or has a server default, so an older pod's INSERT is unaffected, and
 no existing row changes meaning (``production_id`` null = a job on its own).
 
+Locks: this runs in one transaction, so `jobs` stays locked from the first
+ADD COLUMN to commit, through one scan for the foreign key and one for the
+index. That is acceptable only because `jobs` is small today (GPU workers
+have never run in production). On a large table, split the foreign-key
+validation and the index into a second, non-transactional migration.
+
 Revision ID: 20261119_productions
 Revises: 20261118_job_kind
 Create Date: 2026-11-19 00:00:00.000000
@@ -65,8 +71,6 @@ def upgrade() -> None:
     op.add_column(
         "jobs", sa.Column("released_at", sa.DateTime(timezone=True), nullable=True)
     )
-    # NOT VALID: no existing row has a production_id, so there is nothing to
-    # check, and skipping the scan keeps the lock on `jobs` short.
     op.create_foreign_key(
         "fk_jobs_production_id",
         "jobs",
@@ -74,9 +78,7 @@ def upgrade() -> None:
         ["production_id"],
         ["id"],
         ondelete="CASCADE",
-        postgresql_not_valid=True,
     )
-    op.execute("ALTER TABLE jobs VALIDATE CONSTRAINT fk_jobs_production_id")
     # Partial: only production jobs are ever looked up this way.
     op.create_index(
         "ix_jobs_production_id",

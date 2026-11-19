@@ -20,9 +20,10 @@ A step that runs twice is safe: outputs upsert on ``(job_id, storage_uri)``.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID
 
 from sqlalchemy import select
@@ -72,25 +73,81 @@ def host_allowed(host: str, allowed: list[str]) -> bool:
     return False
 
 
-def check_capture_url(url: Any, allowed: list[str]) -> None:
-    """Refuse any page a worker should not open: not https, or a host not named."""
+# One DNS label, and a whole host name of at least two labels. Letters, digits
+# and hyphens only: no IP literal, no underscore, nothing a browser and Python
+# could read differently.
+_LABEL = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+_HOSTNAME = re.compile(rf"^(?:{_LABEL}\.)+{_LABEL}$")
+# Everything a URL here may be made of. Notably absent: backslash (a browser
+# ends the host at one, Python does not), whitespace, control characters and
+# anything outside ASCII.
+_URL_CHARS = re.compile(r"^[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+$")
+# A string that names a resource by scheme ("file:", "concat:", "http://").
+_SCHEME_LIKE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
+
+
+def check_capture_url(url: Any, allowed: list[str]) -> str:
+    """Return the canonical form of a page a worker may open, or raise ``GraphError``.
+
+    Refused: anything not https, a non-default port, credentials, a host not
+    named by the deployment, an IP address, and any character outside the
+    plain URL set. The canonical form is rebuilt from the parsed parts, so the
+    worker is handed what was checked rather than the string as received.
+
+    This is a check at submit time only. It does not constrain where the page
+    redirects or what it loads; a worker that opens pages from inside the
+    cluster must enforce the same list on every request it makes.
+    """
     if not isinstance(url, str) or not url:
         raise GraphError("a capture step needs params.url")
-    parts = urlsplit(url)
-    if parts.scheme != "https":
-        raise GraphError(f"capture url must be https, got {url!r}")
-    if parts.username or parts.password:
+    if len(url) > 2048 or not _URL_CHARS.match(url):
+        raise GraphError("capture url has characters a URL here may not contain")
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+        host = (parts.hostname or "").lower().rstrip(".")
+    except ValueError:
+        raise GraphError("capture url cannot be parsed") from None
+    if parts.scheme.lower() != "https":
+        raise GraphError("capture url must be https")
+    if parts.username is not None or parts.password is not None or "@" in parts.netloc:
         raise GraphError("capture url must not carry credentials")
-    if parts.port not in (None, 443):
+    if port not in (None, 443):
         raise GraphError("capture url must use the default https port")
-    if not parts.hostname or not host_allowed(parts.hostname, allowed):
-        raise GraphError(f"host {parts.hostname!r} is not one this deployment may capture")
+    labels = host.split(".")
+    if not _HOSTNAME.match(host) or len(host) > 253 or not re.search("[a-z]", labels[-1]):
+        raise GraphError("capture url needs a plain host name")
+    if not host_allowed(host, allowed):
+        raise GraphError(f"host {host!r} is not one this deployment may capture")
+    return urlunsplit(("https", host, parts.path or "/", parts.query, ""))
+
+
+def check_no_other_locations(value: Any, where: str) -> None:
+    """Refuse any string in ``params`` that names a resource by scheme.
+
+    Only ``params.url`` of a capture step is checked against the host list.
+    Until each kind has a declared parameter contract, nothing else in
+    ``params`` may carry a location a worker might open or read: no
+    ``file:``, ``concat:``, ``http://`` or similar, at any depth.
+    """
+    if isinstance(value, str):
+        if _SCHEME_LIKE.match(value) or "://" in value or "\x00" in value:
+            raise GraphError(f"{where} may not carry a location or scheme")
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            check_no_other_locations(key, where)
+            check_no_other_locations(item, f"{where}.{key}")
+    elif isinstance(value, list):
+        for item in value:
+            check_no_other_locations(item, where)
 
 
 def validate_graph(
     steps: list[dict[str, Any]], *, allowed_hosts: list[str], max_jobs: int
 ) -> list[str]:
     """Check the steps and return their names in an order that respects dependencies.
+
+    A capture step's ``params.url`` is replaced in place by its canonical form.
 
     Raises ``GraphError`` on: no steps or too many, a repeated name, a kind a
     production may not contain, a dependency on an unknown step or on itself,
@@ -119,11 +176,16 @@ def validate_graph(
                 raise GraphError(f"step {dep!r} depends on itself")
             if dep not in known:
                 raise GraphError(f"step {step['step']!r} depends on unknown step {dep!r}")
-        if step["kind"] in CAPTURE_KINDS:
-            try:
-                check_capture_url((step.get("params") or {}).get("url"), allowed_hosts)
-            except GraphError as exc:
-                raise GraphError(f"step {step['step']!r}: {exc}") from None
+        params = dict(step.get("params") or {})
+        try:
+            if step["kind"] in CAPTURE_KINDS:
+                canonical = check_capture_url(params.pop("url", None), allowed_hosts)
+                check_no_other_locations(params, "params")
+                step["params"] = {**params, "url": canonical}
+            else:
+                check_no_other_locations(params, "params")
+        except GraphError as exc:
+            raise GraphError(f"step {step['step']!r}: {exc}") from None
 
     # Kahn's algorithm, keeping submission order among steps that are ready.
     remaining = {step["step"]: set(step.get("depends_on") or []) for step in steps}
@@ -169,23 +231,29 @@ def in_submitted_order(jobs: list[Job], spec: dict[str, Any] | None) -> list[Job
     return sorted(jobs, key=lambda job: (rank.get(job.step, len(rank)), str(job.id)))
 
 
-async def _production_jobs(db: AsyncSession, production_id: UUID) -> list[Job]:
-    """The production's jobs, read while holding a lock on the production row.
+async def lock_production(db: AsyncSession, production_id: UUID) -> dict[str, Any] | None:
+    """Take the production's row lock and return its submitted graph.
 
-    The lock is what stops two steps that finish at once from both releasing
-    the same dependent: the second waits, then reads the first one's result.
-    It is taken on the production, never on the job rows. Each finishing step
-    has already written its own job row, so locking the others' rows would
-    have two transactions wait on each other.
-
-    This relies on READ COMMITTED (the PostgreSQL default, and what this API
-    runs at): the read after the wait must see what the other step committed.
+    Everything that changes a production job's state takes this lock FIRST,
+    before it writes any job row, and holds it to the end of the transaction.
+    One lock, always taken first, is what keeps two steps finishing at once
+    (or a completion racing a cancel) from waiting on each other.
     """
-    spec = (
+    return (
         await db.execute(
             select(Production.spec).where(Production.id == production_id).with_for_update()
         )
     ).scalar_one_or_none()
+
+
+async def _production_jobs(db: AsyncSession, production_id: UUID) -> list[Job]:
+    """The production's jobs as they are in the database now, under its lock.
+
+    Relies on READ COMMITTED (the PostgreSQL default, and what this API runs
+    at): a read made after waiting for the lock sees what the other
+    transaction committed.
+    """
+    spec = await lock_production(db, production_id)
     result = await db.execute(
         select(Job)
         .where(Job.production_id == production_id)
@@ -222,6 +290,17 @@ async def release_ready_jobs(db: AsyncSession, production_id: UUID) -> list[Job]
             select(Output).where(Output.job_id.in_(dep_ids)).order_by(Output.filename)
         )
         for output in result.scalars().all():
+            # A worker reports its own storage_uri. Only an artifact under the
+            # reporting job's own prefix (where the upload route puts it) is
+            # handed on, so one worker cannot point the next at something else.
+            if f"outputs/{output.job_id}/" not in output.storage_uri:
+                logger.warning(
+                    "Production %s: output %s of job %s is outside the job prefix; not passed on",
+                    production_id,
+                    output.id,
+                    output.job_id,
+                )
+                continue
             outputs_by_job.setdefault(output.job_id, []).append(
                 {
                     "filename": output.filename,
@@ -312,3 +391,31 @@ async def on_job_finished(db: AsyncSession, job: Job) -> None:
         await release_ready_jobs(db, job.production_id)
     elif job.status in (JobStatus.FAILED.value, JobStatus.CANCELLED.value):
         await cancel_dependents(db, job)
+
+
+async def cancel_production(db: AsyncSession, production_id: UUID) -> list[Job]:
+    """Cancel every job of the production that has not finished.
+
+    Returns the jobs that were cancelled. Waiting jobs simply end; a job that
+    was already queued or is running is returned so the caller can also pull
+    it from its queue and signal its worker.
+    """
+    jobs = await _production_jobs(db, production_id)
+    now = datetime.now(UTC)
+    cancelled: list[Job] = []
+    for job in jobs:
+        if job.status in TERMINAL:
+            continue
+        job.output_metadata = {
+            **(job.output_metadata or {}),
+            "cancel_requested_at": now.isoformat(),
+            "cancel_requested_from_status": job.status,
+        }
+        if job.status == JobStatus.QUEUED.value:
+            job.completed_at = now
+        job.status = JobStatus.CANCELLED.value
+        job.error = job.error or "Production cancelled."
+        cancelled.append(job)
+    if cancelled:
+        await db.flush()
+    return cancelled

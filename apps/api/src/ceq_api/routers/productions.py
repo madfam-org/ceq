@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ceq_api.auth.janua import JanuaUser, get_production_principal
 from ceq_api.config import get_settings
+from ceq_api.db.redis import get_redis
 from ceq_api.db.session import get_db
 from ceq_api.models.job import Job, JobStatus
 from ceq_api.models.production import Production
@@ -27,17 +28,20 @@ from ceq_api.productions import (
     PRODUCTION_KINDS,
     TERMINAL,
     GraphError,
+    cancel_production,
     in_submitted_order,
     production_status,
     release_ready_jobs,
     validate_graph,
 )
+from ceq_api.routers.jobs import _remove_pending_job
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 settings = get_settings()
 
 MAX_PARAMS_BYTES = 16 * 1024
+MAX_STEPS = 100
 STEP_NAME = r"^[a-z0-9][a-z0-9._-]{0,63}$"
 
 
@@ -50,8 +54,9 @@ class ProductionStep(BaseModel):
         default_factory=dict,
         description="Handed to the worker as given. A capture step needs `url`.",
     )
-    depends_on: list[str] = Field(
+    depends_on: list[Annotated[str, Field(pattern=STEP_NAME)]] = Field(
         default_factory=list,
+        max_length=MAX_STEPS,
         description="Steps that must complete first. Their outputs are passed to this step.",
     )
 
@@ -64,8 +69,12 @@ class ProductionStep(BaseModel):
 
 
 class ProductionCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=120)
-    steps: list[ProductionStep] = Field(min_length=1)
+    # Printable characters only: a control character would be refused by the
+    # database at write time, as a 500.
+    name: str = Field(min_length=1, max_length=120, pattern=r"^[^\x00-\x1f\x7f]+$")
+    # A hard ceiling so an oversized list is refused before each step is
+    # validated; the configured limit (PRODUCTION_MAX_JOBS) is applied after.
+    steps: list[ProductionStep] = Field(min_length=1, max_length=MAX_STEPS)
 
 
 class ProductionJobResponse(BaseModel):
@@ -225,4 +234,48 @@ async def get_production(
     production = result.scalar_one_or_none()
     if production is None or production.client_id != (principal.client_id or ""):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Production not found.")
+    # Reading also repairs: a step whose dependencies are complete but which
+    # was never queued (the API died between the two) is queued now. Releasing
+    # is idempotent, so this is safe to do on every read.
+    await release_ready_jobs(db, production.id)
+    return _response(production, await _jobs_of(db, production.id))
+
+
+@router.delete("/{production_id}", response_model=ProductionResponse)
+async def cancel_production_route(
+    production_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    principal: Annotated[JanuaUser, Depends(get_production_principal)],
+) -> ProductionResponse:
+    """Cancel every unfinished job of a production the caller submitted.
+
+    Waiting steps end at once. A step already queued is pulled from its queue;
+    a running one is signalled, exactly as ``DELETE /v1/jobs/{id}`` does.
+    Cancelling a finished production changes nothing.
+    """
+    result = await db.execute(select(Production).where(Production.id == production_id))
+    production = result.scalar_one_or_none()
+    if production is None or production.client_id != (principal.client_id or ""):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Production not found.")
+
+    cancelled = await cancel_production(db, production.id)
+    # Database first (above), queue and worker signals after: these are not
+    # undone by a rollback, so they come last.
+    released = [job for job in cancelled if job.released_at is not None]
+    if released:
+        redis = get_redis()
+        now = datetime.now(UTC).isoformat()
+        for job in released:
+            await redis.hset(
+                f"ceq:job:{job.id}",
+                mapping={"status": JobStatus.CANCELLED.value, "cancel_requested": "true"},
+            )
+            await redis.publish(
+                f"ceq:job:{job.id}:control",
+                json.dumps({"action": "cancel", "job_id": str(job.id), "requested_at": now}),
+            )
+            await _remove_pending_job(redis, job.id, job.kind)
+    logger.info(
+        "Production %s cancelled by %s: %s jobs", production.id, principal.client_id, len(cancelled)
+    )
     return _response(production, await _jobs_of(db, production.id))

@@ -145,7 +145,20 @@ class TestCaptureHosts:
             "https://enclii.dev:8443/",
             "https://enclii.dev@evil.com/",
             "https://127.0.0.1/",
+            "https://[::1]/",
             "file:///etc/passwd",
+            # A browser ends the host at a backslash; Python does not.
+            "https://evil.example\\.cv.madfam.io/x",
+            "https://169.254.169.254\\.madfam.io/",
+            "https://evil.example%5c.cv.madfam.io/",
+            "https://cv.madfam.io\t/",
+            "https://cv.madfam.io /",
+            "https://1.2.3.4.madfam.io.5/",
+            "https://münchen.madfam.io/",
+            "https://a_b.madfam.io/",
+            "https://a:b/",
+            "https://[x/",
+            "https://cv.madfam.io/\x00",
             "",
             None,
         ],
@@ -154,8 +167,37 @@ class TestCaptureHosts:
         with pytest.raises(GraphError):
             check_capture_url(url, HOSTS)
 
-    def test_allowed_url(self):
-        check_capture_url("https://enclii.dev/pricing?x=1", HOSTS)
+    def test_allowed_url_comes_back_canonical(self):
+        assert check_capture_url("HTTPS://Enclii.dev./pricing?x=1#top", HOSTS) == (
+            "https://enclii.dev/pricing?x=1"
+        )
+        assert check_capture_url("https://cv.madfam.io:443", HOSTS) == "https://cv.madfam.io/"
+
+    @pytest.mark.parametrize(
+        "params",
+        [
+            {"source": "file:///etc/passwd"},
+            {"input": "concat:a|b"},
+            {"nested": {"deep": ["ok", "http://internal/"]}},
+            {"audio": "s3://bucket/key"},
+            {"http://key": 1},
+            {"text": "a\x00b"},
+        ],
+    )
+    def test_no_other_location_anywhere_in_params(self, params):
+        for kind_step in (
+            step("a", "edit", **params),
+            {**capture("a"), "params": {"url": "https://enclii.dev/", **params}},
+        ):
+            with pytest.raises(GraphError, match="may not carry a location"):
+                validate_graph([kind_step], allowed_hosts=HOSTS, max_jobs=5)
+
+    def test_ordinary_params_pass(self):
+        validate_graph(
+            [step("a", "export", aspect="16:9", formats=["mp4", "webm"], crf=17, note="16:9 cut")],
+            allowed_hosts=HOSTS,
+            max_jobs=5,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +309,7 @@ async def finish(db_session, job: Job, status="completed", outputs=()):
             outputs=[
                 JobOutputReport(
                     filename=name,
-                    storage_uri=f"r2://ceq/{job.id}/{name}",
+                    storage_uri=f"r2://ceq/outputs/{job.id}/{name}",
                     file_type="video",
                     file_size_bytes=1,
                 )
@@ -307,7 +349,7 @@ class TestSubmitAndRun:
             "take": [
                 {
                     "filename": "take.mp4",
-                    "storage_uri": f"r2://ceq/{take.id}/take.mp4",
+                    "storage_uri": f"r2://ceq/outputs/{take.id}/take.mp4",
                     "file_type": "video",
                 }
             ]
@@ -386,6 +428,121 @@ class TestSubmitAndRun:
         assert queued == []
 
 
+class TestRepairAndCancel:
+    async def test_a_second_terminal_report_is_ignored(
+        self, production_app, async_client, queued, db_session
+    ):
+        data = await submit(async_client)
+        take = await job_for(db_session, data["id"], "take")
+        await finish(db_session, take, status="failed")
+
+        result = await finish(db_session, take, status="completed", outputs=["late.mp4"])
+
+        assert result.status == "failed"
+        assert result.outputs_persisted == 0
+        assert (await job_for(db_session, data["id"], "edit")).status == "cancelled"
+        assert [p["step"] for p in queued] == ["take"]
+
+    async def test_an_output_outside_its_job_prefix_is_not_passed_on(
+        self, production_app, async_client, queued, db_session
+    ):
+        data = await submit(async_client)
+        take = await job_for(db_session, data["id"], "take")
+        await persist_job_completion(
+            take.id,
+            JobCompletionReport(
+                status="completed",
+                outputs=[
+                    JobOutputReport(
+                        filename="x",
+                        storage_uri="file:///etc/passwd",
+                        file_type="video",
+                        file_size_bytes=1,
+                    ),
+                    JobOutputReport(
+                        filename="ok.mp4",
+                        storage_uri=f"r2://ceq/outputs/{take.id}/ok.mp4",
+                        file_type="video",
+                        file_size_bytes=1,
+                    ),
+                ],
+            ),
+            db_session,
+        )
+
+        assert [o["filename"] for o in queued[1]["input"]["inputs"]["take"]] == ["ok.mp4"]
+
+    async def test_reading_queues_a_step_that_was_ready_but_never_queued(
+        self, production_app, async_client, queued, db_session
+    ):
+        data = await submit(async_client)
+        take = await job_for(db_session, data["id"], "take")
+        take.status = "completed"  # completed without the hook, as an older pod would
+        await db_session.flush()
+        assert [p["step"] for p in queued] == ["take"]
+
+        body = (await async_client.get(f"/v1/productions/{data['id']}")).json()
+
+        assert [p["step"] for p in queued] == ["take", "edit"]
+        assert {j["step"]: j["waiting"] for j in body["jobs"]}["edit"] is False
+
+    async def test_cancelling_a_production_ends_every_unfinished_job(
+        self, production_app, async_client, queued, db_session, mock_redis, monkeypatch
+    ):
+        monkeypatch.setattr(productions_router, "get_redis", lambda: mock_redis)
+        data = await submit(async_client)
+        await finish(db_session, await job_for(db_session, data["id"], "take"))
+
+        response = await async_client.delete(f"/v1/productions/{data['id']}")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "cancelled"
+        assert {j["step"]: j["status"] for j in body["jobs"]} == {
+            "take": "completed",
+            "edit": "cancelled",
+            "wide": "cancelled",
+            "tall": "cancelled",
+        }
+        # Only `edit` had been queued, so only it is pulled and signalled.
+        edit_id = str((await job_for(db_session, data["id"], "edit")).id)
+        assert [c.args[0] for c in mock_redis.publish.call_args_list] == [
+            f"ceq:job:{edit_id}:control"
+        ]
+        # And it frees the client's quota: nothing is unfinished any more.
+        assert (await async_client.delete(f"/v1/productions/{data['id']}")).status_code == 200
+
+    async def test_another_client_cannot_cancel(self, production_app, async_client, queued):
+        data = await submit(async_client)
+
+        async def other():
+            return principal("other-client")
+
+        production_app.dependency_overrides[get_production_principal] = other
+        assert (await async_client.delete(f"/v1/productions/{data['id']}")).status_code == 404
+
+    async def test_cancelling_one_job_cancels_what_needed_it(
+        self, production_app, app, async_client, queued, db_session, mock_redis, monkeypatch
+    ):
+        from ceq_api.auth import get_service_or_user
+        from ceq_api.routers import jobs as jobs_router
+
+        async def as_owner():
+            return principal()
+
+        app.dependency_overrides[get_service_or_user] = as_owner
+        monkeypatch.setattr(jobs_router, "get_redis", lambda: mock_redis)
+        monkeypatch.setattr(jobs_router, "publish_job_update", AsyncMock())
+        data = await submit(async_client)
+        take = await job_for(db_session, data["id"], "take")
+
+        response = await async_client.delete(f"/v1/jobs/{take.id}")
+
+        assert response.status_code == 204
+        body = (await async_client.get(f"/v1/productions/{data['id']}")).json()
+        assert {j["status"] for j in body["jobs"]} == {"cancelled"}
+
+
 class TestSubmitRoute:
     async def test_a_graph_that_cannot_run_is_422_and_stores_nothing(
         self, production_app, async_client, queued, db_session
@@ -419,6 +576,16 @@ class TestSubmitRoute:
             "/v1/productions/", json={"name": "x", "steps": [step(name)]}
         )
         assert response.status_code == 422
+
+    async def test_bad_names_and_oversized_lists_are_422(
+        self, production_app, async_client, queued
+    ):
+        for body in (
+            {"name": "a\u0000b", "steps": [step("a")]},
+            {"name": "x", "steps": [step(f"s{i}") for i in range(101)]},
+            {"name": "x", "steps": [step("a", deps=["Not A Step"])]},
+        ):
+            assert (await async_client.post("/v1/productions/", json=body)).status_code == 422
 
     async def test_oversized_params_are_422(self, production_app, async_client, queued):
         response = await async_client.post(

@@ -35,7 +35,8 @@ class Production(Base, TimestampMixin):
         JSONB,
         nullable=False,
         default=dict,
-        comment="The submitted graph, as received",
+        server_default="{}",
+        comment="The submitted graph, with capture urls in canonical form",
     )
 
     def __repr__(self) -> str:
