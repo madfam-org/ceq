@@ -51,6 +51,7 @@ resources:
 - studio-deployment.yaml
 - worker-deployment.yaml
 - worker-orchestrator-deployment.yaml
+- cpu-worker-deployment.yaml
 - db-migrate-job.yaml
 - ceq-kubernetes-secretstore.yaml
 - external-secret.yaml

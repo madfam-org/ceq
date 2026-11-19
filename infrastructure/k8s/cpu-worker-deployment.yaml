@@ -1,0 +1,148 @@
+# CEQ CPU worker (RFC 0061) — leases `capture.page` and `export` jobs over
+# HTTPS and runs them with Cinematic Pointer's CLI. No GPU.
+#
+# This pod opens web pages, so it is the most exposed thing CEQ runs:
+#   - It holds ONE credential: its Janua worker client. No storage keys, no
+#     Redis, no database URL. Artifacts move through presigned URLs.
+#   - It has no service account token.
+#   - Its network is its own (network-policies.yaml, `ceq-cpu-worker-egress`):
+#     public HTTPS and DNS only. It cannot reach the `data` namespace, other
+#     ceq pods, Janua's in-cluster service or the Kubernetes API. It talks to
+#     CEQ and Janua through their public hostnames, like an external worker.
+#   - The pages it may open are listed in CEQ_CAPTURE_ALLOWED_HOSTS and
+#     enforced twice: by the worker before it starts a capture, and by the
+#     browser on every request.
+#
+# replicas: 0 until its Janua client exists (confidential client, scope
+# `ceq:worker`, audience `ceq-api`) and its credentials are in the Secret
+# `ceq-cpu-worker-credentials` (keys CEQ_WORKER_CLIENT_ID,
+# CEQ_WORKER_CLIENT_SECRET). The refs below are optional so the manifest can
+# be applied before that Secret exists; without them the worker refuses to
+# start, by design.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ceq-cpu-worker
+  namespace: ceq
+  labels:
+    app: ceq-cpu-worker
+  annotations:
+    ceq.madfam.io/compute-strategy: "in-cluster-cpu"
+    ceq.madfam.io/blocker: "no-janua-worker-client-yet"
+    ceq.madfam.io/docs: "apps/workers/README.md#cpu-worker"
+spec:
+  replicas: 0
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ceq-cpu-worker
+  template:
+    metadata:
+      labels:
+        app: ceq-cpu-worker
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      imagePullSecrets:
+        - name: ghcr-credentials
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: ceq-cpu-worker
+          image: ghcr.io/madfam-org/ceq-cpu-worker:latest
+          ports: []
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: WORKER_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            # Public hostnames on purpose: this pod has no route to the
+            # in-cluster services.
+            - name: CEQ_LEASE_URL
+              value: "https://api.ceq.lol"
+            - name: CEQ_JANUA_TOKEN_URL
+              value: "https://auth.madfam.io/api/v1/oauth/token"
+            - name: CEQ_WORKER_SCOPE
+              value: "ceq:worker"
+            - name: CEQ_WORKER_AUDIENCE
+              value: "ceq-api"
+            - name: CEQ_WORKER_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-cpu-worker-credentials
+                  key: CEQ_WORKER_CLIENT_ID
+                  optional: true
+            - name: CEQ_WORKER_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ceq-cpu-worker-credentials
+                  key: CEQ_WORKER_CLIENT_SECRET
+                  optional: true
+            - name: CEQ_CPU_CAPABILITIES
+              value: '["capture.page", "export"]'
+            # RFC 0061 Q5: MADFAM's own public pages only. Exact hosts; add
+            # one deliberately, and add it to the API's
+            # PRODUCTION_ALLOWED_HOSTS in the same change.
+            - name: CEQ_CAPTURE_ALLOWED_HOSTS
+              value: '["enclii.dev"]'
+            - name: CPU_WORK_DIR
+              value: "/work"
+            - name: TMPDIR
+              value: "/work/tmp"
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "3Gi"
+              cpu: "2000m"
+          # The worker has no listener and no local dependency to ping. These
+          # probes say only that the worker process is the container's main
+          # process; a wedged job is bounded by its own time limit and by the
+          # lease, not by a probe.
+          readinessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import sys; sys.exit(0 if b'ceq_worker.cpu' in open('/proc/1/cmdline','rb').read() else 1)"
+            initialDelaySeconds: 5
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import sys; sys.exit(0 if b'ceq_worker.cpu' in open('/proc/1/cmdline','rb').read() else 1)"
+            initialDelaySeconds: 15
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 3
+          volumeMounts:
+            - name: work
+              mountPath: /work
+            - name: shm
+              mountPath: /dev/shm
+      volumes:
+        - name: work
+          emptyDir:
+            sizeLimit: 4Gi
+        # Chromium needs more shared memory than a container's default 64Mi.
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 512Mi

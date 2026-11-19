@@ -23,6 +23,7 @@ PROBED_DEPLOYMENT_MANIFESTS = (
     "studio-deployment.yaml",
     "worker-deployment.yaml",
     "worker-orchestrator-deployment.yaml",
+    "cpu-worker-deployment.yaml",
 )
 
 JANUA_JWT_ENV = (
@@ -67,9 +68,7 @@ def test_external_secret_orchestrator_reads_vast_from_vault() -> None:
 
 
 def test_orchestrator_deployment_uses_vast_control_plane() -> None:
-    manifest = (
-        REPO_ROOT / "infrastructure/k8s/worker-orchestrator-deployment.yaml"
-    ).read_text()
+    manifest = (REPO_ROOT / "infrastructure/k8s/worker-orchestrator-deployment.yaml").read_text()
 
     assert "name: ceq-orchestrator" in manifest
     assert "ceq_worker.orchestrator" in manifest
@@ -303,6 +302,7 @@ def test_every_image_is_digest_pinned_in_kustomization() -> None:
         "ghcr.io/madfam-org/ceq-api",
         "ghcr.io/madfam-org/ceq-studio",
         "ghcr.io/madfam-org/ceq-worker",
+        "ghcr.io/madfam-org/ceq-cpu-worker",
     ):
         assert f"name: {image}" in kustomization, f"{image} missing from images:"
 
@@ -379,7 +379,7 @@ def test_rendered_manifests_are_probe_and_digest_clean() -> None:
             assert "@sha256:" in image, f"{name} image not digest-pinned: {image}"
             assert not image.endswith(":latest"), f"{name} renders a :latest tag"
 
-    assert deployments == 4, f"expected 4 Deployments, rendered {deployments}"
+    assert deployments == 5, f"expected 5 Deployments, rendered {deployments}"
 
 
 # --------------------------------------------------------------------------
@@ -422,13 +422,9 @@ def test_enclii_manifest_declares_all_three_services() -> None:
         assert services[name]["build"]["type"] == "dockerfile"
 
     # The worker is not routable: no ingress, no domain.
-    worker_net = next(
-        s for s in project_spec["network"]["services"] if s["name"] == "ceq-worker"
-    )
+    worker_net = next(s for s in project_spec["network"]["services"] if s["name"] == "ceq-worker")
     assert "ingress" not in worker_net
-    domain_hosts = {
-        d["host"] for s in project_spec["services"] for d in s.get("domains", [])
-    }
+    domain_hosts = {d["host"] for s in project_spec["services"] for d in s.get("domains", [])}
     assert domain_hosts == {"ceq.lol", "app.ceq.lol", "api.ceq.lol", "ws.ceq.lol"}
 
 
@@ -441,9 +437,7 @@ def test_enclii_health_paths_match_k8s_probes() -> None:
     yaml = pytest.importorskip("yaml", reason="PyYAML not installed in this lane")
 
     docs = [d for d in yaml.safe_load_all((REPO_ROOT / "enclii.yaml").read_text()) if d]
-    services = {
-        d["metadata"]["name"]: d["spec"] for d in docs if d["kind"] == "Service"
-    }
+    services = {d["metadata"]["name"]: d["spec"] for d in docs if d["kind"] == "Service"}
 
     assert services["ceq-api"]["runtime"]["healthCheck"] == "/health"
     assert services["ceq-studio"]["runtime"]["healthCheck"] == "/"
@@ -530,9 +524,7 @@ def _render_go_template(template: str, context: dict[str, str]) -> str:
                 assert len(tokens) == 1, f"unsupported call form in {expr!r}"
                 carried = resolve(tokens[0])
                 continue
-            assert head == "regexReplaceAll", (
-                f"renderer only models regexReplaceAll, got {head!r}"
-            )
+            assert head == "regexReplaceAll", f"renderer only models regexReplaceAll, got {head!r}"
             args = [resolve(t) for t in tokens[1:]]
             if carried is not None:
                 # Go appends the piped value as the FINAL argument.
@@ -585,13 +577,11 @@ def test_renderer_reproduces_the_2026_09_05_outage_shape() -> None:
     pipeline-appends-last semantics and every test below becomes vacuous.
     """
     broken = (
-        '{{ .DATABASE_URL | regexReplaceAll '
+        "{{ .DATABASE_URL | regexReplaceAll "
         '"@postgres[.][a-z0-9-]+[.]svc[.]cluster[.]local(:[0-9]+)?" '
         '"@pgbouncer.data.svc.cluster.local:6432" }}'
     )
-    rendered = _render_go_template(
-        broken, {"DATABASE_URL": VAULT_URL_SHAPES[0]}
-    )
+    rendered = _render_go_template(broken, {"DATABASE_URL": VAULT_URL_SHAPES[0]})
     assert rendered == "@pgbouncer.data.svc.cluster.local:6432"
     assert urlsplit(rendered).scheme == ""
 
@@ -653,3 +643,125 @@ def test_query_string_survives_the_host_rewrite() -> None:
         },
     )
     assert rendered.endswith("?sslmode=require")
+
+
+# ---------------------------------------------------------------------------
+# CPU worker: the pod that opens web pages
+# ---------------------------------------------------------------------------
+
+PRIVATE_RANGES = {
+    "0.0.0.0/8",
+    "10.0.0.0/8",
+    "100.64.0.0/10",
+    "127.0.0.0/8",
+    "169.254.0.0/16",
+    "172.16.0.0/12",
+    "192.168.0.0/16",
+    "224.0.0.0/3",
+}
+
+
+def _cpu_worker():
+    yaml = pytest.importorskip("yaml", reason="PyYAML not installed in this lane")
+    return yaml.safe_load((K8S_DIR / "cpu-worker-deployment.yaml").read_text())
+
+
+def _policies():
+    yaml = pytest.importorskip("yaml", reason="PyYAML not installed in this lane")
+    return {
+        d["metadata"]["name"]: d["spec"]
+        for d in yaml.safe_load_all((K8S_DIR / "network-policies.yaml").read_text())
+        if d
+    }
+
+
+def test_cpu_worker_holds_no_credential_but_its_own() -> None:
+    """It opens web pages, so it must not carry storage, Redis or database secrets."""
+    pod = _cpu_worker()["spec"]["template"]["spec"]
+    container = pod["containers"][0]
+
+    assert pod["automountServiceAccountToken"] is False
+    assert "serviceAccountName" not in pod
+    secrets = {
+        env["valueFrom"]["secretKeyRef"]["name"]
+        for env in container["env"]
+        if "secretKeyRef" in env.get("valueFrom", {})
+    }
+    assert secrets == {"ceq-cpu-worker-credentials"}
+    names = {env["name"] for env in container["env"]}
+    assert not {n for n in names if n.startswith(("R2_", "REDIS", "DATABASE", "API_JOB"))}
+    assert "envFrom" not in container
+    assert all(v.get("emptyDir") is not None for v in pod["volumes"]), "no secret or PVC mounts"
+
+
+def test_cpu_worker_reaches_ceq_and_janua_by_public_hostname() -> None:
+    env = {
+        e["name"]: e.get("value")
+        for e in _cpu_worker()["spec"]["template"]["spec"]["containers"][0]["env"]
+    }
+
+    assert env["CEQ_LEASE_URL"] == "https://api.ceq.lol"
+    assert env["CEQ_JANUA_TOKEN_URL"].startswith("https://auth.madfam.io/")
+    assert "svc.cluster.local" not in " ".join(v for v in env.values() if v)
+
+
+def test_cpu_worker_starts_at_zero_with_a_bounded_host_list() -> None:
+    import json
+
+    doc = _cpu_worker()
+    env = {
+        e["name"]: e.get("value") for e in doc["spec"]["template"]["spec"]["containers"][0]["env"]
+    }
+
+    assert doc["spec"]["replicas"] == 0
+    hosts = json.loads(env["CEQ_CAPTURE_ALLOWED_HOSTS"])
+    assert hosts and all(not h.startswith(".") for h in hosts), (
+        "exact hosts only, no suffix entries"
+    )
+    assert json.loads(env["CEQ_CPU_CAPABILITIES"]) == ["capture.page", "export"]
+
+
+def test_cpu_worker_is_restricted_like_every_other_ceq_pod() -> None:
+    pod = _cpu_worker()["spec"]["template"]["spec"]
+    container = pod["containers"][0]
+
+    assert pod["securityContext"]["runAsNonRoot"] is True
+    assert pod["securityContext"]["seccompProfile"] == {"type": "RuntimeDefault"}
+    assert container["securityContext"] == {
+        "privileged": False,
+        "allowPrivilegeEscalation": False,
+        "capabilities": {"drop": ["ALL"]},
+    }
+    assert container["ports"] == []
+    assert container["image"] == "ghcr.io/madfam-org/ceq-cpu-worker:latest"
+
+
+def test_no_broad_network_rule_applies_to_the_cpu_worker() -> None:
+    """NetworkPolicies only add. Every rule that is not the worker's own must leave it out."""
+    excluded = {
+        "matchExpressions": [{"key": "app", "operator": "NotIn", "values": ["ceq-cpu-worker"]}]
+    }
+    for name, spec in _policies().items():
+        selector = spec["podSelector"]
+        if name == "ceq-cpu-worker-egress":
+            continue
+        if selector.get("matchLabels"):
+            assert selector["matchLabels"].get("app") != "ceq-cpu-worker", name
+            continue
+        assert selector == excluded, f"{name} would also apply to the CPU worker"
+
+
+def test_cpu_worker_network_is_public_https_and_dns_only() -> None:
+    spec = _policies()["ceq-cpu-worker-egress"]
+
+    assert spec["podSelector"] == {"matchLabels": {"app": "ceq-cpu-worker"}}
+    assert set(spec["policyTypes"]) == {"Ingress", "Egress"}
+    assert spec["ingress"] == []
+    dns, web = spec["egress"]
+    assert "to" not in dns
+    assert {(p["port"], p["protocol"]) for p in dns["ports"]} == {(53, "UDP"), (53, "TCP")}
+    assert web["ports"] == [{"port": 443, "protocol": "TCP"}]
+    (block,) = web["to"]
+    assert block["ipBlock"]["cidr"] == "0.0.0.0/0"
+    assert set(block["ipBlock"]["except"]) == PRIVATE_RANGES
+    assert len(spec["egress"]) == 2, "nothing else may be allowed"

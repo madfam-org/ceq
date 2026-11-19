@@ -8,6 +8,12 @@
 # marketing-landing rollout; committed to git so future ArgoCD reconciles
 # preserve them.
 ---
+# Every broad allow rule below selects all pods EXCEPT the CPU worker
+# (`app NotIn [ceq-cpu-worker]`). NetworkPolicies only add, so the one way to
+# give that pod a narrower network than its neighbours is to leave it out of
+# these and give it its own policy (`ceq-cpu-worker-egress`, at the end). A pod
+# with no `app` label still matches NotIn, so nothing else changes.
+#
 # Cloudflared is the trust boundary — explicit per-port allowlists
 # silently drop traffic on every containerPort change. See
 # status.enclii.dev incident 2026-05-04.
@@ -22,7 +28,12 @@ spec:
     - namespaceSelector:
         matchLabels:
           kubernetes.io/metadata.name: cloudflare-tunnel
-  podSelector: {}
+  podSelector:
+    matchExpressions:
+    - key: app
+      operator: NotIn
+      values:
+      - ceq-cpu-worker
   policyTypes:
   - Ingress
 ---
@@ -38,7 +49,12 @@ spec:
   ingress:
   - from:
     - podSelector: {}
-  podSelector: {}
+  podSelector:
+    matchExpressions:
+    - key: app
+      operator: NotIn
+      values:
+      - ceq-cpu-worker
   policyTypes:
   - Ingress
   - Egress
@@ -55,7 +71,12 @@ spec:
       protocol: TCP
     - port: 80
       protocol: TCP
-  podSelector: {}
+  podSelector:
+    matchExpressions:
+    - key: app
+      operator: NotIn
+      values:
+      - ceq-cpu-worker
   policyTypes:
   - Egress
 ---
@@ -70,7 +91,12 @@ spec:
     - namespaceSelector:
         matchLabels:
           kubernetes.io/metadata.name: data
-  podSelector: {}
+  podSelector:
+    matchExpressions:
+    - key: app
+      operator: NotIn
+      values:
+      - ceq-cpu-worker
   policyTypes:
   - Egress
 ---
@@ -89,7 +115,12 @@ spec:
     ports:
     - port: 8080
       protocol: TCP
-  podSelector: {}
+  podSelector:
+    matchExpressions:
+    - key: app
+      operator: NotIn
+      values:
+      - ceq-cpu-worker
   policyTypes:
   - Egress
 ---
@@ -121,3 +152,48 @@ spec:
       protocol: TCP
   policyTypes:
   - Ingress
+---
+# The CPU worker opens web pages. Its whole network is this policy: DNS, and
+# HTTPS to public addresses. Every private, loopback, link-local and
+# carrier-grade NAT range is excluded, which covers pod and service networks,
+# the node network, the Kubernetes API and cloud metadata. It reaches CEQ's
+# API, Janua and object storage through their public hostnames.
+#
+# No ingress rule: nothing connects to this pod.
+#
+# The DNS rule has no `to:` because the resolver lives at a private address
+# that the second rule excludes.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ceq-cpu-worker-egress
+  namespace: ceq
+spec:
+  podSelector:
+    matchLabels:
+      app: ceq-cpu-worker
+  egress:
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 0.0.0.0/8
+        - 10.0.0.0/8
+        - 100.64.0.0/10
+        - 127.0.0.0/8
+        - 169.254.0.0/16
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+        - 224.0.0.0/3
+    ports:
+    - port: 443
+      protocol: TCP
+  ingress: []
+  policyTypes:
+  - Ingress
+  - Egress
