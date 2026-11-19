@@ -149,6 +149,30 @@ class Settings(BaseSettings):
     ceq_idle_timeout: int = Field(default=300)
     ceq_max_hourly_spend: float = Field(default=5.0)
 
+    # CPU worker (`ceq_worker.cpu`, RFC 0061): runs Cinematic Pointer's CLI for
+    # the job kinds that need no GPU. Lease mode only, and no storage or Redis
+    # credentials: artifacts move through presigned URLs.
+    cpu_capabilities: list[str] = Field(
+        default=["capture.page", "export"],
+        validation_alias=AliasChoices("CEQ_CPU_CAPABILITIES", "CPU_CAPABILITIES"),
+    )
+    # Argument vector of the Cinematic Pointer CLI, as a shell-style string.
+    cinematic_pointer_cli: str = Field(
+        default="node /opt/cinematic-pointer/dist/cli.js",
+        validation_alias=AliasChoices("CEQ_CINEMATIC_POINTER_CLI", "CINEMATIC_POINTER_CLI"),
+    )
+    # Hosts a capture may open, https only. Same rule as the API's
+    # PRODUCTION_ALLOWED_HOSTS and checked again here, because this is the
+    # process that opens the page: "enclii.dev" is exact, ".madfam.io" is any
+    # subdomain. Empty refuses every capture.
+    capture_allowed_hosts: list[str] = Field(
+        default=[],
+        validation_alias=AliasChoices("CEQ_CAPTURE_ALLOWED_HOSTS", "CAPTURE_ALLOWED_HOSTS"),
+    )
+    cpu_job_timeout_seconds: int = Field(default=900, ge=30, le=3300)
+    cpu_work_dir: str = Field(default="/tmp/ceq-cpu")
+    artifact_transfer_timeout_seconds: float = Field(default=300.0)
+
     @property
     def external_worker_redis_url(self) -> str:
         """Redis URL injected into external GPU workers (Vast.ai, etc.)."""

@@ -48,6 +48,7 @@ from ceq_api.db.session import get_db
 from ceq_api.job_kinds import DEFAULT_JOB_KIND, JOB_KINDS
 from ceq_api.models.job import Job
 from ceq_api.models.job import JobStatus as JobStatusEnum
+from ceq_api.models.output import Output
 from ceq_api.routers.jobs import (
     JobCompletionReport,
     JobOutputReport,
@@ -188,6 +189,20 @@ class UploadUrlRequest(BaseModel):
     worker_id: str = Field(min_length=1, max_length=128)
     filename: str = Field(min_length=1, max_length=255)
     content_type: str = Field(default="application/octet-stream", max_length=255)
+
+
+class DownloadUrlRequest(BaseModel):
+    """Request a presigned GET for an output of a step this job depends on."""
+
+    worker_id: str = Field(min_length=1, max_length=128)
+    storage_uri: str = Field(min_length=1, max_length=2048)
+
+
+class DownloadUrlResponse(BaseModel):
+    """Presigned source for one input of a leased job."""
+
+    download_url: str
+    expires_in_seconds: int
 
 
 class UploadUrlResponse(BaseModel):
@@ -611,4 +626,71 @@ async def create_artifact_upload_url(
         upload_url=presigned["upload_url"],
         storage_uri=presigned["storage_uri"],
         expires_in_seconds=settings.presigned_url_expiry_seconds,
+    )
+
+
+@router.post("/jobs/{job_id}/download-url", response_model=DownloadUrlResponse)
+async def create_input_download_url(
+    job_id: UUID,
+    data: DownloadUrlRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    principal: Annotated[JanuaUser, Depends(get_worker_principal)],
+) -> DownloadUrlResponse:
+    """Mint a presigned GET for one input of a leased production job.
+
+    The counterpart of ``upload-url``, for workers that carry no storage
+    credentials. A worker may read exactly what its job was handed: an output
+    of a step this job depends on, in the same production, stored under that
+    step's own job prefix. Anything else is a 404, whether or not it exists.
+    """
+    redis = get_redis()
+    await _require_lease(redis, job_id, data.worker_id)
+
+    job = (await db.execute(select(Job).where(Job.id == job_id))).scalar_one_or_none()
+    not_found = HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="That is not an input of this job.",
+    )
+    if job is None or job.production_id is None or not job.depends_on:
+        raise not_found
+
+    row = (
+        await db.execute(
+            select(Output.storage_uri, Output.job_id)
+            .join(Job, Job.id == Output.job_id)
+            .where(
+                Job.production_id == job.production_id,
+                Job.step.in_(list(job.depends_on)),
+                Job.status == JobStatusEnum.COMPLETED.value,
+                Output.storage_uri == data.storage_uri,
+            )
+            .limit(1)
+        )
+    ).first()
+    expected_prefix = f"r2://{settings.r2_bucket}/outputs/"
+    if (
+        row is None
+        or not row.storage_uri.startswith(f"{expected_prefix}{row.job_id}/")
+        or ".." in row.storage_uri
+    ):
+        raise not_found
+
+    storage = await get_storage()
+    if not getattr(storage, "is_configured", False):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Object storage is not configured on this deployment.",
+        )
+    url = await storage.generate_download_url(
+        row.storage_uri, expires_in=settings.presigned_url_expiry_seconds
+    )
+    logger.info(
+        "Job %s: worker %s (client=%s) granted read of an input from job %s",
+        job_id,
+        data.worker_id,
+        principal.client_id,
+        row.job_id,
+    )
+    return DownloadUrlResponse(
+        download_url=url, expires_in_seconds=settings.presigned_url_expiry_seconds
     )

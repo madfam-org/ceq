@@ -109,6 +109,31 @@ The API writes `cancel_requested=true` to `ceq:job:{id}` and publishes
 worker watches both surfaces, cancels the handler task, interrupts ComfyUI, and
 reports `cancelled` through the durable completion callback.
 
+## CPU Worker
+
+`python -m ceq_worker.cpu` leases the job kinds that need no GPU (`capture.page`,
+`export`; RFC 0061) and runs them with the Cinematic Pointer CLI. Lease mode only.
+
+- It asks the API only for the kinds in `CEQ_CPU_CAPABILITIES`, so it never
+  receives a ComfyUI graph, and a GPU worker never receives its jobs.
+- It holds one credential, its Janua worker client (`CEQ_WORKER_CLIENT_ID`,
+  `CEQ_WORKER_CLIENT_SECRET`, scope `ceq:worker`). It has no storage keys and no
+  Redis: outputs go up through `POST /v1/worker/jobs/{id}/upload-url`, and the
+  inputs of a production step come down through
+  `POST /v1/worker/jobs/{id}/download-url`, which signs a read only of an output
+  of a step that job depends on.
+- The CLI runs in a child process whose environment is rebuilt from a short
+  allow-list, so the browser never sees the worker's credentials.
+- A capture opens a page only if its host is in `CEQ_CAPTURE_ALLOWED_HOSTS`
+  (same rule as the API's `PRODUCTION_ALLOWED_HOSTS`; empty refuses everything).
+  The list is also passed to the CLI as `--allow-hosts`.
+- Parameters are a closed set per kind; an unknown one fails the job without a
+  retry. A partly failed export uploads nothing.
+- `CEQ_CINEMATIC_POINTER_CLI` is the CLI's argument vector;
+  `CPU_JOB_TIMEOUT_SECONDS` (900) bounds one job.
+
+Not built yet: the image that carries the CLI, and the Deployment.
+
 ## GPU Provider Abstraction
 
 The worker supports multiple GPU providers via a common interface:
