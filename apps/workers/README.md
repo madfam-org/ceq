@@ -132,7 +132,10 @@ reports `cancelled` through the durable completion callback.
 - `CEQ_CINEMATIC_POINTER_CLI` is the CLI's argument vector;
   `CPU_JOB_TIMEOUT_SECONDS` (900) bounds one job.
 
-Not built yet: the image that carries the CLI, and the Deployment.
+The image is `apps/workers/Dockerfile.cpu`: Cinematic Pointer's published image, pinned by digest,
+with this lease client added. CI builds it on every pull request; the deploy pipeline publishes it as
+`ghcr.io/madfam-org/ceq-cpu-worker` without gating the other images on it. Not built yet: the
+Deployment.
 
 ## GPU Provider Abstraction
 

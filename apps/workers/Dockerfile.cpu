@@ -1,0 +1,47 @@
+# CEQ CPU worker (RFC 0061): Cinematic Pointer's own image with CEQ's lease
+# client added.
+#
+# Runs `python -m ceq_worker.cpu`, which leases `capture.page` and `export`
+# jobs over HTTPS and runs them with the Cinematic Pointer CLI the base image
+# carries. No GPU, no ComfyUI, no storage or Redis client: artifacts move
+# through presigned URLs.
+#
+# The base is pinned by digest: the image published and signed by
+# cinematic-pointer's `image.yml`. Raise the digest deliberately, to one that
+# workflow printed.
+ARG CINEMATIC_POINTER_IMAGE=ghcr.io/madfam-org/cinematic-pointer@sha256:d00ed2515de88c598dda4fb894a08919606a84f9cc61bbcbb11080b520cde3ab
+FROM ${CINEMATIC_POINTER_IMAGE}
+
+USER root
+ENV PYTHONUNBUFFERED=1 \
+    HOME=/home/ceq \
+    TMPDIR=/tmp
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+# The lease client needs three packages. The GPU worker's dependencies (torch,
+# boto3, redis, pillow) are deliberately not installed.
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir \
+        "httpx>=0.27,<1" "pydantic>=2.6,<3" "pydantic-settings>=2.2,<3"
+COPY src /opt/ceq-worker/src
+ENV PYTHONPATH=/opt/ceq-worker/src \
+    PATH=/opt/venv/bin:/usr/local/bin:/usr/bin:/bin \
+    CEQ_CINEMATIC_POINTER_CLI="/opt/cinematic-pointer/node_modules/.bin/tsx /opt/cinematic-pointer/src/cli.ts"
+
+# Same uid as the base image's user (1001), under CEQ's name.
+RUN mkdir -p /home/ceq /tmp/ceq-cpu \
+    && chown -R 1001:1001 /home/ceq /tmp/ceq-cpu
+USER 1001
+WORKDIR /home/ceq
+
+# Fails the build if either half is not runnable as the runtime user, or if the
+# base image is too old to have what the worker asks of it.
+RUN python -c "import ceq_worker.cpu" \
+    && /opt/cinematic-pointer/node_modules/.bin/tsx /opt/cinematic-pointer/src/cli.ts export --help >/dev/null \
+    && /opt/cinematic-pointer/node_modules/.bin/tsx /opt/cinematic-pointer/src/cli.ts capture page --help | grep -q allow-hosts \
+    && ffmpeg -version >/dev/null
+
+ENTRYPOINT []
+CMD ["python", "-m", "ceq_worker.cpu"]

@@ -379,6 +379,92 @@ jobs:
             exit 1
           fi
 
+  # The CPU worker image (RFC 0061): Cinematic Pointer's CLI plus the lease
+  # client. It does NOT gate the deploy: if this build fails, the three core
+  # images still roll and the CPU worker keeps its previous digest.
+  build-cpu-worker:
+    name: Build CPU Worker
+    needs: [verify-ci]
+    runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-24.04' }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    outputs:
+      # docker/build-push-action's `outputs.digest` IS the manifest-list
+      # digest for multi-arch and the image manifest digest for single-arch
+      # — same value cosign signs above. Reusing it avoids the broken
+      # imagetools-inspect retry that was failing on every CEQ Deploy run
+      # since acecfd5 (75s × 5 retries, then exit 1).
+      digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAMESPACE }}/ceq-cpu-worker
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        id: build
+        with:
+          context: ./apps/workers
+          file: ./apps/workers/Dockerfile.cpu
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=cpu-worker
+          cache-to: type=gha,mode=max,scope=cpu-worker
+
+      # Retry: 2026-08-26 crea-frontend run 33010085743 lost a deploy when
+      # GitHub's OIDC endpoint returned non-JSON ("invalid character 'u'") and
+      # cosign died. Image was pushed, digest never pinned, ArgoCD never rolled.
+      - name: Sign image with cosign
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+          IMAGE_REF: ${{ env.IMAGE_NAMESPACE }}/ceq-cpu-worker@${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          signed=0
+          for wait in 0 20 60; do
+            if [ "$wait" -gt 0 ]; then
+              echo "::warning::cosign sign failed for ${IMAGE_REF} (transient OIDC/Fulcio/Rekor?); retrying in ${wait}s..."
+              sleep "$wait"
+            fi
+            if cosign sign --yes "${IMAGE_REF}"; then
+              signed=1
+              break
+            fi
+          done
+          if [ "$signed" -ne 1 ]; then
+            echo "::error::cosign sign failed 3 times for ${IMAGE_REF}."
+            echo "::error::The image was BUILT AND PUSHED but is NOT signed, so it will not be"
+            echo "::error::pinned and ArgoCD will not roll it: the live host is still serving the"
+            echo "::error::PREVIOUS build even though this commit is on main. Rerun the failed jobs."
+            exit 1
+          fi
+
+
 
   # ===========================================================================
   # GitOps Deploy: commit digests to kustomization.yaml
@@ -393,7 +479,7 @@ jobs:
   deploy:
     name: Commit deploy digests (GitOps)
     runs-on: ${{ vars.ARC_BOOTSTRAP_COMPLETE == 'true' && 'madfam-runners-blue' || 'ubuntu-24.04' }}
-    needs: [build-api, build-studio, build-worker]
+    needs: [build-api, build-studio, build-worker, build-cpu-worker]
     if: |
       always() &&
       needs.build-api.result == 'success' &&
@@ -430,6 +516,8 @@ jobs:
           API_DIGEST="${{ needs.build-api.outputs.digest }}"
           STUDIO_DIGEST="${{ needs.build-studio.outputs.digest }}"
           WORKER_DIGEST="${{ needs.build-worker.outputs.digest }}"
+          # Empty when the CPU worker build failed or was skipped; see below.
+          CPU_WORKER_DIGEST="${{ needs.build-cpu-worker.result == 'success' && needs.build-cpu-worker.outputs.digest || '' }}"
 
           if [ -z "$API_DIGEST" ] || [ -z "$STUDIO_DIGEST" ] || [ -z "$WORKER_DIGEST" ]; then
             echo "Missing required digest (api=$API_DIGEST, studio=$STUDIO_DIGEST, worker=$WORKER_DIGEST)" >&2
@@ -450,6 +538,12 @@ jobs:
                 "ghcr.io/madfam-org/ceq-studio=ghcr.io/madfam-org/ceq-studio@${STUDIO_DIGEST}"
               kustomize edit set image \
                 "ghcr.io/madfam-org/ceq-worker=ghcr.io/madfam-org/ceq-worker@${WORKER_DIGEST}"
+              if [ -n "$CPU_WORKER_DIGEST" ]; then
+                kustomize edit set image \
+                  "ghcr.io/madfam-org/ceq-cpu-worker=ghcr.io/madfam-org/ceq-cpu-worker@${CPU_WORKER_DIGEST}"
+              else
+                echo "::warning::CPU worker image was not built; its pinned digest is left as it is"
+              fi
             )
             git add infrastructure/k8s/kustomization.yaml
             if git diff --staged --quiet; then
