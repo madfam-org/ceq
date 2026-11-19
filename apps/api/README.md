@@ -304,6 +304,9 @@ Job kinds and capability leases (RFC 0061):
 - Nothing falls back across lists: a job of a kind no worker declares waits.
   `GET /v1/operations/status` reports `pending_jobs_by_kind`; the
   `ceq_queue_depth` metric and `redis.pending_jobs` count the `comfy` list only.
+- Rolling back past this version: an older API requeues every lease onto the
+  `comfy` list. Empty the non-comfy lists and leases first, and ship a route
+  that creates non-comfy jobs only after this version is fully rolled out.
 - Not built yet: no route submits a non-comfy job, and no CPU worker exists.
 
 Worker completion callback notes:

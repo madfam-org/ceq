@@ -14,6 +14,9 @@ The list in ``ck_jobs_kind`` is frozen here on purpose: a migration must not
 change meaning when ``ceq_api.job_kinds`` later grows. Adding a kind is a new
 migration that replaces the constraint.
 
+``kind`` is not indexed: six values, nearly all ``comfy``, and nothing queries
+by it. Routing is by Redis list.
+
 Downgrade restores NOT NULL and therefore fails, deliberately, if any
 non-comfy job row exists; remove or archive those rows first.
 
@@ -44,6 +47,10 @@ JOB_KINDS = (
 
 
 def upgrade() -> None:
+    # Fail fast instead of queueing behind an open transaction on `jobs`: while
+    # this waits for its lock, every later query on the table waits behind it.
+    # The PreSync job retries; a stalled API does not.
+    op.execute("SET LOCAL lock_timeout = '5s'")
     op.add_column(
         "jobs",
         sa.Column(
@@ -54,7 +61,6 @@ def upgrade() -> None:
             comment="Job kind (closed set, see ceq_api.job_kinds)",
         ),
     )
-    op.create_index(op.f("ix_jobs_kind"), "jobs", ["kind"], unique=False)
     op.alter_column(
         "jobs",
         "workflow_id",
@@ -84,5 +90,4 @@ def downgrade() -> None:
         nullable=False,
         comment=None,
     )
-    op.drop_index(op.f("ix_jobs_kind"), table_name="jobs")
     op.drop_column("jobs", "kind")

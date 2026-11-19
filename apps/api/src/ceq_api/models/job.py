@@ -50,7 +50,6 @@ class Job(Base, TimestampMixin):
         nullable=False,
         default=DEFAULT_JOB_KIND,
         server_default=DEFAULT_JOB_KIND,
-        index=True,
         comment="Job kind (closed set, see ceq_api.job_kinds)",
     )
 

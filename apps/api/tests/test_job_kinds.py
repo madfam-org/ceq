@@ -170,6 +170,8 @@ class TestMigration:
 
         migration.upgrade()
 
+        assert fake.calls[0][0] == "execute"
+        assert "lock_timeout" in fake.calls[0][1][0]
         by_name = {name: (args, kwargs) for name, args, kwargs in fake.calls}
         column = by_name["add_column"][0][1]
         assert column.name == "kind"
@@ -193,7 +195,6 @@ class TestMigration:
             "drop_constraint",
             "drop_constraint",
             "alter_column",
-            "drop_index",
             "drop_column",
         ]
         assert fake.calls[2][2]["nullable"] is False

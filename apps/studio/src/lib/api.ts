@@ -35,7 +35,9 @@ export interface WorkflowCreate {
 
 export interface Job {
   id: string;
-  workflow_id: string;
+  /** `comfy` for ComfyUI jobs; other kinds are CPU jobs with no workflow. */
+  kind?: string;
+  workflow_id: string | null;
   status: "queued" | "running" | "completed" | "failed" | "cancelled";
   progress: number;
   current_node: string | null;
