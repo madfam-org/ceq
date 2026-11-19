@@ -853,6 +853,83 @@ async def get_worker_principal(
     return principal
 
 
+async def get_production_principal(
+    request: Request,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Depends(bearer_scheme),
+    ] = None,
+) -> JanuaUser:
+    """Authenticate a service principal allowed to submit productions.
+
+    As narrow as ``get_worker_principal``, and for the same reason: this
+    surface makes CEQ's workers open web pages and spend CPU on a caller's
+    say-so.
+
+    - Only ``client_credentials`` tokens. A human token is a 403.
+    - The token must carry ``production_submit_scope`` (default
+      ``ceq:produce``). ``ceq:render`` and ``ceq:worker`` do not imply it.
+    - The client id must be listed in ``production_submit_client_ids``. The
+      scope says what a client may do; the list says which clients were named.
+      An empty list refuses everyone.
+    - No development bypass: with Janua disabled this fails closed.
+    """
+    if not settings.production_submit_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Production submit API is disabled (PRODUCTION_SUBMIT_ENABLED=false).",
+        )
+
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Signal lost. Service credentials required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    principal = await validate_token(credentials.credentials)
+
+    if principal is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials. Signal corrupted.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not principal.is_service_principal:
+        logger.warning("Human principal %s denied on production surface", principal.id)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The production surface accepts machine credentials only.",
+        )
+
+    required = settings.production_submit_scope
+    if not required or not principal.has_scope(required):
+        logger.warning(
+            "Service principal %s denied on production surface: missing scope %r (has %s)",
+            principal.client_id,
+            required,
+            sorted(principal.scopes),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Service credentials lack the required scope {required!r}.",
+        )
+
+    if principal.client_id not in settings.production_submit_client_ids:
+        logger.warning(
+            "Service principal %s denied on production surface: client not named",
+            principal.client_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This client is not named as a production submitter.",
+        )
+
+    request.state.service_client_id = principal.client_id
+    return principal
+
+
 async def get_optional_user(
     credentials: Annotated[
         HTTPAuthorizationCredentials | None,

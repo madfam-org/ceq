@@ -307,7 +307,36 @@ Job kinds and capability leases (RFC 0061):
 - Rolling back past this version: an older API requeues every lease onto the
   `comfy` list. Empty the non-comfy lists and leases first, and ship a route
   that creates non-comfy jobs only after this version is fully rolled out.
-- Not built yet: no route submits a non-comfy job, and no CPU worker exists.
+- Not built yet: no CPU worker exists, so a submitted production waits.
+
+Productions (RFC 0061 Q7):
+
+- `POST /v1/productions/` takes `{name, steps: [{step, kind, params, depends_on}]}`:
+  a small graph of `capture.*`, `edit` and `export` jobs (never `comfy`).
+  `GET /v1/productions/{id}` returns it with the state of each job; a client
+  sees only what it submitted.
+- Callers are service clients only. The token needs the scope
+  `PRODUCTION_SUBMIT_SCOPE` (`ceq:produce`; `ceq:render` and `ceq:worker` do
+  not imply it) **and** the client id must be listed in
+  `PRODUCTION_SUBMIT_CLIENT_IDS` (a JSON list, empty by default, which refuses
+  everyone). There is no development bypass.
+- A capture step's `params.url` must be `https`, on the default port, without
+  credentials, and on a host listed in `PRODUCTION_ALLOWED_HOSTS` (JSON list,
+  empty by default). `"enclii.dev"` matches that host only; `".madfam.io"`
+  matches any subdomain and not the bare domain.
+- Steps with no dependency are queued at once. Every other step waits in the
+  database (`released_at` null) until the steps it names have completed, then
+  is queued with their outputs under `input.inputs[<step>]`.
+- If a step fails or is cancelled, the steps that needed it are cancelled with
+  the reason in `error`. Other branches carry on.
+- Limits: `PRODUCTION_MAX_JOBS` (20) steps, `PRODUCTION_MAX_ACTIVE_PER_CLIENT`
+  (10) unfinished productions per client, 16 KB of `params` per step.
+- Delivery is at least once: a step may be queued twice if the API fails
+  between queueing and commit. Outputs upsert, so a repeat is safe.
+- Known gaps: there is no route to cancel a whole production, and a job that
+  is dead-lettered by the lease reaper (not by an explicit `/fail`) is not
+  marked failed in the database, so the steps after it keep waiting.
+
 
 Worker completion callback notes:
 

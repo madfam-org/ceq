@@ -131,6 +131,33 @@ class Settings(BaseSettings):
     # poll loop is far chattier than a submit call.
     rate_limit_worker_lease: str = "600/minute"
 
+    # Production submit API (`/v1/productions`, RFC 0061 Q7).
+    #
+    # A third scope, beside `ceq:render` and `ceq:worker`: the capability to
+    # queue a production, a small graph of CPU jobs (capture, edit, export).
+    # Holding it lets a client make CEQ's workers open web pages, so it is
+    # granted to named clients only: the scope alone is not enough, the
+    # client id must also be listed here. Both lists are empty by default, so
+    # the route refuses every caller and every page until a deployment names
+    # them. That is deliberate.
+    production_submit_enabled: bool = True
+    production_submit_scope: str = Field(
+        default="ceq:produce",
+        validation_alias=AliasChoices(
+            "PRODUCTION_SUBMIT_SCOPE", "CEQ_PRODUCTION_SUBMIT_SCOPE"
+        ),
+    )
+    # Janua client ids allowed to submit. JSON list in the environment.
+    production_submit_client_ids: list[str] = []
+    # Hosts a capture job may open, https only. An entry matches itself; an
+    # entry starting with a dot matches any subdomain (".madfam.io"). RFC 0061
+    # Q5: MADFAM's own public pages only.
+    production_allowed_hosts: list[str] = []
+    production_max_jobs: int = Field(default=20, ge=1, le=100)
+    # Productions one client may have unfinished at a time.
+    production_max_active_per_client: int = Field(default=10, ge=1)
+    rate_limit_production_submit: str = "30/minute"
+
     # R2 Storage (Cloudflare)
     r2_endpoint: str = ""
     r2_access_key: str = ""

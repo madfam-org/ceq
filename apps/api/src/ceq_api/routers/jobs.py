@@ -35,6 +35,7 @@ from ceq_api.metrics import record_job_cancellation, record_worker_completion_re
 from ceq_api.models.job import Job
 from ceq_api.models.job import JobStatus as JobStatusEnum
 from ceq_api.models.output import Output
+from ceq_api.productions import on_job_finished
 from ceq_api.services.job_webhooks import deliver_job_webhook
 from ceq_api.storage import get_storage
 
@@ -539,6 +540,11 @@ async def persist_job_completion(
     await db.flush()
     record_worker_completion_report(job.status, outputs_persisted)
 
+    # A production moves on here: steps that waited on this job are queued, or
+    # cancelled if it did not complete. Outputs are flushed above so a released
+    # step is handed them.
+    await on_job_finished(db, job)
+
     if job.status in {
         JobStatusEnum.COMPLETED.value,
         JobStatusEnum.FAILED.value,
@@ -667,6 +673,7 @@ async def cancel_job(
 
     # Remove from queue if still queued.
     await _remove_pending_job(redis, job_id, job.kind or DEFAULT_JOB_KIND)
+    await on_job_finished(db, job)
     record_job_cancellation()
 
     # Publish status update for WebSocket listeners
