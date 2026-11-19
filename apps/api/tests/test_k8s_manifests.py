@@ -307,7 +307,14 @@ def test_every_image_is_digest_pinned_in_kustomization() -> None:
         assert f"name: {image}" in kustomization, f"{image} missing from images:"
 
     digests = re.findall(r"^- digest: (sha256:[0-9a-f]{64})$", kustomization, re.M)
-    assert len(digests) == 3, f"expected 3 pinned digests, found {len(digests)}"
+    # Image entries only (other blocks have a `name:` too), whichever key
+    # comes first in the entry: an unpinned one starts with `- name:`.
+    names = re.findall(r"^[- ] name: (ghcr\.io/\S+)$", kustomization, re.M)
+    # Every image entry is pinned by digest, however many there are. The CPU
+    # worker's entry appears with its first published build.
+    assert len(digests) == len(names) >= 3, (
+        f"{len(names)} image entries but {len(digests)} pinned digests"
+    )
 
 
 def test_deployment_images_stay_dash_form_placeholders() -> None:
