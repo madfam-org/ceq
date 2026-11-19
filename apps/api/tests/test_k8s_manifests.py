@@ -765,3 +765,23 @@ def test_cpu_worker_network_is_public_https_and_dns_only() -> None:
     assert block["ipBlock"]["cidr"] == "0.0.0.0/0"
     assert set(block["ipBlock"]["except"]) == PRIVATE_RANGES
     assert len(spec["egress"]) == 2, "nothing else may be allowed"
+
+
+def test_cpu_worker_credentials_have_their_own_secret_from_vault() -> None:
+    """One credential, in a Secret no other workload mounts, fed from Vault."""
+    yaml = pytest.importorskip("yaml", reason="PyYAML not installed in this lane")
+    docs = [d for d in yaml.safe_load_all((K8S_DIR / "external-secret.yaml").read_text()) if d]
+    (es,) = [d for d in docs if d["metadata"]["name"] == "ceq-cpu-worker-credentials"]
+
+    assert es["spec"]["secretStoreRef"] == {"name": "vault-store", "kind": "ClusterSecretStore"}
+    assert es["spec"]["target"]["name"] == "ceq-cpu-worker-credentials"
+    mapping = {d["secretKey"]: d["remoteRef"] for d in es["spec"]["data"]}
+    assert set(mapping) == {"CEQ_WORKER_CLIENT_ID", "CEQ_WORKER_CLIENT_SECRET"}
+    assert {r["key"] for r in mapping.values()} == {"secret/ceq"}
+    # Lowercase, exactly as Enclii's intake target `ceq/cpu-worker-oauth` writes them.
+    assert mapping["CEQ_WORKER_CLIENT_ID"]["property"] == "cpu_worker_client_id"
+    assert mapping["CEQ_WORKER_CLIENT_SECRET"]["property"] == "cpu_worker_client_secret"
+
+    for name in ("api-deployment.yaml", "studio-deployment.yaml", "worker-deployment.yaml",
+                 "worker-orchestrator-deployment.yaml", "db-migrate-job.yaml"):
+        assert "ceq-cpu-worker-credentials" not in (K8S_DIR / name).read_text(), name
