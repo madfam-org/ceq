@@ -368,7 +368,7 @@ This means the Cloudflare tunnel cannot reach the origin server. Common causes:
 ### API not starting
 
 ```bash
-enclii ops pods diagnose --namespace ceq --workload ceq-api
+enclii ops pods diagnose ceq-api --namespace ceq
 ```
 
 Common issues:
